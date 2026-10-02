@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.2",
+          "buildVersion": "3",
+          "date": "2026-10-02T03:29:17Z",
+          "localizedDescription": "Fixes 1.0.1 closing itself / \"Spitify is crashing frequently\" after swiping it away from Recents. Swiping away still stops the music; reopening picks up where you left off.\n\nIncludes everything from 1.0.1.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.2/Spitify-1.0.2-unsigned.ipa",
+          "size": 1804563,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.1",
           "buildVersion": "2",
           "date": "2026-10-02T03:16:27Z",
