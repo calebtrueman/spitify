@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.10",
+          "buildVersion": "11",
+          "date": "2026-10-02T10:17:56Z",
+          "localizedDescription": "Downloads now retry short outages and try another matching source when the first source fails. Failed downloads from the previous release can recover when the app opens. Songs keep their titles, album details, and cover art inside the saved files.\n\nSearch opens a full song or album page. Saved songs can play right away. Missing songs stay grey with a small download circle, and become playable when saved. Album downloads sit beside the play controls. Search no longer shows storage folders. Profile controls stay below the notch, and both apps include a Wi-Fi-only download setting.\n\nChecked real backup downloads for all 28 songs on The Beatles\u2019 Love on iOS, repeated checks for three affected songs, and real playback of three backup downloads on Android. Also checked Android recovering from a real first-source failure through the normal album page. Source availability can still vary by song and over time.\n\nChecks: iOS and Android release builds succeeded. Android's 34 unit tests passed. iOS ran 36 unit tests with three opt-in network tests skipped, plus three passing page-layout tests. The separate live download tests passed. Android's wider lint check still reports 36 errors in unchanged playback and UI files.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.10/Spitify-1.0.10-unsigned.ipa",
+          "size": 2492197,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.9",
           "buildVersion": "10",
           "date": "2026-10-02T08:28:31Z",
