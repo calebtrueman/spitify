@@ -3,15 +3,23 @@
 # Spitify
 
 **Music, podcasts and audiobooks for Android and iPhone.**
-Play your own files, find online music, stream it, or download it for offline listening. No Spitify account or ads. Your recommendations are learned on your device. The Android app also adapts to Samsung Galaxy Z Fold screens.
+Play your own files, find online music, stream it, or download it for offline listening. Listen on your phone or through your car’s playback controls. No Spitify account or ads. Recommendations are learned on your device.
 
 Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · AVFoundation · iOS 17+
 
-<img src="docs/screenshots/home-unfolded.jpg" width="720" alt="Spitify on the unfolded Galaxy Z Fold8: library on the left half, player on the right">
+<img src="docs/screenshots/ios-album.png" width="260" alt="Spitify album page on iPhone"> &nbsp; <img src="docs/screenshots/player-cover-screen.jpg" width="260" alt="Spitify player on Android">
 
 </div>
 
 ---
+
+## Choose your device
+
+| Platform | What is available | Install and build |
+|---|---|---|
+| **Android 11+** | Phones, tablets and foldables; Android Auto and car playback controls | [APK releases](../../releases) · [Android build steps](#build) |
+| **iPhone, iOS 17+** | Native SwiftUI app; Files import, Siri shortcuts, background audio and lock-screen controls | [IPA releases](../../releases) · [SideStore, AltStore and Xcode setup](ios/README.md) |
+| **CarPlay** | System Now Playing controls; a separate Spitify browsing interface is included in the source and needs Apple-approved CarPlay signing | [CarPlay details](#carplay-and-siri) |
 
 ## Screenshots
 
@@ -67,26 +75,29 @@ It generates the playlists you'd expect:
 |---|---|---|
 | Discover Weekly · Release Radar · **daylist** ("mellow synthwave thursday evening") | This Is *artist* · *artist* Radio · Chill / Energy / Focus · genre mixes | On Repeat · Repeat Rewind · Your Top Songs *year* · decade mixes |
 
-There's also song radio on any song, artist radio on artist pages, and **Don't recommend** for songs or artists. Each playlist has a generated cover and a line explaining why it was made. All of this is plain Kotlin on the device, with no network calls and no AI service.
+There's also song radio on any song, artist radio on artist pages, and **Don't recommend** for songs or artists. Each playlist has a generated cover and a line explaining why it was made. The same listening rules run locally in Kotlin on Android and Swift on iPhone. Making these recommendations needs no network calls or AI service.
 
-### 📱 Built for the Galaxy Z Fold8
-| Device state | What you get |
-|---|---|
-| **Closed** (5.5″ 1248×1972 cover screen) | Phone layout. Drag the mini player up to open the full player. Below it are lyrics, up next, the artist and credits. |
-| **Open** (7.6″ 2448×1848 main screen) | The screen splits at the hinge: library on the left, an always-on player with Playing / Lyrics / Queue on the right. |
-| **Dual-screen player** | The player on one half, synced lyrics or the queue on the other. |
-| **Flex Mode** (half-folded) | Artwork and lyrics on the upright half, controls on the half resting on the desk. |
-| **Fold or unfold mid-song** | Playback, scroll position and queue carry over. |
+### Car playback
 
-It also adapts to the Fold8 Ultra and to any phone or tablet size.
+#### CarPlay and Siri
 
-### 🚗 Android Auto
-Spitify works in Android Auto, Android Automotive, Assistant and Bluetooth head units:
-- **Tabs:** For you, Library, Podcasts and Books.
-- **Tap a song:** its whole album or playlist queues from there.
-- **Search and voice:** "Hey Google, play Daft Punk on Spitify".
-- **Buttons:** Like and Shuffle, or −10 / +30 s for spoken word.
-- **Artwork:** shown in the car too.
+The iPhone app sends the current song, cover, playback position and play/pause/skip controls to Apple’s Now Playing screen. It keeps using the same queue when you move between the phone, Bluetooth and the car.
+
+- **Siri and Shortcuts:** play a named song, album, artist, playlist or followed show from your library; pause or resume. These actions also appear in Apple’s Shortcuts app.
+- **CarPlay browsing:** the included interface has For you, Library, Podcasts and Books, plus Now Playing and the queue. Shuffle and repeat use the phone’s player.
+- **Signing limit:** the dedicated Spitify CarPlay icon and browsing screens require Apple’s approved CarPlay audio permission in the signing profile. The normal SideStore build leaves that permission off. The car’s system Now Playing controls do not depend on that separate browsing interface.
+
+See [iPhone voice and car setup](ios/README.md#voice-and-car-playback). Siri’s choice of app and car hardware behaviour still need checking on the actual phone and vehicle.
+
+#### Android Auto
+
+The Android app supports Android Auto, Android Automotive, Assistant and Bluetooth playback controls.
+
+- Browse For you, Library, Podcasts and Books.
+- Choose a song to queue its album or playlist from that point.
+- Search by voice, with commands such as “Play Daft Punk on Spitify.”
+- Use Like and Shuffle for music, or −10 / +30 seconds for spoken word.
+- See the current song’s artwork in the car.
 
 ### 🎙️ Podcasts & 📚 audiobooks
 - **Podcasts:** search Apple's directory or paste any RSS feed. Stream or download episodes. Each one keeps its resume position and played state. Podcasts have their own speed setting and −10 / +30 s skips.
@@ -100,23 +111,52 @@ Spitify works in Android Auto, Android Automotive, Assistant and Bluetooth head 
 - Android manual edits stay in the app. On iPhone, automatic fill can write missing tags and artwork into local files; Music app library files stay read-only. Downloads include tags and cover art.
 
 ### 🔊 Formats & sound
-These format and sound options describe the Android app. For iPhone formats, see [the iOS guide](ios/README.md). On iPhone, EQ and crossfade apply to local files and downloads; live music streams use the system player.
+Both apps have a 10-band equaliser. On iPhone, EQ and crossfade apply to local files and downloads; live music streams use the system player.
+
+| Platform | Audio formats |
+|---|---|
+| iPhone | FLAC, ALAC, AAC/M4A, MP3, WAV, AIFF and CAF through iOS decoders |
+| Android | The formats below, with extra decoders bundled in the app |
+
+The following details describe Android. See [the iPhone guide](ios/README.md) for its format limits.
+
 - **Formats:** MP3, AAC/M4A, **ALAC**, **FLAC** (incl. 24-bit/96 kHz), Opus, Vorbis, WAV, **AIFF/AIFF-C**, AC-3/E-AC-3, DTS, TrueHD, AMR and more. Bundled FFmpeg decoders cover what the phone can't, and Spitify adds its own AIFF reader.
 - **Unsupported:** WMA, APE, WavPack and DSD files are shown greyed out.
 - **Equaliser:** an in-app **10-band** EQ with a curve you drag directly, 15 presets, bass boost, surround, loudness and a limiter.
 
 ### 🎨 Make it yours
 - **Theme:** Dark, Light, AMOLED or follow the system.
-- **Accent colour:** 10 presets, the current album art, or Material You.
-- **Look and feel:** 5 typefaces, 4 text sizes, artwork shape, and Now Playing style (artwork, spinning vinyl or minimal).
+- **Accent colour:** presets or the current album art on both apps; Android also offers Material You.
+- **Look and feel:** typefaces, text sizes, artwork shape, and player style: artwork, spinning vinyl or minimal. Font choices differ by platform.
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** your name and photo, set up on first launch.
 
 ## iPhone
 
-There's a SwiftUI version in [`ios/`](ios/) with the same recommendation engine, lyrics, crossfade, EQ, podcasts, audiobooks and metadata tools. It runs on iOS 17+. See [ios/README.md](ios/README.md) for building, and for installing without a paid developer account (SideStore / AltStore auto-refresh).
+The iPhone app in [`ios/`](ios/) is built with SwiftUI and runs on iOS 17+. It includes online search, streaming, offline downloads, playlists, on-device mixes, synced lyrics, podcasts, audiobooks and song-detail editing.
 
-Online search, streaming, Add to Library, downloads, playlists, and the playback queue work on iPhone too. Swipe down to close the full player. Lock-screen artwork uses Apple’s Now Playing support; iOS controls whether it appears expanded. Siri shortcuts are included. A separate CarPlay browsing interface requires Apple’s approved signing profile, so it is not enabled in the normal SideStore build.
+- Import audio with the Files app, AirDrop, the share sheet, or Finder file sharing. Spitify’s Music and Audiobooks folders appear under **On My iPhone → Spitify**.
+- Optionally include downloaded, DRM-free songs from the Music app library. Apple Music subscription tracks cannot be played through this option.
+- Keep listening in the background. Use the lock screen, Bluetooth, Siri shortcuts and car playback controls.
+- Swipe down over the full player to return to the bottom rail.
+- See album art on the lock screen. Supported iOS versions can show expanded portrait artwork; iOS controls when that view appears.
+- Fill missing song details and covers, edit them manually, and use a name and photo for your local profile.
+
+See [the iPhone guide](ios/README.md) for formats, installation, building, Siri and CarPlay signing.
+
+## Android phones, tablets and foldables
+
+The Android app works on regular phones and tablets as well as foldables. Its wider layouts can show the library and player side by side. The repo includes Galaxy Z Fold8 emulator profiles for checking hinge and cover-screen behaviour.
+
+| Device layout | What you get |
+|---|---|
+| Phone or closed foldable | Full-screen pages and a small player that opens into the full player |
+| Wide screen or open foldable | Library beside an always-on player, with Playing, Lyrics and Queue |
+| Dual-screen player | Artwork on one half, synced lyrics or the queue on the other |
+| Half-folded Flex Mode | Artwork and lyrics above the hinge, controls below it |
+| Fold or unfold mid-song | Playback, scroll position and queue carry over |
+
+<img src="docs/screenshots/home-unfolded.jpg" width="720" alt="Android foldable layout with library and player side by side">
 
 ## Install
 
@@ -131,6 +171,8 @@ adb install -r app-release.apk
 On a Fold, set **Settings › Display › Screen continuity** to *Always* for Spitify, so it keeps playing on the cover screen when you close the phone.
 
 ## Build
+
+These commands build **Android**. For the iPhone app, use [the Xcode steps](ios/README.md#build).
 
 Requirements: JDK 17, the Android SDK (platform 37), NDK 26.1 and CMake 3.22. Gradle downloads everything else.
 
@@ -171,6 +213,8 @@ app/src/main/java/com/localfy/app/      (internal package name predates the rena
 │  └─ lyrics/     tag reader (ID3/FLAC/Ogg/MP4), LRC parser, LRCLIB
 ├─ playback/      MediaLibraryService (Android Auto), crossfade, 10-band EQ, AIFF extractor
 └─ ui/            adaptive fold-aware shell, player, screens, theme
+ios/Spitify/      SwiftUI iPhone app, AVFoundation player, Siri shortcuts and CarPlay screens
+ios/SpitifyTests/ iPhone unit and native playback checks
 ffmpeg/           Media3 FFmpeg audio decoder module (JNI + prebuilt FFmpeg 6.0)
 scripts/          emulator setup, test music, FFmpeg build
 ```
