@@ -13,16 +13,19 @@ data class OnlineTrack(
     val id: String, val title: String, val artist: String, val album: String,
     val releaseId: String, val durationMs: Long, val track: Int, val disc: Int,
     val artwork: String?, val playable: Boolean, val albumArtist: String? = null,
-    val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false, val attemptedSources: List<String> = emptyList(), val retryCount: Int = 0, val retryAtMillis: Long = 0,
+    val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false, val attemptedSources: List<String> = emptyList(), val retryCount: Int = 0, val retryAtMillis: Long = 0, val explicit: Boolean? = null,
 ) {
     fun json(): String = JSONObject().apply {
         put("trackId", id); put("title", title); put("artistNames", org.json.JSONArray(listOf(artist)))
         put("albumTitle", album); put("releaseId", releaseId); put("duration", durationMs)
+        put("explicit", explicit)
         put("retryCount", retryCount); put("retryAtMillis", retryAtMillis); put("attemptedSources", org.json.JSONArray(attemptedSources)); put("audioURL", audioURL); put("audioExtension", audioExtension); put("fallbackTried", fallbackTried); put("albumArtist", albumArtist); put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
     }.toString()
 }
 
-data class OnlineAlbum(val id: String, val title: String, val artist: String, val artwork: String? = null)
+data class OnlineAlbum(val id: String, val title: String, val artist: String, val artwork: String? = null, val explicit: Boolean? = null, val releaseDate: String? = null)
+data class OnlineArtist(val id: String, val name: String, val artwork: String? = null)
+data class OnlineSearch(val tracks: List<OnlineTrack> = emptyList(), val albums: List<OnlineAlbum> = emptyList(), val artists: List<OnlineArtist> = emptyList())
 
 object Monochrome {
     const val BASE = "https://tracks.monochrome.st"
@@ -55,12 +58,36 @@ object Monochrome {
         return (0 until items.length()).mapNotNull { parseTrack(items.getJSONObject(it)) }
     }
 
+    suspend fun searchAll(query: String): OnlineSearch {
+        val obj = get("search?q=${URLEncoder.encode(query, "UTF-8")}&limit=30")
+        fun rows(key: String): List<JSONObject> = obj.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.orEmpty()
+        return OnlineSearch(rows("tracks").mapNotNull { parseTrack(it) }, rows("releases").mapNotNull { item ->
+            val id = item.optString("releaseId", item.optString("id"))
+            if (!validId(id)) null else OnlineAlbum(id, item.optString("title"), artist(item), item.optString("artwork").takeIf { it.startsWith("https://") }, item.flag("explicit"))
+        }, rows("artists").mapNotNull { item ->
+            val id = item.optString("artistId", item.optString("id"))
+            if (!validId(id)) null else OnlineArtist(id, item.optString("displayName", item.optString("name")), item.optString("avatar").takeIf { it.startsWith("https://") })
+        })
+    }
+
+    suspend fun artistPage(id: String): OnlineSearch {
+        require(validId(id))
+        val obj = get("artists/$id")
+        fun rows(key: String) = obj.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }.orEmpty()
+        return OnlineSearch(rows("topTracks").mapNotNull { parseTrack(it) }, listOf("releases", "albums", "singles", "compilations").flatMap { rows(it) }.distinctBy { it.optString("releaseId", it.optString("id")) }.mapNotNull { item ->
+            val release = item.optString("releaseId", item.optString("id"))
+            if (!validId(release)) null else OnlineAlbum(release, item.optString("title"), artist(item), item.optString("artwork").takeIf { it.startsWith("https://") }, item.flag("explicit"), item.optString("releaseDate").takeIf { it.isNotBlank() })
+        })
+    }
+
+    private fun JSONObject.flag(key: String): Boolean? = if (has(key) && !isNull(key)) optBoolean(key) else null
+
     suspend fun albums(query: String): List<OnlineAlbum> {
         val items = get("search/releases?q=${URLEncoder.encode(query, "UTF-8")}&limit=30").getJSONArray("releases")
         return (0 until items.length()).mapNotNull {
             val item = items.getJSONObject(it)
             val id = item.optString("releaseId", item.optString("id"))
-            if (!validId(id)) null else OnlineAlbum(id, item.optString("title", "Unknown album"), artist(item), item.optString("artwork").takeIf { it.startsWith("https://") })
+            if (!validId(id)) null else OnlineAlbum(id, item.optString("title", "Unknown album"), artist(item), item.optString("artwork").takeIf { it.startsWith("https://") }, item.flag("explicit"))
         }
     }
 
@@ -85,7 +112,7 @@ object Monochrome {
                 ?: album?.let { artist(it) }?.takeIf { it != "Unknown artist" },
             item.optString("audioURL").takeIf { AudioFallback.validAudioURL(it) },
             item.optString("audioExtension").takeIf { it in listOf("m4a", "mp3") } ?: "flac", item.optBoolean("fallbackTried", false),
-            item.optJSONArray("attemptedSources")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), item.optInt("retryCount", 0), item.optLong("retryAtMillis", 0))
+            item.optJSONArray("attemptedSources")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), item.optInt("retryCount", 0), item.optLong("retryAtMillis", 0), item.flag("explicit"))
     }
 
     private fun artist(item: JSONObject): String {

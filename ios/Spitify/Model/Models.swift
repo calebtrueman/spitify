@@ -32,6 +32,7 @@ struct Song: Identifiable, Hashable, Codable {
     var isAudiobook: Bool = false
     var episodeId: String? = nil
     var artVersion: Int = 0
+    var explicit: Bool? = nil
 
     var albumKey: String { Song.albumKey(album: album, artist: albumArtist) }
     var isSpoken: Bool { isPodcast || isAudiobook }

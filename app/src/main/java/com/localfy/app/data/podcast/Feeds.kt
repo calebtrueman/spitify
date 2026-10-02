@@ -29,7 +29,7 @@ data class ParsedEpisode(
     val position: Int = 0,
 )
 
-data class PodcastSearchResult(val title: String, val author: String, val feedUrl: String, val artworkUrl: String?, val genre: String?)
+data class PodcastSearchResult(val title: String, val author: String, val feedUrl: String, val artworkUrl: String?, val genre: String?, val explicit: Boolean? = null)
 
 internal object Http {
     /** GET with manual redirect handling (HttpURLConnection won't follow http -> https). */
@@ -157,6 +157,7 @@ object PodcastDirectory {
                 o.optString("collectionName"), o.optString("artistName"), feed,
                 o.optString("artworkUrl600").takeIf { it.startsWith("http") } ?: o.optString("artworkUrl100").takeIf { it.startsWith("http") },
                 o.optString("primaryGenreName").takeIf { it.isNotBlank() },
+                if (o.has("collectionExplicitness")) o.optString("collectionExplicitness") == "explicit" else null,
             )
         }
     }

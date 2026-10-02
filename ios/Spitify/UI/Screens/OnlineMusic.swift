@@ -2,104 +2,7 @@ import SwiftUI
 
 struct OnlineMusicView: View {
     let query: String
-    @Environment(AppModel.self) private var app
-    @Environment(Router.self) private var router
-    @State private var tracks: [OnlineTrack] = []
-    @State private var albums: [OnlineAlbum] = []
-    @State private var error: String?
-    @State private var loading = false
-    @State private var albumMode = false
-    @State private var retrySearch = 0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Results").font(.headline)
-
-            }
-            Picker("Search for", selection: $albumMode) {
-                Text("Songs").tag(false)
-                Text("Albums").tag(true)
-            }.pickerStyle(.segmented)
-            if loading { ProgressView("Searching…") }
-            if error != nil { Button("Couldn't load more results. Try again") { retrySearch += 1 }.foregroundStyle(.secondary) }
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
-                Text("Search for a song or album.").foregroundStyle(.secondary)
-            }
-            if albumMode {
-                if albumResults.isEmpty && !loading { Text("No albums found.").foregroundStyle(.secondary) }
-                ForEach(albumResults) { result in
-                    Button {
-                        if let remote = result.remote { router.go(.catalogAlbum(remote)) } else if let local = result.local { router.go(.album(local.id)) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            if let local = result.local { ArtworkView(local.cover).frame(width: 52, height: 52) }
-                            else { SearchCover(id: result.id, album: result.title, artist: result.artist, artwork: result.remote?.artwork) }
-                            VStack(alignment: .leading) { Text(result.title); Text(result.artist).font(.caption).foregroundStyle(.secondary) }
-                            Spacer(); Image(systemName: "chevron.right")
-                        }.padding(.vertical, 6).contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityIdentifier("catalog-album:" + (result.remote?.id ?? result.id))
-                }
-            } else {
-                if songResults.isEmpty && !loading { Text("No songs found.").foregroundStyle(.secondary) }
-                ForEach(songResults) { result in
-                    if let song = result.local {
-                        SongRow(song: song) {
-                            let songs = songResults.compactMap(\.local)
-                            app.player.play(songs, from: songs.firstIndex(where: { $0.id == song.id }) ?? 0, shuffle: false, source: "Search: \(query)")
-                        }
-                    } else if let track = result.remote { OnlineTrackRow(track: track) }
-                }
-            }
-        }
-        .padding(16)
-        .onAppear { app.musicDownloads.refreshMissingFiles() }
-        .task(id: "\(albumMode):\(query):\(retrySearch)") {
-            tracks = []; albums = []; error = nil; loading = false
-            let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard q.count >= 2 else { return }
-            loading = true
-            do {
-                try await Task.sleep(for: .milliseconds(400))
-                if albumMode {
-                    let result = try await MonochromeClient().searchAlbums(q)
-                    try Task.checkCancellation(); albums = result
-                } else {
-                    let result = try await MonochromeClient().search(q)
-                    try Task.checkCancellation(); tracks = result
-                }
-                loading = false
-            } catch {
-                guard !Task.isCancelled else { return }
-                NSLog("Spitify search failed: %@", error.localizedDescription)
-                self.error = error.localizedDescription; loading = false
-            }
-        }
-    }
-    private var songResults: [SongSearchResult] {
-        let local = app.library.library.songs.compactMap { song -> SongSearchResult? in
-            guard let score = SearchMatch.score(query, title: song.title, artist: song.artist, album: song.album) else { return nil }
-            return SongSearchResult(id: "local:" + song.id, title: song.title, artist: song.artist, score: score, local: song)
-        }
-        let remote = tracks.filter { track in !app.library.library.songs.contains { SearchMatch.sameSong($0, track) } }.compactMap { track -> SongSearchResult? in
-            guard let score = SearchMatch.score(query, title: track.title, artist: track.artist, album: track.album) else { return nil }
-            return SongSearchResult(id: "online:" + track.id, title: track.title, artist: track.artist, score: score, remote: track)
-        }
-        return Array((local + remote).sorted { $0.score != $1.score ? $0.score > $1.score : SearchMatch.fold($0.title + " " + $0.artist) < SearchMatch.fold($1.title + " " + $1.artist) }.prefix(60))
-    }
-    private var albumResults: [AlbumSearchResult] {
-        let local = app.library.library.albums.compactMap { album -> AlbumSearchResult? in
-            guard let score = SearchMatch.score(query, title: album.title, artist: album.artist) else { return nil }
-            let remote = albums.first { SearchMatch.fold($0.title) == SearchMatch.fold(album.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(album.artist) }
-            return AlbumSearchResult(id: "local:" + album.id, title: album.title, artist: album.artist, score: score, local: album, remote: remote)
-        }
-        let remote = albums.filter { album in !local.contains { $0.remote?.id == album.id } }.compactMap { album -> AlbumSearchResult? in
-            guard let score = SearchMatch.score(query, title: album.title, artist: album.artist) else { return nil }
-            return AlbumSearchResult(id: "online:" + album.id, title: album.title, artist: album.artist, score: score, remote: album)
-        }
-        return Array((local + remote).sorted { $0.score != $1.score ? $0.score > $1.score : SearchMatch.fold($0.title + " " + $0.artist) < SearchMatch.fold($1.title + " " + $1.artist) }.prefix(60))
-    }
-
+    var body: some View { MixedSearchView(query: query) }
 }
 
 struct DownloadMark: View {
@@ -167,7 +70,7 @@ struct OnlineTrackRow: View {
                         Text(track.artist).font(.caption)
                     }
                     Spacer(minLength: 0)
-                }.foregroundStyle(song == nil ? Color.secondary : Color.primary).contentShape(Rectangle())
+                }.foregroundStyle(Color.primary).contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(onPlay != nil && song == nil)
             Button {
                 if job?.state.active == true { app.musicDownloads.cancel(track.id) }

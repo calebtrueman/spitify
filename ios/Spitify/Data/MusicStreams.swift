@@ -33,6 +33,6 @@ final class MusicStreams {
              albumArtist: track.albumArtist ?? Song.albumArtist(track.artist), durationMs: track.durationMs,
              track: track.trackNumber, disc: track.discNumber, year: 0, genre: nil,
              location: "spitify://music/" + track.id, kind: .remote, dateAdded: Date(timeIntervalSince1970: 0),
-             sizeBytes: 0, fileExtension: track.audioExtension ?? "flac", artURL: track.artwork)
+             sizeBytes: 0, fileExtension: track.audioExtension ?? "flac", artURL: track.artwork, explicit: track.explicit)
     }
 }

@@ -24,11 +24,14 @@ struct ArtworkView: View {
             LinearGradient(colors: [fallbackColor(key), fallbackColor(key).mix(.black, 0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Image(systemName: "music.note").font(.system(size: 22, weight: .semibold)).foregroundStyle(.white.opacity(0.55))
             // Overlay on a clear view so a fill-scaled image never reports a size bigger than its frame.
-            if let image { Color.clear.overlay { Image(uiImage: image).resizable().scaledToFill() }.clipped().transition(.opacity) }
+            if let image { Color.clear.overlay { Image(uiImage: image).resizable().scaledToFill() }.clipped().transaction { $0.animation = nil; $0.disablesAnimations = true } }
         }
         .clipShape(circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: radius, style: .continuous)))
         .task(id: "\(key)|\(remote ?? "")|\(app.library.artVersion)") {
-            if let img = await ArtCache.shared.load(key: key, remote: remote) { withAnimation(.easeOut(duration: 0.2)) { image = img } }
+            guard let img = await ArtCache.shared.load(key: key, remote: remote), !Task.isCancelled else { return }
+            guard image !== img else { return }
+            var transaction = Transaction(animation: nil); transaction.disablesAnimations = true
+            withTransaction(transaction) { image = img }
         }
     }
 }
@@ -42,7 +45,7 @@ struct ArtColorReader: ViewModifier {
     func body(content: Content) -> some View {
         content.task(id: "\(key)|\(remote ?? "")|\(theme.artworkTint)") {
             guard theme.artworkTint, key != "none" else { withAnimation { color = Color(hex: 0x2A2A2E) }; return }
-            if let img = await ArtCache.shared.load(key: key, remote: remote) {
+            if let img = await ArtCache.shared.load(key: key, remote: remote), !Task.isCancelled {
                 let c = ArtCache.shared.color(for: key, image: img)
                 withAnimation(.easeInOut(duration: 0.6)) { color = c }
             } else { withAnimation { color = fallbackColor(key).mix(.black, 0.35) } }

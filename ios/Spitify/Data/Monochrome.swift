@@ -18,13 +18,28 @@ struct OnlineTrack: Codable, Identifiable, Hashable {
     var fallbackTried: Bool? = nil
     var attemptedSources: [String]? = nil
     var audioByteCount: Int64? = nil
+    var explicit: Bool? = nil
 }
 
-struct OnlineAlbum: Identifiable, Hashable {
+struct OnlineAlbum: Identifiable, Hashable, Codable {
     let id: String
     let title: String
     let artist: String
     let artwork: String?
+    var explicit: Bool? = nil
+    var releaseDate: String? = nil
+}
+
+struct OnlineArtist: Identifiable, Hashable, Codable {
+    let id: String
+    let name: String
+    let artwork: String?
+}
+
+struct OnlineSearch {
+    var tracks: [OnlineTrack] = []
+    var albums: [OnlineAlbum] = []
+    var artists: [OnlineArtist] = []
 }
 
 enum MusicSourceError: LocalizedError {
@@ -83,12 +98,27 @@ struct MonochromeClient {
         return tracks.compactMap { Self.track($0) }
     }
 
+    func searchAll(_ query: String) async throws -> OnlineSearch {
+        let data = try await json("search", query: query)
+        guard data["tracks"] != nil || data["releases"] != nil || data["artists"] != nil else {
+            throw MusicSourceError.message("The search response has changed.")
+        }
+        return OnlineSearch(tracks: (data["tracks"] as? [[String: Any]] ?? []).compactMap { Self.track($0) },
+            albums: (data["releases"] as? [[String: Any]] ?? []).compactMap { item in
+                guard let id = Self.id(item["releaseId"] ?? item["id"]) else { return nil }
+                return OnlineAlbum(id: id, title: item["title"] as? String ?? "Unknown album", artist: Self.artist(item), artwork: item["artwork"] as? String, explicit: item["explicit"] as? Bool)
+            }, artists: (data["artists"] as? [[String: Any]] ?? []).compactMap { item in
+                guard let id = Self.id(item["artistId"] ?? item["id"]), let name = (item["displayName"] ?? item["name"]) as? String else { return nil }
+                return OnlineArtist(id: id, name: name, artwork: item["avatar"] as? String)
+            })
+    }
+
     func searchAlbums(_ query: String) async throws -> [OnlineAlbum] {
         let data = try await json("search/releases", query: query)
         guard let albums = data["releases"] as? [[String: Any]] else { throw MusicSourceError.message("The album response has changed.") }
         return albums.compactMap { item in
             guard let id = Self.id(item["releaseId"] ?? item["id"]) else { return nil }
-            return OnlineAlbum(id: id, title: item["title"] as? String ?? "Unknown album", artist: Self.artist(item), artwork: item["artwork"] as? String)
+            return OnlineAlbum(id: id, title: item["title"] as? String ?? "Unknown album", artist: Self.artist(item), artwork: item["artwork"] as? String, explicit: item["explicit"] as? Bool)
         }
     }
 
@@ -97,6 +127,21 @@ struct MonochromeClient {
         let album = try await json("releases/\(id)")
         guard let tracks = album["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("Online search did not return this album's songs.") }
         return tracks.compactMap { Self.track($0, album: album) }.sorted { ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber) }
+    }
+
+    func artistPage(_ id: String) async throws -> OnlineSearch {
+        _ = try Self.audioURL(id)
+        let data = try await json("artists/\(id)")
+        var seen = Set<String>()
+        let releases = ["releases", "albums", "singles", "compilations"].flatMap { data[$0] as? [[String: Any]] ?? [] }.filter { item in
+            guard let id = Self.id(item["releaseId"] ?? item["id"]) else { return false }
+            return seen.insert(id).inserted
+        }
+        return OnlineSearch(tracks: (data["topTracks"] as? [[String: Any]] ?? []).compactMap { Self.track($0) },
+            albums: releases.compactMap { item in
+                guard let id = Self.id(item["releaseId"] ?? item["id"]) else { return nil }
+                return OnlineAlbum(id: id, title: item["title"] as? String ?? "Unknown album", artist: Self.artist(item), artwork: item["artwork"] as? String, explicit: item["explicit"] as? Bool, releaseDate: item["releaseDate"] as? String)
+            })
     }
 
     static func id(_ value: Any?) -> String? {
@@ -119,7 +164,7 @@ struct MonochromeClient {
             durationMs: (item["duration"] as? NSNumber)?.int64Value ?? 0,
             trackNumber: item["trackNumber"] as? Int ?? 0, discNumber: item["discNumber"] as? Int ?? 1,
             artwork: (item["artwork"] ?? album?["artwork"]) as? String, playable: item["playable"] as? Bool ?? true,
-            albumArtist: item["albumArtist"] as? String ?? album.map { Self.artist($0) })
+            albumArtist: item["albumArtist"] as? String ?? album.map { Self.artist($0) }, explicit: item["explicit"] as? Bool)
     }
 }
 

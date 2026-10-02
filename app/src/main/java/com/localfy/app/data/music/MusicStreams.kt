@@ -37,6 +37,7 @@ class MusicStreams(private val context: Context) {
         }
         return song(track)
     }
+    @Synchronized fun knownTracks(): List<OnlineTrack> = tracks.values.toList()
     @Synchronized fun track(id: String): OnlineTrack? = tracks[id]
     @Synchronized fun track(song: Song): OnlineTrack? = song.sourceUri?.takeIf { it.scheme == "spitify" }?.lastPathSegment?.let(tracks::get)
     @Synchronized fun lookup(id: Long): Song? = tracks.values.firstOrNull { streamId(it.id) == id }?.let(::song)
@@ -50,7 +51,7 @@ class MusicStreams(private val context: Context) {
         albumId = streamId("album:" + track.releaseId), albumArtist = track.albumArtist ?: track.artist,
         durationMs = track.durationMs, track = track.track, disc = track.disc, year = 0, genre = null,
         folder = "", dateAddedSec = prefs.getLong("added:${track.id}", 0), sizeBytes = 0, mimeType = null,
-        sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork,
+        sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork, explicit = track.explicit,
     )
     internal fun lastSource(track: OnlineTrack): OnlineTrack = prefs.getString("source:${track.id}", null)?.let {
         runCatching { Monochrome.parseTrack(JSONObject(it)) }.getOrNull()

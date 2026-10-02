@@ -29,6 +29,18 @@ struct LibraryView: View {
                 }.padding(.horizontal, 16).padding(.bottom, 6)
 
                 if filter == nil || filter == .playlists {
+                    ForEach(app.social.playlists, id: \.key) { playlist in
+                        NavigationLink { SharedPlaylistView(initial: playlist) } label: {
+                            HStack(spacing: 12) {
+                                PlaylistCover(url: playlist.image).frame(width: 60, height: 60)
+                                VStack(alignment: .leading) {
+                                    Text(playlist.name).text(.body).foregroundStyle(p.text)
+                                    Text("Playlist · \(playlist.tracks.count) songs").text(.bodyS).foregroundStyle(p.secondary)
+                                }
+                                Spacer()
+                            }.padding(.horizontal, 16).padding(.vertical, 6)
+                        }.buttonStyle(.plain)
+                    }
                     pinned("All Songs", "Pinned • \(songCount(lib.library.songs.count))", "music.note.list", [Color(hex: 0x4B2BD6), Color(hex: 0x9AB8F0)]) { router.go(.smart(.allSongs)) }
                     if !lib.recentlyPlayed.isEmpty { pinned("On repeat", "Smart playlist", "sparkles", [Color(hex: 0x0E7A55), Color(hex: 0x1ED760)]) { router.go(.smart(.mostPlayed)) } }
                     pinned("Recently added", "Smart playlist • \(songCount(lib.recentlyAdded.count))", "clock.fill", [Color(hex: 0x0E7A55), Color(hex: 0x1ED760)]) { router.go(.smart(.recentlyAdded)) }
@@ -52,6 +64,8 @@ struct LibraryView: View {
         .background(p.background)
         .navigationTitle("Your Library")
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { NavigationLink { ArtistReleasesView() } label: { Image(systemName: "bell") }.accessibilityLabel("New releases") }
+            ToolbarItem(placement: .topBarTrailing) { NavigationLink { FriendsView() } label: { Image(systemName: "person.2") }.accessibilityLabel("Friends") }
             ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") } }
         }
         .alert("Give your playlist a name", isPresented: $creating) {

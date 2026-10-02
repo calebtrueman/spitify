@@ -4,7 +4,7 @@ import Observation
 enum Route: Hashable {
     case album(String), artist(String), playlist(String), mix(String), smart(SmartKind), genre(String), folder(String)
     case show(String), book(String), localBook(String)
-    case settings, appearance, equalizer, profile, stats
+    case settings, appearance, equalizer, profile, stats, releases
     case catalogAlbum(OnlineAlbum), catalogSong(OnlineTrack)
 }
 
@@ -22,6 +22,12 @@ final class Router {
     var playerOpen = false
     var editing: (songs: [Song], albumMode: Bool)?
     var addingToPlaylist: [Song]?
+    var sharing: SharedPlaylist?
+    var sharingError: String?
+    func share(name: String, songs: [Song], kind: String = "playlist", app: AppModel) {
+        do { sharing = try app.social.create(name: name, songs: songs, kind: kind); playerOpen = false }
+        catch { sharingError = error.localizedDescription }
+    }
     var info: Song?
 
     func go(_ r: Route) {

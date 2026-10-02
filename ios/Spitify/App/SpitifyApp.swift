@@ -42,6 +42,7 @@ struct RootView: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @Environment(\.scenePhase) private var phase
+    @State private var incomingLink: String?
 
     var body: some View {
         @Bindable var router = router
@@ -54,6 +55,8 @@ struct RootView: View {
         }
         .tint(p.text)
         .fullScreenCover(isPresented: $router.playerOpen) { NowPlayingView() }
+        .sheet(item: Binding(get: { router.sharing }, set: { router.sharing = $0 })) { playlist in NavigationStack { PlaylistSharingView(playlist: playlist) }.environment(app) }
+        .alert("Couldn't prepare share", isPresented: Binding(get: { router.sharingError != nil }, set: { if !$0 { router.sharingError = nil } })) { Button("OK") { router.sharingError = nil } } message: { Text(router.sharingError ?? "") }
         .sheet(item: Binding(get: { router.info }, set: { router.info = $0 })) { SongInfoSheet(song: $0) }
         .sheet(isPresented: Binding(get: { router.addingToPlaylist != nil }, set: { if !$0 { router.addingToPlaylist = nil } })) {
             AddToPlaylistSheet(songs: router.addingToPlaylist ?? [])
@@ -68,17 +71,28 @@ struct RootView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: app.player.message)
-        .task { await app.start() }
-        .onChange(of: phase) { _, new in if new == .active { app.musicDownloads.resumePending(); Task { await app.library.scan() } } }
+        .task { await app.start(); openReleaseFeedIfRequested() }
+        .onReceive(NotificationCenter.default.publisher(for: .init("SpitifyOpenReleaseFeed"))) { _ in openReleaseFeedIfRequested() }
+        .onChange(of: phase) { _, new in if new == .active { app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
+        .sheet(isPresented: Binding(get: { incomingLink != nil }, set: { if !$0 { incomingLink = nil } })) {
+            if let value = incomingLink, let link = SocialLink.parse(value) { NavigationStack { IncomingShareView(link: link) }.environment(app) }
+        }
         .onOpenURL { url in Task { await openExternal(url) } }
     }
 
+    private func openReleaseFeedIfRequested() {
+        guard UserDefaults.standard.bool(forKey: "openReleaseFeed") else { return }
+        UserDefaults.standard.removeObject(forKey: "openReleaseFeed"); router.tab = .library; router.go(.releases)
+    }
+
     private func tab<V: View>(_ t: Tab, _ title: String, _ icon: String, @ViewBuilder content: () -> V) -> some View {
-        NavigationStack(path: router.path(t)) {
-            content()
-                .navigationDestination(for: Route.self) { RouteView(route: $0).toolbar(.visible, for: .navigationBar) }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+            NavigationStack(path: router.path(t)) {
+                content()
+                    .navigationDestination(for: Route.self) { RouteView(route: $0).toolbar(.visible, for: .navigationBar) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Reserve space in the layout itself, including pushed screens.
             MiniPlayer().background(p.background)
         }
         .tint(p.accent)
@@ -91,6 +105,7 @@ struct RootView: View {
 
     /// "Open in Spitify" from Files/AirDrop: copy into the Music folder and play it.
     private func openExternal(_ url: URL) async {
+        if url.scheme == "spitify" { if SocialLink.parse(url.absoluteString) != nil { incomingLink = url.absoluteString }; return }
         _ = await app.library.importItems([url], asAudiobooks: url.pathExtension.lowercased() == "m4b")
         if let s = app.library.library.songs.first(where: { $0.fileName == url.lastPathComponent }) { app.player.play([s], source: "Opened file") }
     }
@@ -104,7 +119,7 @@ struct RouteView: View {
         case .album(let id): AlbumView(id: id)
         case .catalogAlbum(let album): OnlineAlbumView(album: album)
         case .catalogSong(let track): OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork), single: track)
-        case .artist(let name): ArtistView(name: name)
+        case .artist(let name): ArtistLandingView(name: name)
         case .playlist(let id): PlaylistView(id: id)
         case .mix(let id): MixView(id: id)
         case .smart(let k): SmartView(kind: k)
@@ -115,6 +130,7 @@ struct RouteView: View {
         case .show(let id): ShowView(id: id)
         case .book(let id): BookView(showId: id)
         case .localBook(let key): BookView(localKey: key)
+        case .releases: ArtistReleasesView()
         case .settings: SettingsView()
         case .appearance: AppearanceView()
         case .equalizer: EqualizerView()

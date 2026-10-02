@@ -25,11 +25,12 @@ struct Episode: Identifiable, Codable, Hashable {
     var artworkURL: String?
     var position: Int
     var localFile: String?
+    var explicit: Bool? = nil
 }
 
 struct Resume: Codable, Hashable { var positionMs: Int64; var durationMs: Int64; var played: Bool; var updated: Date }
 
-struct ShowSearchResult: Identifiable, Hashable { var id: String { feedURL }; var title, author, feedURL: String; var artworkURL: String?; var genre: String? }
+struct ShowSearchResult: Identifiable, Hashable { var id: String { feedURL }; var title, author, feedURL: String; var artworkURL: String?; var genre: String?; var explicit: Bool? = nil }
 struct BookSearchResult: Identifiable, Hashable { var id: String; var title, author, summary: String; var seconds: Int64; var coverURL: String?; var language: String }
 
 /// RSS 2.0 + iTunes namespace.
@@ -65,6 +66,7 @@ final class FeedParser: NSObject, XMLParserDelegate {
             case "guid": cur["guid"] = v
             case "pubDate": cur["date"] = v
             case "itunes:duration": cur["dur"] = v
+            case "itunes:explicit": cur["explicit"] = v.lowercased()
             case "description", "itunes:summary": if cur["desc"] == nil { cur["desc"] = v }
             case "content:encoded": if v.count > (cur["desc"]?.count ?? 0) { cur["desc"] = v }
             case "item", "entry":
@@ -72,7 +74,7 @@ final class FeedParser: NSObject, XMLParserDelegate {
                 if let url = cur["url"], feed.episodes.count < 300 {
                     feed.episodes.append(Episode(id: stableId(cur["guid"] ?? url), title: cur["title"] ?? "Untitled episode", summary: FeedParser.clean(cur["desc"] ?? ""),
                                                  audioURL: url, published: FeedParser.date(cur["date"]), durationMs: FeedParser.duration(cur["dur"] ?? ""),
-                                                 artworkURL: cur["art"], position: feed.episodes.count))
+                                                 artworkURL: cur["art"], position: feed.episodes.count, explicit: cur["explicit"].map { ["yes", "true", "explicit"].contains($0) }))
                 }
             default: break
             }
@@ -140,6 +142,7 @@ final class ShowsStore {
         s.isPodcast = true
         s.isAudiobook = show.kind == .audiobook
         s.episodeId = "\(show.id)/\(e.id)"
+        s.explicit = e.explicit
         return s
     }
     func songs(_ show: Show) -> [Song] { show.episodes.sorted { show.kind == .audiobook ? $0.position < $1.position : ($0.published ?? .distantPast) > ($1.published ?? .distantPast) }.map { song($0, in: show) } }
@@ -153,7 +156,7 @@ final class ShowsStore {
         return res.compactMap { o in
             guard let feed = o["feedUrl"] as? String else { return nil }
             return ShowSearchResult(title: o["collectionName"] as? String ?? "", author: o["artistName"] as? String ?? "", feedURL: feed,
-                                    artworkURL: (o["artworkUrl600"] as? String) ?? (o["artworkUrl100"] as? String), genre: o["primaryGenreName"] as? String)
+                                    artworkURL: (o["artworkUrl600"] as? String) ?? (o["artworkUrl100"] as? String), genre: o["primaryGenreName"] as? String, explicit: (o["collectionExplicitness"] as? String).map { $0 == "explicit" })
         }
     }
 

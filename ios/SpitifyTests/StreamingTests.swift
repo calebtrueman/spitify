@@ -5,6 +5,34 @@ import UIKit
 @testable import Spitify
 
 final class StreamingTests: XCTestCase {
+    @MainActor func testPausingLocalAudioStopsEngineAndResumesAtSamePosition() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44100 * 5))
+        buffer.frameLength = buffer.frameCapacity
+        if let samples = buffer.floatChannelData?[0] { samples.initialize(repeating: 0, count: Int(buffer.frameLength)) }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
+        let backend = EngineBackend()
+        defer { backend.stop() }
+        try backend.load(url, at: 1, play: false)
+        XCTAssertFalse(backend.engine.isRunning)
+        backend.play()
+        XCTAssertTrue(backend.engine.isRunning)
+        try await Task.sleep(for: .milliseconds(200))
+        backend.pause()
+        let position = backend.currentTime
+        XCTAssertFalse(backend.engine.isRunning, "Paused audio must release the running output so iOS can show Play")
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(backend.currentTime, position, accuracy: 0.01)
+        backend.play()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertTrue(backend.engine.isRunning)
+        XCTAssertGreaterThan(backend.currentTime, position)
+        backend.stop()
+        XCTAssertFalse(backend.engine.isRunning)
+    }
     func track(_ suffix: String) -> OnlineTrack {
         OnlineTrack(id: suffix, title: "Stream test", artist: "Spitify", album: "Streaming tests", releaseID: "1", durationMs: 30000,
                     trackNumber: 1, discNumber: 1, artwork: nil, playable: true)
@@ -61,6 +89,32 @@ final class StreamingTests: XCTestCase {
         player.stop()
         XCTAssertNil(MPNowPlayingInfoCenter.default().nowPlayingInfo)
     }
+    @MainActor func testRestoringOldQueueDoesNotPublishUntilPlaybackStarts() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "sample", withExtension: "mp3"))
+        var oldSong = MusicStreams.song(track("restored-old")); oldSong.location = url.absoluteString; oldSong.title = "Previous session"
+        var newSong = oldSong; newSong.id = "stream:restored-new"; newSong.title = "Current song"
+        let defaults = UserDefaults.standard
+        let keys = ["queue", "queueIndex", "queuePosition", "queueSource", "queueManualIndices", "queueUnshuffled"]
+        let saved = keys.map { ($0, defaults.object(forKey: $0)) }
+        defer { for (key, value) in saved { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        defaults.set([oldSong.id], forKey: "queue"); defaults.set(0, forKey: "queueIndex"); defaults.set(1.0, forKey: "queuePosition")
+        let player = Player()
+        player.restore { $0 == oldSong.id ? oldSong : nil }
+        XCTAssertEqual(player.current?.title, "Previous session")
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertNil(MPNowPlayingInfoCenter.default().nowPlayingInfo)
+        NotificationCenter.default.post(name: UIApplication.willResignActiveNotification, object: nil)
+        XCTAssertNil(MPNowPlayingInfoCenter.default().nowPlayingInfo)
+        player.resume()
+        XCTAssertEqual(MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] as? String, oldSong.title)
+        player.play([newSong], shuffle: false)
+        NotificationCenter.default.post(name: UIApplication.willResignActiveNotification, object: nil)
+        XCTAssertEqual(MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] as? String, newSong.title)
+        player.stop()
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertNil(MPNowPlayingInfoCenter.default().nowPlayingInfo)
+    }
+
     func testCacheEvictsOldAudioAndKeepsActiveFileAndDownloads() throws {
         try ListeningCache.queue.sync {
             let fm = FileManager.default

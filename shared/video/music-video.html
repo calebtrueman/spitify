@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:100vw;height:56.25vw;min-width:177.78vh;min-height:100vh;border:0;pointer-events:none}</style></head>
+<body><div id="video"></div><script>
+'use strict';
+let player, ready = false, desired = {position:0, playing:false, speed:1}, lastSeek = 0;
+function report(state) {
+  if (window.webkit && window.webkit.messageHandlers.videoState) window.webkit.messageHandlers.videoState.postMessage(state);
+  console.log('SPITIFY_VIDEO_' + state);
+}
+function spitifySync(position, playing, speed) {
+  desired = {position: Math.max(0, Number(position)||0), playing: Boolean(playing), speed: Number(speed)||1};
+  if (!ready) return;
+  player.mute(); player.setVolume(0);
+  const current = player.getCurrentTime(), now = Date.now();
+  if (Math.abs(current - desired.position) > 1.25 && now-lastSeek > 750) {
+    lastSeek = now; player.seekTo(desired.position, true);
+  }
+  const rates = player.getAvailablePlaybackRates();
+  if (rates.includes(desired.speed) && player.getPlaybackRate() !== desired.speed) player.setPlaybackRate(desired.speed);
+  const state = player.getPlayerState();
+  if (desired.playing && state !== 1 && state !== 3) player.playVideo();
+  if (!desired.playing && (state === 1 || state === 3)) player.pauseVideo();
+}
+function spitifyStop() { desired.playing = false; ready = false; if (player) { player.mute(); player.stopVideo(); player.destroy(); } }
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('video', {
+    videoId: '__VIDEO_ID__', width:'100%', height:'100%',
+    playerVars: {autoplay:0, controls:0, playsinline:1, fs:0, rel:0, origin:location.origin},
+    events: {
+      onReady: function() { player.mute(); player.setVolume(0); ready=true; report('READY'); spitifySync(desired.position, desired.playing, desired.speed); },
+      onStateChange: function() { player.mute(); player.setVolume(0); },
+      onError: function() { ready=false; report('ERROR'); }
+    }
+  });
+}
+document.addEventListener('visibilitychange', function() { if(document.hidden && ready) player.pauseVideo(); });
+</script><script src="https://www.youtube.com/iframe_api"></script></body></html>

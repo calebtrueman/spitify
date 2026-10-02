@@ -42,6 +42,9 @@ final class AppModel {
     let player = Player()
     let musicDownloads = MusicDownloads.shared
     let musicStreams = MusicStreams.shared
+    let social = SocialStore()
+    let artistFollows = ArtistFollows()
+    let rooms = ListeningRooms()
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes() } }
@@ -70,6 +73,8 @@ final class AppModel {
     func start() async {
         guard !started else { return }
         started = true
+        rooms.start(app: self)
+        do { try social.prepare() } catch { social.message = error.localizedDescription }
         await library.scan()
         musicDownloads.start()
         await importDownloadedMusic(rescan: false)

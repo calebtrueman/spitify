@@ -5,7 +5,6 @@ struct SearchView: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @State private var query = ""
-    @State private var online = false
 
     var body: some View {
         let lib = app.library.library

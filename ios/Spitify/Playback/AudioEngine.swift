@@ -86,9 +86,9 @@ final class EngineBackend {
         stopNode(active)
         connect(active, file: file)
         files[active] = file
-        startEngine()
         nodes[active].volume = 1
-        if play { schedule(active, from: seconds); nodes[active].play() } else { pausedAt[active] = seconds }
+        if play { startEngine(); schedule(active, from: seconds); nodes[active].play() }
+        else { pausedAt[active] = seconds; engine.pause() }
     }
 
     func play() {
@@ -103,6 +103,7 @@ final class EngineBackend {
         stopNode(1 - active)
         stopNode(active)
         pausedAt[active] = t
+        engine.pause()
     }
 
     func seek(_ seconds: Double) {
@@ -111,7 +112,7 @@ final class EngineBackend {
         if playing { schedule(active, from: seconds); nodes[active].play() } else { pausedAt[active] = seconds }
     }
 
-    func stop() { cancelFade(); stopNode(0); stopNode(1); files = [nil, nil] }
+    func stop() { cancelFade(); stopNode(0); stopNode(1); files = [nil, nil]; engine.stop() }
 
     /// Starts `url` on the idle node and fades between them over `seconds` (equal-power).
     func crossfade(to url: URL, seconds: Double) throws {

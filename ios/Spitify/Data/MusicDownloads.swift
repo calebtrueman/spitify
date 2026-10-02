@@ -1,3 +1,4 @@
+import UserNotifications
 import Foundation
 import Observation
 import UIKit
@@ -376,7 +377,15 @@ private final class MusicDownloadDelegate: NSObject, URLSessionDownloadDelegate,
     }
 }
 
-final class MusicBackgroundAppDelegate: NSObject, UIApplicationDelegate {
+final class MusicBackgroundAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self; return true
+    }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping @Sendable (Int) -> Void) { completionHandler(Int(UNNotificationPresentationOptions([.banner, .sound]).rawValue)) }
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.notification.request.content.userInfo["releaseID"] != nil { UserDefaults.standard.set(true, forKey: "openReleaseFeed"); DispatchQueue.main.async { NotificationCenter.default.post(name: .init("SpitifyOpenReleaseFeed"), object: nil) } }
+        completionHandler()
+    }
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
         guard identifier == MusicDownloads.sessionID else { completionHandler(); return }
         MusicDownloads.shared.backgroundCompletion = completionHandler

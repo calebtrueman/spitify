@@ -56,6 +56,7 @@ struct NowPlayingView: View {
     @State private var dragDown: CGFloat = 0
     @State private var scrollTop: CGFloat = 0
     @State private var canCollapse: Bool?
+    @State private var videoOpen = false
     enum Sheet: String, Identifiable { case lyrics, queue, sleep, playback; var id: String { rawValue } }
 
     var body: some View {
@@ -69,7 +70,8 @@ struct NowPlayingView: View {
                         VStack(spacing: 0) {
                             VStack(spacing: 0) {
                                 header(s)
-                                ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * 0.48))).frame(maxHeight: .infinity).padding(.vertical, 12)
+                                if videoOpen && !s.isSpoken { Color.clear.frame(maxHeight: .infinity).padding(.vertical, 12) }
+                                else { ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * 0.48))).frame(maxHeight: .infinity).padding(.vertical, 12) }
                                 titleRow(s)
                                 SeekBar().padding(.top, 6)
                                 Transport().padding(.top, 2)
@@ -89,7 +91,7 @@ struct NowPlayingView: View {
                 }
             }
         }
-        .background { Backdrop(song: player.current, tint: tint) }
+        .background { if videoOpen && player.current?.isSpoken == false { MusicVideoBackdrop() } else { Backdrop(song: player.current, tint: tint) } }
         .offset(y: max(0, dragDown))
         .simultaneousGesture(DragGesture(minimumDistance: 14).onChanged { value in
             if canCollapse == nil { canCollapse = scrollTop >= -2 && value.translation.height > abs(value.translation.width) * 1.3 }
@@ -140,7 +142,10 @@ struct NowPlayingView: View {
             }
             .id(s.id).transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             Spacer()
-            if !s.isSpoken { PlaylistButton(song: s) }
+            if !s.isSpoken {
+                Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "photo" : "video").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Show album art" : "Watch music video")
+                PlaylistButton(song: s)
+            }
         }
         .animation(.spring(duration: 0.35), value: s.id)
     }

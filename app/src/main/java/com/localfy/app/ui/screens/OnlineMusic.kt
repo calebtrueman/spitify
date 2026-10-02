@@ -36,64 +36,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun OnlineMusicPanel(query: String) {
-    val actions = LocalApp.current
-    val library by actions.repo.library.collectAsStateWithLifecycle()
-    var tracks by remember { mutableStateOf(emptyList<OnlineTrack>()) }
-    var albums by remember { mutableStateOf(emptyList<OnlineAlbum>()) }
-    var albumMode by remember { mutableStateOf(false) }
-    var loading by remember { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
-    LaunchedEffect(query, albumMode) {
-        tracks = emptyList(); albums = emptyList(); failed = false
-        if (query.trim().length < 2) { loading = false; return@LaunchedEffect }
-        loading = true
-        try {
-            delay(400)
-            if (albumMode) albums = Monochrome.albums(query.trim()) else tracks = Monochrome.search(query.trim())
-        } catch (e: Exception) { if (e is CancellationException) throw e; failed = true }
-        finally { loading = false }
-    }
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Results", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !albumMode, onClick = { albumMode = false }, label = { Text("Songs") })
-            FilterChip(selected = albumMode, onClick = { albumMode = true }, label = { Text("Albums") })
-        }
-        if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (failed) Text("Couldn't load more results. Your saved music is still here.", style = MaterialTheme.typography.bodySmall)
-        if (albumMode) {
-            val local = library.albums.mapNotNull { a -> SearchMatch.score(query, a.title, a.artist)?.let { score ->
-                val remote = albums.firstOrNull { SearchMatch.fold(it.title) == SearchMatch.fold(a.title) && SearchMatch.fold(it.artist) == SearchMatch.fold(a.artist) }
-                AlbumMatch(a.title, a.artist, score, local = a, remote = remote)
-            } }
-            val remote = albums.filter { a -> local.none { it.remote?.id == a.id } }
-                .mapNotNull { a -> SearchMatch.score(query, a.title, a.artist)?.let { AlbumMatch(a.title, a.artist, it, remote = a) } }
-            val results = (local + remote).sortedWith(compareByDescending<AlbumMatch> { it.score }.thenBy { SearchMatch.fold(it.title + " " + it.artist) })
-            if (results.isEmpty() && !loading) Text("No albums found.")
-            results.take(60).forEach { result -> key(result.local?.id?.let { "local:$it" } ?: "online:${result.remote!!.id}") {
-                Row(Modifier.fillMaxWidth().clickable {
-                    result.remote?.let { actions.navigate(Routes.catalogAlbum(it)) } ?: result.local?.let { actions.navigate(Routes.album(it.id)) }
-                }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (result.local != null) Artwork(result.local.cover.artKey, Modifier.size(52.dp), RoundedCornerShape(6.dp))
-                    else SearchCover("album:${result.remote!!.id}", result.title, result.artist, result.remote.artwork)
-                    Column(Modifier.weight(1f)) { Text(result.title); Text(result.artist, style = MaterialTheme.typography.bodySmall) }
-                }
-            } }
-        } else {
-            val local = library.songs.mapNotNull { song -> SearchMatch.score(query, song.title, song.artist, song.album)?.let { SongMatch(song.title, song.artist, it, local = song) } }
-            val remote = tracks.filter { track -> library.songs.none { SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) } }
-                .mapNotNull { track -> SearchMatch.score(query, track.title, track.artist, track.album)?.let { SongMatch(track.title, track.artist, it, remote = track) } }
-            val results = (local + remote).sortedWith(compareByDescending<SongMatch> { it.score }.thenBy { SearchMatch.fold(it.title + " " + it.artist) })
-            val playable = results.mapNotNull { it.local }
-            if (results.isEmpty() && !loading) Text("No songs found.")
-            results.take(60).forEach { result -> key(result.local?.id?.let { "local:$it" } ?: "online:${result.remote!!.id}") {
-                result.local?.let { song -> SongRow(song = song, onClick = { actions.player.playSongs(playable, playable.indexOf(song), shuffle = false, source = "Search: $query") }, onMore = { actions.openSongMenu(song, SongMenuExtras()) }) }
-                    ?: OnlineMusicRow(result.remote!!)
-            } }
-        }
-    }
-}
+fun OnlineMusicPanel(query: String) { MixedSearchPanel(query) }
 
 internal fun savedSong(track: OnlineTrack, songs: List<Song>, jobs: List<MusicDownloadEntity>): Song? {
     val uri = jobs.firstOrNull { it.id == track.id && it.state == "complete" }?.localUri
@@ -150,7 +93,7 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
         Row(Modifier.weight(1f).clickable {
             actions.navigate(Routes.catalogSong(track))
         }, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            val textColor = if (song == null) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
+            val textColor = MaterialTheme.colorScheme.onSurface
             if (trackNumber != null) Text(trackNumber.toString(), Modifier.width(26.dp), color = textColor)
             else SearchCover("track:${track.id}", track.album.ifBlank { track.title }, track.artist, track.artwork)
             Column(Modifier.weight(1f)) {

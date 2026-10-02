@@ -5,6 +5,9 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 packages:
+  NostrSDK:
+    url: https://github.com/nostrdevkit/nostr-sdk-swift.git
+    exactVersion: 0.45.1
   TagLibSwift:
     url: https://github.com/jeonghi/TagLibSwift.git
     revision: a36e48f43a4cea1fd41baa0c90acdb6f35444800
@@ -13,8 +16,8 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.11"
-    CURRENT_PROJECT_VERSION: "12"
+    MARKETING_VERSION: "1.0.12"
+    CURRENT_PROJECT_VERSION: "16"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
@@ -26,8 +29,14 @@ targets:
     platform: iOS
     sources:
       - path: Spitify
+      - path: ../licenses
+        buildPhase: resources
+      - path: ../shared/video/music-video.html
+        buildPhase: resources
     dependencies:
       - package: TagLibSwift
+      - package: NostrSDK
+        product: NostrSDK
     settings:
       base:
         SWIFT_OBJC_BRIDGING_HEADER: Spitify/Data/FileTagsBridge.h

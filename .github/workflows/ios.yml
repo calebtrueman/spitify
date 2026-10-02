@@ -3,7 +3,7 @@ name: iOS build
 on:
   push:
     branches: [main]
-    paths: ["ios/**", ".github/workflows/ios.yml"]
+    paths: ["ios/**", "shared/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
   release:
     types: [published]

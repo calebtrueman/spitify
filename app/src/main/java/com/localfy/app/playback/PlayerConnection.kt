@@ -226,7 +226,7 @@ class PlayerConnection(
 
     private fun applySpeedFor(item: MediaItem?) {
         val podcast = item?.mediaMetadata?.mediaType.isSpoken()
-        val speed = prefs.getFloat(if (podcast) KEY_SPEED_PODCAST else KEY_SPEED_MUSIC, 1f)
+        val speed = roomSpeed ?: prefs.getFloat(if (podcast) KEY_SPEED_PODCAST else KEY_SPEED_MUSIC, 1f)
         if (controller?.playbackParameters?.speed != speed) controller?.setPlaybackSpeed(speed)
     }
 
@@ -282,6 +282,7 @@ class PlayerConnection(
 
     // ---- Transport ----
 
+    var queueVersion: Long = 0; private set
     fun playSongs(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean? = null, source: String? = null, startPositionMs: Long = 0L) {
         val c = controller ?: return
         if (songs.isEmpty()) return
@@ -289,6 +290,7 @@ class PlayerConnection(
         val usable = songs.filter { it.playable }
         if (usable.isEmpty()) { _messages.tryEmit("This format isn't supported (${songs.first().fileName.substringAfterLast('.').uppercase()})"); return }
         if (usable.size != songs.size) return playSongs(usable, usable.indexOf(wanted).coerceAtLeast(0), shuffle, source, startPositionMs)
+        queueVersion += 1
         val wantShuffle = shuffle ?: _state.value.shuffle
         val start = startIndex.coerceIn(songs.indices)
         val ordered: List<Song>
@@ -358,6 +360,22 @@ class PlayerConnection(
         return true
     }
 
+    fun appendFromSource(songs: List<Song>) {
+        controller?.addMediaItems(songs.filter { it.playable }.map { it.toMediaItem() })
+        saveQueue()
+    }
+
+    private var roomSpeed: Float? = null
+    private var roomRepeat: Int? = null
+    fun setRoomPlayback(speed: Float?) {
+        val c = controller ?: return
+        if (speed != null && roomSpeed == null) roomRepeat = c.repeatMode
+        roomSpeed = speed
+        if (speed != null) { c.repeatMode = Player.REPEAT_MODE_OFF; c.setPlaybackSpeed(speed) }
+        else { roomRepeat?.let { c.repeatMode = it }; roomRepeat = null; c.setPlaybackSpeed(prefs.getFloat(KEY_SPEED_MUSIC, 1f)) }
+    }
+    fun setPlaying(playing: Boolean) { controller?.let { c -> if (playing) { if (c.playbackState == Player.STATE_IDLE) c.prepare(); c.play() } else c.pause() } }
+
     fun togglePlay() {
         val c = controller ?: return
         if (c.isPlaying) c.pause() else {
@@ -400,6 +418,7 @@ class PlayerConnection(
     }
 
     fun clearUpNext() {
+        queueVersion += 1
         val c = controller ?: return
         val cur = c.currentMediaItemIndex
         if (cur + 1 < c.mediaItemCount) c.removeMediaItems(cur + 1, c.mediaItemCount)
@@ -537,7 +556,7 @@ class PlayerConnection(
             putString(KEY_MANUAL, (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.joinToString(","))
             putInt(KEY_INDEX, c.currentMediaItemIndex)
             putLong(KEY_POSITION, c.currentPosition)
-            putInt(KEY_REPEAT, c.repeatMode)
+            putInt(KEY_REPEAT, roomRepeat ?: c.repeatMode)
             putString(KEY_UNSHUFFLED, unshuffledOrder?.joinToString(","))
         }
     }

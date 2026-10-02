@@ -33,6 +33,7 @@ data class Song(
     val episodeId: Long? = null,
     /** Bumped when custom artwork changes, so image caches refresh. */
     val artVersion: Long = 0,
+    val explicit: Boolean? = null,
 ) {
     val uri: Uri get() = sourceUri ?: ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 

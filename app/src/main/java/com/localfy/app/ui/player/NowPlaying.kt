@@ -563,7 +563,8 @@ fun TabletopPlayer(posture: FoldPosture, onExit: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(topHeight).statusBarsPadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (song == null) { EmptyState("Flex mode", "Start some music and the controls will live down here on the desk."); return@Row }
-                Artwork(song.artKey, Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true).swipeToSkip(), RoundedCornerShape(12.dp), song.album)
+                if (!app.musicVideoEnabled.value || song.isPodcast || song.isAudiobook) Artwork(song.artKey, Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true).swipeToSkip(), RoundedCornerShape(12.dp), song.album)
+                else Spacer(Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true))
                 Spacer(Modifier.width(24.dp))
                 LyricsView(song, Modifier.weight(1f).fillMaxHeight(), MaterialTheme.typography.titleLarge, PaddingValues(vertical = 8.dp), showFooter = false)
             }

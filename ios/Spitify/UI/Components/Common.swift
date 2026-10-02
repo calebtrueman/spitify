@@ -104,6 +104,7 @@ struct SongMenuItems: View {
         Button("Add to queue", systemImage: "text.line.last.and.arrowtriangle.forward") { app.player.addToQueue([song]) }
         if !song.isSpoken {
             Button("Go to song radio", systemImage: "dot.radiowaves.left.and.right") { app.player.play(app.songRadio(song), shuffle: false, source: "\(song.title) Radio") }
+            Button("Share with friends", systemImage: "square.and.arrow.up") { router.share(name: song.title, songs: [song], kind: "song", app: app) }
             Button("Add to playlist", systemImage: "text.badge.plus") { if let track = app.musicStreams.track(song) { app.musicStreams.save([track]) }; router.addingToPlaylist = [song] }
             Divider()
             Button("Go to album", systemImage: "square.stack") { if let track = app.musicStreams.track(song) { router.go(.catalogAlbum(OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork))) } else { router.go(.album(song.albumKey)) } }

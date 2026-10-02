@@ -3,7 +3,7 @@
 # Spitify
 
 **Music, podcasts and audiobooks for Android and iPhone.**
-Play your own files, find online music, stream it, or download it for offline listening. Listen on your phone or through your car’s playback controls. No Spitify account or ads. Recommendations are learned on your device.
+Play your own files, find online music, stream it, or download it for offline listening. Listen on your phone or through your car’s playback controls. No Spitify account. Recommendations are learned on your device.
 
 Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · AVFoundation · iOS 17+
 
@@ -51,8 +51,8 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 
 ### 🎵 Your music, Spotify-style
 - Home with quick picks, generated playlists, Jump back in, Recently added and top artists.
-- Search across songs, artists, albums and playlists, plus browsing by genre and folder.
-- Search finds local and online songs and albums. **Play** streams online audio as it arrives. **Add to Library** saves the song without downloading it. **Download** keeps an offline copy with song details and cover art.
+- One search list ranks songs, albums, artists, playlists, podcasts, episodes and audiobooks together. Each result shows its type and creator, with an **E** badge when the source marks it explicit.
+- Online results are ready to play, even before saving them. **Play** streams online audio as it arrives. **Add to Library** saves the song without downloading it. **Download** keeps an offline copy with song details and cover art.
 - Temporary listening audio has a separate 1 GB cache. Older audio is removed first; Settings can clear it without touching downloads. See [streaming and saved music](docs/STREAMING.md).
 - Downloads include Wi-Fi-only mode, cancellation, retries, and matched backup sources when the first source fails. Online availability varies. See [music sources and checks](docs/MONOCHROME.md).
 - Your Library with filters, sorting, and grid or list view.
@@ -63,6 +63,21 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - **Synced lyrics** from file tags, `.lrc` files, or [LRCLIB](https://lrclib.net), fetched automatically when you're online. They follow playback and you can tap a line to jump to it.
 - Lock-screen and Bluetooth playback controls. On iPhone, song details follow the current queue and supported iOS versions can show expanded album artwork.
 - Swipe down over the full player to collapse it to the small player. Android also supports notification controls and resume-on-reboot; swiping it away from Recents stops playback.
+
+### Friends, playlists and listening together
+- Search public Spotify playlists or paste a playlist link. Matching runs in the background when you open or save a playlist, and saved matches are reused. Playback starts with the first available song while the rest prepare. Spitify keeps the playlist name, cover, description and source link, then matches songs to its own files and online sources. Incomplete source lists and songs that cannot be matched are labelled.
+- Open **Your Library → Friends** to share a friend code and follow people. Sharing is off until you turn it on. Public profiles and playlists are optional; private shares are encrypted.
+- Share a song, album or playlist from its menu. Invite editors to add, remove, rename and reorder songs. Their changes wait for the owner's app to accept them.
+- **Shared Mix** takes turns between songs picked by each person and skips repeated recordings. It uses contributions you choose, rather than uploading listening history.
+- **Rooms** lets a host approve guests, share a queue, and choose whether guests can control playback. Everyone plays their own matching source. Leaving or ending a Room stops future Room updates from restarting a guest's music.
+- Artist pages show songs from their albums and singles, with **Show more songs** to keep browsing beyond the popular picks. Follow artists from their pages, then open **New releases** in Your Library. Checks run when you open the app or refresh the feed. Optional notifications alert you to new releases found during those checks.
+
+Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
+
+### Music videos
+Tap the video icon in the full player to fill the player with a matching music video, behind the title and controls. Tap it again to return to album art. The video stays muted and follows the song's position, pause state and speed. Your existing song audio continues. Closing the view or putting the app in the background stops the visuals.
+
+Videos use YouTube's embedded player. Some songs have no matching video, and some videos block embedding or show provider ads. The song keeps playing if the video cannot load.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -221,11 +236,14 @@ scripts/          emulator setup, test music, FFmpeg build
 
 ## Privacy
 
-Your library, listening history, taste profile, name and photo stay on the phone. Spitify goes online when a feature needs it. Music search sends your query to Monochrome. Playing or downloading online music contacts the audio source; backup matching can send song, artist and album details to a public source. Streaming writes temporary audio to the listening cache. Permanent music downloads start when you request them. Other optional lookups can be switched off in Settings:
+Your library, listening history and taste profile stay on the phone. Friends sends only the profile and music details you choose to share. Public profiles and playlists are public; direct shares are encrypted. Relays can still see the sending and receiving public keys. Spitify goes online when a feature needs it. Music search sends your query to Monochrome. Playing or downloading online music contacts the audio source; backup matching can send song, artist and album details to a public source. Streaming writes temporary audio to the listening cache. Permanent music downloads start when you request them. Other optional lookups can be switched off in Settings:
 
 | Feature | Service |
 |---|---|
 | Online music search, streaming and downloads | Monochrome Tracks; matched public backup sources, including Internet Archive |
+| Public Spotify playlist search and metadata | wolfXspotify public service; Spotify public embed as a fallback |
+| Friends and Rooms, when enabled | Public Nostr relays; editable in Friends |
+| Music video search and playback | YouTube |
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
 | Synced lyrics | LRCLIB |

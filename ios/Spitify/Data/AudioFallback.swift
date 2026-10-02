@@ -91,7 +91,7 @@ enum AudioFallback {
         result.playable = true; result.audioURL = url; result.audioExtension = "m4a"; result.audioByteCount = Int64(audio["contentLength"] as? String ?? ""); result.fallbackTried = true
         return result
     }
-    private static func request(_ path: String, _ payload: [String: Any]) async throws -> [String: Any] {
+    static func request(_ path: String, _ payload: [String: Any]) async throws -> [String: Any] {
         var body = payload
         body["context"] = ["client": ["clientName": "WEB", "clientVersion": "2.20260708.00.00"]]
         var req = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/\(path)")!, timeoutInterval: 15)

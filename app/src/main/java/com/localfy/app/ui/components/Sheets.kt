@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
@@ -103,6 +104,10 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
             if (!song.isPodcast) MenuItem(Icons.Rounded.Radio, "Go to song radio") {
                 onDismiss()
                 app.player.playSongs(app.taste.songRadio(song), 0, shuffle = false, source = "${song.title} Radio")
+            }
+            if (!song.isPodcast && !song.isAudiobook) MenuItem(Icons.Rounded.Share, "Share with friends") {
+                runCatching { val playlist = nativeApp.social.create(song.title, listOf(song), nativeApp.musicStreams, "song"); onDismiss(); onNavigated(); app.navigate(Routes.sharedPlaylist(playlist.key)) }
+                    .onFailure { android.widget.Toast.makeText(nativeApp, it.message, android.widget.Toast.LENGTH_LONG).show() }
             }
             if (!song.isPodcast) MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { streamTrack?.let { nativeApp.musicStreams.save(listOf(it)) }; onDismiss(); app.addToPlaylist(listOf(song)) }
             if (extras.onRemove != null) {

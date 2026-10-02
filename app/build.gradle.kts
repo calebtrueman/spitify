@@ -16,8 +16,8 @@ android {
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        versionCode = 12
-        versionName = "1.0.11"
+        versionCode = 16
+        versionName = "1.0.12"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -41,6 +41,8 @@ android {
     }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/src/test/resources")
+    sourceSets.getByName("main").assets.srcDir("$rootDir/shared/video")
+    sourceSets.getByName("main").assets.srcDir("$rootDir/licenses")
 }
 
 kotlin {
@@ -54,6 +56,7 @@ ksp {
 }
 
 dependencies {
+    implementation("org.nostrdevkit:nostr-sdk:0.45.1")
     implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation(libs.androidx.core.ktx)

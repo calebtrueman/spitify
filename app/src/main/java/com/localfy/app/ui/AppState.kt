@@ -22,6 +22,10 @@ object Routes {
     const val ALBUM = "album/{id}"
     const val CATALOG_ALBUM = "catalogalbum/{album}"
     const val CATALOG_SONG = "catalogsong/{track}"
+    const val ONLINE_ARTIST = "onlineartist/{artist}"
+    const val SPOTIFY_PLAYLIST = "spotifyplaylist/{id}"
+    const val SHARED_PLAYLIST = "sharedplaylist/{key}"
+    const val FRIENDS = "friends"
     const val ARTIST = "artist/{name}"
     const val PLAYLIST = "playlist/{id}"
     const val SMART = "smart/{kind}"
@@ -41,6 +45,9 @@ object Routes {
         put("id", album.id); put("title", album.title); put("artist", album.artist); put("artwork", album.artwork)
     }.toString())
     fun catalogSong(track: com.localfy.app.data.music.OnlineTrack) = "catalogsong/" + Uri.encode(track.json())
+    fun onlineArtist(artist: com.localfy.app.data.music.OnlineArtist) = "onlineartist/" + Uri.encode(org.json.JSONObject().put("id", artist.id).put("name", artist.name).put("artwork", artist.artwork).toString())
+    fun spotifyPlaylist(id: String) = "spotifyplaylist/" + Uri.encode(id)
+    fun sharedPlaylist(key: String) = "sharedplaylist/" + Uri.encode(key)
     fun artist(name: String) = "artist/${Uri.encode(name)}"
     fun playlist(id: Long) = "playlist/$id"
     fun smart(kind: SmartCollection.Kind) = "smart/${kind.name}"
@@ -71,6 +78,8 @@ class AppActions(
     val editMetadata: (List<Song>, Boolean) -> Unit,
     val openPlayer: () -> Unit,
 ) {
+    val musicVideoEnabled = androidx.compose.runtime.mutableStateOf(false)
+
     fun navigate(route: String) = nav.navigate(route) { launchSingleTop = true }
 
     /** The editor works on the song as currently shown (overrides applied), keyed by id. */

@@ -20,6 +20,7 @@ struct CollectionView<Extra: View>: View {
     @ViewBuilder var extra: () -> Extra
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
+    @Environment(Router.self) private var router
     @State private var color = Color(hex: 0x2A2A2E)
     @State private var offset: CGFloat = 0
 
@@ -30,6 +31,9 @@ struct CollectionView<Extra: View>: View {
                 header
                 HStack(spacing: 6) {
                     if let toolbarExtra { toolbarExtra }
+                    if !songs.isEmpty && songs.allSatisfy({ !$0.isSpoken }) {
+                        Button { router.share(name: title, songs: songs, kind: kind == "Album" ? "album" : kind == "Song" ? "song" : "playlist", app: app) } label: { Image(systemName: "square.and.arrow.up").frame(width: 40, height: 40) }.accessibilityLabel("Share with friends")
+                    }
                     Button { app.player.addToQueue(songs) } label: { Image(systemName: "text.badge.plus").font(.system(size: 20)).frame(width: 40, height: 40) }.disabled(songs.isEmpty)
                     Spacer()
                     Button { app.player.play(songs, shuffle: true, source: title) } label: { Image(systemName: "shuffle").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }.disabled(songs.isEmpty)

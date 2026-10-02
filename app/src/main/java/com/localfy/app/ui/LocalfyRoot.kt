@@ -1,5 +1,6 @@
 package com.localfy.app.ui
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -170,6 +171,8 @@ private val PaneBreakpoint = 720.dp
 fun LocalfyRoot(activity: Activity) {
     val container = activity.application as LocalfyApp
     val nav = rememberNavController()
+    val incomingLink by container.incomingSocialLink.collectAsStateWithLifecycle()
+    LaunchedEffect(incomingLink) { incomingLink?.let { nav.navigate(if (it == "releases") "releases" else "incoming/" + android.net.Uri.encode(it)); container.incomingSocialLink.value = null } }
     var menu by remember { mutableStateOf<Pair<Song, SongMenuExtras>?>(null) }
     var addToPlaylist by remember { mutableStateOf<List<Song>?>(null) }
     var editing by remember { mutableStateOf<Pair<List<Song>, Boolean>?>(null) }
@@ -329,7 +332,14 @@ fun LocalfyRoot(activity: Activity) {
                             }
                             composable(Routes.CATALOG_ALBUM) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("album").orEmpty(), false) }
                             composable(Routes.CATALOG_SONG) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("track").orEmpty(), true) }
-                            composable(Routes.ARTIST) { ArtistScreen(it.arguments?.getString("name").orEmpty()) }
+                            composable(Routes.ONLINE_ARTIST) { com.localfy.app.ui.screens.OnlineArtistScreen(it.arguments?.getString("artist").orEmpty()) }
+                            composable(Routes.SPOTIFY_PLAYLIST) { com.localfy.app.ui.screens.PublicPlaylistScreen(it.arguments?.getString("id").orEmpty(), false) }
+                            composable(Routes.SHARED_PLAYLIST) { com.localfy.app.ui.screens.PublicPlaylistScreen(it.arguments?.getString("key").orEmpty(), true) }
+                            composable("rooms") { com.localfy.app.ui.screens.RoomsScreen() }
+                            composable("releases") { com.localfy.app.ui.screens.ArtistReleasesScreen() }
+                            composable("incoming/{link}") { com.localfy.app.ui.screens.IncomingShareScreen(it.arguments?.getString("link").orEmpty()) }
+                            composable(Routes.FRIENDS) { com.localfy.app.ui.screens.FriendsScreen() }
+                            composable(Routes.ARTIST) { com.localfy.app.ui.screens.ArtistLandingScreen(it.arguments?.getString("name").orEmpty()) }
                             composable(Routes.PLAYLIST, listOf(navArgument("id") { type = NavType.LongType })) {
                                 PlaylistScreen(it.arguments!!.getLong("id"))
                             }

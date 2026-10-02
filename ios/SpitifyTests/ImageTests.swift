@@ -1,9 +1,33 @@
 import XCTest
+import SwiftUI
 import ImageIO
 import UniformTypeIdentifiers
 @testable import Spitify
 
 final class ImageTests: XCTestCase {
+    @MainActor func testArtworkStaysBrightWhileOtherCoversRefresh() async throws {
+        let key = "steady-art-" + UUID().uuidString
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 80)).image { context in UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 80, height: 80)) }
+        ArtCache.shared.storeEmbedded(try XCTUnwrap(image.pngData()), key: key)
+        let app = AppModel()
+        let host = UIHostingController(rootView: ArtworkView(key: key, remote: nil).frame(width: 200, height: 200).environment(app))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let oldKey = scene.keyWindow
+        let window = UIWindow(windowScene: scene); window.rootViewController = host; window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; oldKey?.makeKeyAndVisible(); try? FileManager.default.removeItem(at: ArtCache.shared.embeddedURL(key)); ArtCache.shared.invalidate(key) }
+        try await Task.sleep(for: .milliseconds(400))
+        for _ in 0..<8 {
+            ArtCache.shared.invalidate(key)
+            app.library.artVersion += 1
+            try await Task.sleep(for: .milliseconds(70))
+            let shot = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true) }
+            let cg = try XCTUnwrap(shot.cgImage)
+            let sample = pixel(cg, cg.width / 2, cg.height / 2)
+            XCTAssertGreaterThan(sample.r, 240, "Refreshing covers must not dim an existing image")
+            XCTAssertGreaterThan(sample.b, 240)
+        }
+    }
+
     /// A camera-style JPEG: pixels stored landscape (left red, right blue) with EXIF orientation 6
     /// ("rotate 90° clockwise to display"), so it should display as a portrait image, red on top.
     private func rotatedJPEG() -> Data {

@@ -8,3 +8,12 @@
 -dontwarn java.awt.image.BufferedImage
 -dontwarn javax.imageio.ImageIO
 -dontwarn javax.imageio.stream.ImageInputStream
+
+# Nostr's generated bindings pass callbacks and structures through JNA by name.
+-keep class org.nostrdevkit.sdk.** { *; }
+-keep class com.sun.jna.** { *; }
+# JNA's AWT helpers are desktop-only and are never used by the Nostr bindings.
+-dontwarn java.awt.Component
+-dontwarn java.awt.GraphicsEnvironment
+-dontwarn java.awt.HeadlessException
+-dontwarn java.awt.Window

@@ -34,6 +34,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
+    val incomingSocialLink = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val database by lazy { LocalfyDatabase.create(this) }
     val metadata: MetadataRepository by lazy { MetadataRepository(this, database, appScope) }
@@ -54,6 +55,9 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val taste by lazy { com.localfy.app.data.taste.TasteRepository(this, database, appScope, library, profiles).also { it.start() } }
     val podcasts by lazy { PodcastRepository(this, database, appScope) }
     val musicStreams by lazy { com.localfy.app.data.music.MusicStreams(this) }
+    val artistFollows by lazy { com.localfy.app.data.music.ArtistFollows(this) }
+    val rooms by lazy { com.localfy.app.data.social.ListeningRooms(this) }
+    val social by lazy { com.localfy.app.data.social.SocialRepository(this, appScope) }
     val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 
     /** Resolves any queue id: MediaStore songs, local podcast files, or podcast episodes (negative ids). */

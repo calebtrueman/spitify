@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         app.library.ensureStarted()
                         app.podcasts.start()
+                        app.rooms
                         app.taste // starts the recommendation engine
                         app.player.connect()
                     }
@@ -120,6 +121,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!crashScreen) lifecycleScope.launch { app.artistFollows.refresh() }
         if (!crashScreen) app.player.connect() // no-op if already connected
     }
 
@@ -130,11 +132,13 @@ class MainActivity : ComponentActivity() {
 
     /** "Open with Spitify" from a file manager or another app. */
     private fun handleViewIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("open_releases", false) == true) { app.incomingSocialLink.value = "releases"; return }
         if (intent?.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
             playVoiceRequest(intent)
             return
         }
         val uri = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data ?: return
+        if (uri.scheme == "spitify") { if (com.localfy.app.data.social.SocialLink.parse(uri.toString()) != null) app.incomingSocialLink.value = uri.toString(); return }
         lifecycleScope.launch {
             val id = if (uri.authority == MediaStore.AUTHORITY) uri.lastPathSegment?.toLongOrNull() else null
             val lib = withTimeoutOrNull(8_000) { app.library.library.first { !it.isEmpty } } ?: return@launch

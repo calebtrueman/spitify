@@ -14,6 +14,7 @@ final class Player {
     private(set) var queue: [Song] = []
     private(set) var index = -1
     private(set) var manualQueueIndices: Set<Int> = []
+    private(set) var queueVersion = UUID()
     private(set) var isPlaying = false
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
@@ -23,7 +24,9 @@ final class Player {
     private(set) var sleep: SleepTimer?
     private(set) var message: String?
     private(set) var audioOutput = "Audio output unavailable"
-    var speed: Float { current?.isSpoken == true ? speedSpoken : speedMusic }
+    private var roomSpeed: Float?
+    var speed: Float { roomSpeed ?? (current?.isSpoken == true ? speedSpoken : speedMusic) }
+    func setRoomPlayback(speed: Float?) { roomSpeed = speed; engine.setRate(self.speed); stream.setRate(self.speed) }
     var lockScreenArt = UserDefaults.standard.object(forKey: "lockScreenArt") as? Bool ?? true {
         didSet { UserDefaults.standard.set(lockScreenArt, forKey: "lockScreenArt"); updateNowPlaying() }
     }
@@ -51,6 +54,8 @@ final class Player {
     private let engine = EngineBackend()
     private let stream = StreamBackend()
     private var usingStream = false
+    private var needsLoad = false
+    private var hasStartedPlayback = false
     private var ticker: Timer?
     private var unshuffled: [Song]?
     private var listenedMs: Int64 = 0
@@ -71,6 +76,13 @@ final class Player {
         configureSession()
         updateAudioOutput()
         configureRemote()
+        // Restoring a queue must not revive the previous lock-screen session.
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didBecomeActiveNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateNowPlaying() }
+            }
+        }
     }
 
     // MARK: - Public transport
@@ -78,6 +90,7 @@ final class Player {
     func play(_ songs: [Song], from start: Int = 0, shuffle wantShuffle: Bool? = nil, source: String? = nil, at positionMs: Int64 = 0) {
         let usable = songs.filter(\.playable)
         guard !usable.isEmpty else { flash("This format isn't supported on iPhone"); return }
+        queueVersion = UUID()
         let wanted = songs.indices.contains(start) ? songs[start] : usable[0]
         let startIdx = usable.firstIndex(of: wanted) ?? 0
         let doShuffle = wantShuffle ?? shuffle
@@ -106,7 +119,8 @@ final class Player {
 
     func resume() {
         guard current != nil else { return }
-        if usingStream && stream.failed { startCurrent(at: position, play: true); return }
+        if needsLoad || usingStream && stream.failed { startCurrent(at: position, play: true); return }
+        hasStartedPlayback = true
         activateSession()
         if usingStream { stream.play() } else { engine.play() }
         isPlaying = true
@@ -133,7 +147,9 @@ final class Player {
     }
 
     func stop() {
+        queueVersion = UUID()
         pause()
+        hasStartedPlayback = false
         artworkSessionActive = false; artworkIdleTask?.cancel(); artworkLoad?.cancel(); artworkLoad = nil; nowPlayingID = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -195,6 +211,11 @@ final class Player {
         saveQueue()
     }
 
+    func appendFromSource(_ songs: [Song]) {
+        queue.append(contentsOf: songs.filter(\.playable))
+        saveQueue()
+    }
+
     func remove(at i: Int) {
         guard queue.indices.contains(i), i != index else { return }
         let wasManual = manualQueueIndices.contains(i)
@@ -217,6 +238,7 @@ final class Player {
         saveQueue()
     }
     func clearUpNext() {
+        queueVersion = UUID()
         if index + 1 < queue.count { queue.removeSubrange((index + 1)...) }
         manualQueueIndices = manualQueueIndices.filter { $0 <= index }
         unshuffled = nil
@@ -284,9 +306,11 @@ final class Player {
         guard let song = current else { return }
         guard let url = url(for: song) else { stop(); flash("This song is no longer available."); return }
         // Publish the selected song before loading audio; never leave the previous title visible during a load.
+        needsLoad = false
         position = seconds; duration = Double(song.durationMs) / 1000; isPlaying = play
-        updateNowPlaying()
+        if play { hasStartedPlayback = true }
         activateSession()
+        updateNowPlaying()
         fading = false
         listenedMs = 0
         listenStarted = Date()
@@ -324,6 +348,7 @@ final class Player {
         markFinished()
         endListen(auto: true)
         if sleep == .endOfTrack { sleep = nil; pause(); seek(0); return }
+        if roomSpeed != nil { pause(); return }
         if repeatMode == .one { startCurrent(at: 0, play: true); return }
         if index + 1 < queue.count { index += 1; startCurrent(at: 0, play: true) }
         else if repeatMode == .all && !queue.isEmpty { index = 0; startCurrent(at: 0, play: true) }
@@ -332,7 +357,9 @@ final class Player {
 
     private func startTicker() {
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+        ticker = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func tick() {
@@ -416,7 +443,10 @@ final class Player {
         unshuffled = d.stringArray(forKey: "queueUnshuffled")?.compactMap(lookup)
         index = min(max(0, d.integer(forKey: "queueIndex")), songs.count - 1)
         source = d.string(forKey: "queueSource")
-        startCurrent(at: d.double(forKey: "queuePosition"), play: false)
+        position = max(0, d.double(forKey: "queuePosition"))
+        duration = Double(current?.durationMs ?? 0) / 1000
+        needsLoad = true
+        isPlaying = false
     }
 
     private func setShuffle(_ on: Bool) { shuffle = on; UserDefaults.standard.set(on, forKey: "shuffle") }
@@ -460,7 +490,8 @@ final class Player {
     }
 
     private func activateSession() {
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do { try AVAudioSession.sharedInstance().setActive(true) }
+        catch { NSLog("Spitify audio session could not activate: %@", error.localizedDescription) }
         updateAudioOutput()
     }
 
@@ -484,6 +515,7 @@ final class Player {
     }
 
     private func updateNowPlaying() {
+        guard hasStartedPlayback else { return }
         let c = MPRemoteCommandCenter.shared()
         let spoken = current?.isSpoken == true
         c.skipForwardCommand.isEnabled = spoken; c.skipBackwardCommand.isEnabled = spoken
@@ -493,7 +525,7 @@ final class Player {
         if nowPlayingID != s.id {
             nowPlayingID = s.id; artworkLoad?.cancel(); artworkLoad = nil
             portraitArtKey = nil; portraitArt = nil
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            // Replace the song in one write without dropping the active session.
         }
         var info: [String: Any] = [
             MPNowPlayingInfoPropertyExternalContentIdentifier: s.id,
@@ -523,11 +555,18 @@ final class Player {
             }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+        #if DEBUG
+        let snapshot: [String: Any] = ["songID": s.id, "title": s.title, "playing": isPlaying,
+            "position": position, "publishedTitle": MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyTitle] as? String ?? "",
+            "updatedAt": Date().timeIntervalSince1970]
+        if let data = try? JSONSerialization.data(withJSONObject: snapshot) {
+            try? data.write(to: Store.caches.appendingPathComponent("playback-state.json"), options: .atomic)
+        }
+        #endif
     }
 
     private func updateNowPlayingElapsed() {
-        guard let current else { return }
+        guard hasStartedPlayback, let current else { return }
         guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo,
               info[MPNowPlayingInfoPropertyExternalContentIdentifier] as? String == current.id else {
             updateNowPlaying(); return

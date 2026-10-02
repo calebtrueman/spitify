@@ -1,0 +1,42 @@
+import SwiftUI
+
+struct ArtistReleasesView: View {
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    var body: some View {
+        List {
+            Section {
+                Toggle("Release notifications", isOn: Binding(get: { app.artistFollows.notifications }, set: { enabled in Task { await app.artistFollows.setNotifications(enabled) } }))
+                Text("Spitify checks followed artists when you open the app. New releases appear here; alerts need notification permission.").font(.caption).foregroundStyle(.secondary)
+            }
+            if app.artistFollows.artists.isEmpty { Text("Follow an artist from search to see their releases here.") }
+            Section("Following") {
+                ForEach(app.artistFollows.artists) { artist in NavigationLink(artist.name) { OnlineArtistView(artist: artist) } }
+            }
+            Section("Latest releases") {
+                ForEach(app.artistFollows.releases) { notice in
+                    Button { router.go(.catalogAlbum(notice.album)) } label: {
+                        HStack(spacing: 12) {
+                            PlaylistCover(url: notice.album.artwork).frame(width: 56, height: 56)
+                            VStack(alignment: .leading) { Text(notice.album.title).foregroundStyle(.primary); SearchSubtitle(type: "Album", creator: notice.artist.name, explicit: notice.album.explicit == true) }
+                        }
+                    }.buttonStyle(.plain)
+                }
+            }
+            if let message = app.artistFollows.message { Text(message) }
+        }.navigationTitle("New releases")
+        .task { await app.artistFollows.refresh() }
+        .refreshable { await app.artistFollows.refresh() }
+    }
+}
+
+struct ArtistLandingView: View {
+    var name: String
+    @State private var artist: OnlineArtist?
+    var body: some View {
+        Group { if let artist { OnlineArtistView(artist: artist) } else { ArtistView(name: name) } }
+            .task(id: name) {
+                if let found = try? await MonochromeClient().searchAll(name) { artist = found.artists.first { SearchMatch.fold($0.name) == SearchMatch.fold(name) } }
+            }
+    }
+}

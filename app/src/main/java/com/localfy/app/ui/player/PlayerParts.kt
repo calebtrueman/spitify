@@ -248,6 +248,8 @@ fun Modifier.swipeToSkip(threshold: Dp = 80.dp): Modifier {
  */
 @Composable
 fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
+    val videoSong = rememberCurrentSong()
+    if (LocalApp.current.musicVideoEnabled.value && videoSong != null && !videoSong.isPodcast && !videoSong.isAudiobook) { Spacer(modifier); return }
     val app = LocalApp.current
     val state = rememberPlayerState()
     val lookup = rememberSongLookup()
@@ -397,6 +399,7 @@ private fun VinylRecord(song: Song?, modifier: Modifier) {
 @Composable
 fun ArtBackdrop(song: Song?, modifier: Modifier = Modifier, strength: Float = 1f) {
     val tint = rememberPlayerTint(song)
+    if (LocalApp.current.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) { Box(modifier.fillMaxSize()) { MusicVideoBackdrop() }; return }
     Box(modifier.fillMaxSize().clipToBounds().background(LocalfyColors.Background)) {
         if (song != null && Build.VERSION.SDK_INT >= 31 && LocalThemeSettings.current.blurBackdrop) {
             AnimatedContent(song.albumId, transitionSpec = { fadeIn(tween(900)) togetherWith fadeOut(tween(900)) }, label = "backdrop") { _ ->
@@ -544,6 +547,7 @@ fun TitleBlock(song: Song, modifier: Modifier = Modifier, large: Boolean = false
                 )
             }
         }
+        if (!song.isPodcast && !song.isAudiobook) MusicVideoButton()
         if (!song.isPodcast) IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
     }
 }

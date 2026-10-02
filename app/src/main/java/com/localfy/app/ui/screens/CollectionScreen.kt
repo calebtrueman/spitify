@@ -189,6 +189,7 @@ fun CollectionScreen(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         headerActions()
+                        if (songs.isNotEmpty() && songs.none { it.isPodcast || it.isAudiobook }) ShareMusicButton(title, songs, if (kindLabel == "Album") "album" else if (kindLabel == "Song") "song" else "playlist")
                         IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)
                         }

@@ -317,3 +317,25 @@ final class PlayerCollapseTests: XCTestCase {
         XCTAssertTrue(mini.waitForExistence(timeout: 5))
     }
 }
+
+final class RailLayoutTests: XCTestCase {
+    func testLastAlbumSongStaysAboveMiniPlayer() throws {
+        let app = XCUIApplication(); app.launch()
+        let album = app.buttons.matching(NSPredicate(format: "label == 'Layout Check'")).firstMatch
+        guard album.waitForExistence(timeout: 10) else { throw XCTSkip("Needs the simulator-only Layout Check album") }
+        album.tap()
+        let first = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Layout Song 01'")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap()
+        let mini = app.buttons["miniPlayer"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        let last = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Layout Song 25' AND NOT label BEGINSWITH 'Now playing'")).firstMatch
+        for _ in 0..<12 {
+            if last.exists && last.isHittable && last.frame.maxY <= mini.frame.minY { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(last.exists)
+        XCTAssertTrue(last.isHittable)
+        XCTAssertLessThanOrEqual(last.frame.maxY, mini.frame.minY, "The final song must be fully above the player")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = "Last song above mini player"; shot.lifetime = .keepAlways; add(shot)
+    }
+}

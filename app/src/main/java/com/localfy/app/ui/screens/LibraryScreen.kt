@@ -73,6 +73,8 @@ private data class Entry(val key: String, val title: String, val subtitle: Strin
 
 @Composable
 fun LibraryScreen(onCreatePlaylist: () -> Unit) {
+    val container = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp
+    val socialRevision by container.social.revision.collectAsStateWithLifecycle()
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
     val playlists by app.repo.playlists.collectAsStateWithLifecycle()
@@ -135,6 +137,8 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
             Column(Modifier.statusBarsPadding()) {
                 Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Your Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    androidx.compose.material3.TextButton(onClick = { app.navigate("releases") }) { Text("New releases") }
+                    androidx.compose.material3.TextButton(onClick = { app.navigate(Routes.FRIENDS) }) { Text("Friends") }
                     IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,6 +167,12 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
         }
 
         if (filter == null || filter == Filter.Playlists) {
+            items(container.social.playlists, key = { "shared:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { playlist ->
+                Row(Modifier.fillMaxWidth().clickable { app.navigate(Routes.sharedPlaylist(playlist.key)) }.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    coil3.compose.AsyncImage(playlist.image, null, Modifier.size(56.dp))
+                    Column { Text(playlist.name); SearchSubtitle("Playlist", playlist.sourceName ?: "Spitify") }
+                }
+            }
             val likedCount = smart[SmartCollection.Kind.AllSongs]?.songs?.size ?: 0
             item(span = { GridItemSpan(if (grid) 1 else maxLineSpan) }, key = "liked") {
                 PinnedEntry("All Songs", "Pinned • ${songCount(likedCount)}", Icons.AutoMirrored.Rounded.QueueMusic, Color(0xFF4B2BD6), Color(0xFF9AB8F0), grid) {
@@ -244,4 +254,3 @@ private fun PinnedEntry(
         }
     }
 }
-
