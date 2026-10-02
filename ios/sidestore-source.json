@@ -1,0 +1,45 @@
+{
+  "name": "Spitify",
+  "subtitle": "Your music, podcasts & audiobooks",
+  "description": "Official source for Spitify, a Spotify-style player for the music on your phone.",
+  "iconURL": "https://raw.githubusercontent.com/calebtrueman/spitify/main/docs/icon.png",
+  "website": "https://github.com/calebtrueman/spitify",
+  "tintColor": "#1ED760",
+  "featuredApps": [
+    "com.calebtrueman.spitify"
+  ],
+  "apps": [
+    {
+      "name": "Spitify",
+      "bundleIdentifier": "com.calebtrueman.spitify",
+      "developerName": "Caleb Trueman",
+      "subtitle": "Spotify-style player for your own music",
+      "localizedDescription": "Play the music, podcasts and audiobooks on your iPhone with playlists made for you, learned on the device. Synced lyrics, crossfade, a 10-band EQ, free LibriVox audiobooks, automatic artwork and tag fixing, and themes. No account, no ads.",
+      "iconURL": "https://raw.githubusercontent.com/calebtrueman/spitify/main/docs/icon.png",
+      "tintColor": "#1ED760",
+      "category": "entertainment",
+      "screenshots": [
+        "https://raw.githubusercontent.com/calebtrueman/spitify/main/docs/screenshots/ios-player.png"
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSAppleMusicUsageDescription": "Spitify can play the songs already downloaded in your Music library.",
+          "NSPhotoLibraryUsageDescription": "Choose a profile picture or custom artwork."
+        }
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "buildVersion": "1",
+          "date": "2026-10-02T02:24:14Z",
+          "localizedDescription": "First release.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.0/Spitify-1.0.0-unsigned.ipa",
+          "size": 1814872,
+          "minOSVersion": "17.0"
+        }
+      ]
+    }
+  ],
+  "news": []
+}

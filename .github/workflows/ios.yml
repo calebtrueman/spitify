@@ -8,6 +8,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   ipa:
     runs-on: macos-26
@@ -40,3 +43,17 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           cp ios/build/Spitify.ipa "ios/build/Spitify-${TAG#v}-unsigned.ipa"
           gh release upload "$TAG" "ios/build/Spitify-${TAG#v}-unsigned.ipa" --clobber
+      - name: Publish to SideStore source
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          V="${TAG#v}"
+          git fetch origin main && git checkout main
+          python3 scripts/update-sidestore-source.py "$V" "ios/build/Spitify-$V-unsigned.ipa" \
+            "https://github.com/${{ github.repository }}/releases/download/$TAG/Spitify-$V-unsigned.ipa" \
+            "$(gh release view "$TAG" --json body -q .body | head -c 1500)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios/sidestore-source.json
+          git commit -m "SideStore source: $TAG" && git push origin main || echo "No changes"
+        env: { GH_TOKEN: "${{ github.token }}" }

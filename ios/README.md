@@ -21,14 +21,41 @@ open Spitify.xcodeproj           # or:
 xcodebuild test -project Spitify.xcodeproj -scheme Spitify -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-## Installing without a paid developer account
+## Installing with SideStore (free Apple ID, refreshes itself)
 
-A free Apple ID can sign apps, but Apple makes free signatures expire after **7 days** (and allows 3 sideloaded apps at once). Nothing on a server can change that, because the 7-day limit is in the provisioning profile Apple issues. What you *can* do is re-sign automatically, so you never have to think about it:
+A free Apple ID signature lasts 7 days. SideStore renews it **on the iPhone, in the background**. The app is updated in place, so your library, playlists and listening history stay put, and you never reinstall.
 
-1. **[SideStore](https://sidestore.io)** (recommended, no computer needed after setup). It installs once from your Mac, then re-signs apps **on the iPhone itself** in the background over Wi-Fi. Install `Spitify.ipa` through it and turn on background refresh.
-2. **[AltStore](https://altstore.io)** with AltServer running on your Mac. It refreshes automatically whenever the iPhone and Mac are on the same Wi-Fi.
-3. **Xcode:** plug in the iPhone, select your Apple ID team in *Signing & Capabilities*, and press Run. Repeat weekly.
+### One-time setup (≈15 min, iPhone plugged into the Mac)
 
-Grab `Spitify.ipa` from [Releases](../../releases), or from the *iOS build* workflow artifacts. Every push to `main` builds a fresh unsigned IPA ready for SideStore/AltStore.
+1. On the iPhone, install **[LocalDevVPN](https://apps.apple.com/app/localdevvpn/id6755608044)** from the App Store.
+2. On the Mac, open **iloader** (Applications), sign in with your Apple ID, select the iPhone, and choose **Install SideStore (Stable)**. iloader also saves the pairing file SideStore needs.
+3. On the iPhone:
+   - Settings › General › **VPN & Device Management** › trust your Apple ID.
+   - Settings › Privacy & Security › **Developer Mode** › On (the phone restarts).
+4. Open LocalDevVPN, tap **Connect**, then open SideStore and sign in with the same Apple ID.
+5. In SideStore › **Sources** › **+**, add:
+   ```
+   https://raw.githubusercontent.com/calebtrueman/spitify/main/ios/sidestore-source.json
+   ```
+   Then **Browse** › Spitify › **Free**. (Or open `Spitify-x.y.z-unsigned.ipa` from Releases and use SideStore's **+** in My Apps.)
 
-With a paid Apple Developer account ($99/yr), signatures last a year, or you can use TestFlight.
+### Make it automatic
+
+Shortcuts › **Automation** › **+** › **Time of Day** (e.g. 3:00 am daily) › **Run Immediately**, with these actions:
+
+1. **LocalDevVPN › Connect**
+2. **SideStore › Refresh All Apps**
+3. *(optional)* **LocalDevVPN › Disconnect**
+
+As long as the phone is on Wi-Fi at least once every 7 days, Spitify (and SideStore itself) never expire. New Spitify releases also show up in SideStore's **Updates** tab, because each GitHub release updates the source above.
+
+Free Apple ID limits: 3 sideloaded apps at once (SideStore counts as one) and 10 new app IDs per week.
+
+### Other options
+
+- **Xcode:** plug in, pick your Apple ID team in *Signing & Capabilities*, press Run. Has to be repeated weekly.
+- **Paid Apple Developer account** ($99/yr): signatures last a year, or use TestFlight.
+
+## Releasing a new version
+
+Bump `MARKETING_VERSION` in `project.yml`, then publish a GitHub release tagged `vX.Y.Z`. CI then builds the IPA, attaches it to the release, and adds it to `ios/sidestore-source.json`. SideStore will offer the update.
