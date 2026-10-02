@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -128,7 +129,8 @@ fun CollectionScreen(
             item(key = "header") {
                 Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(color, lerp(color, LocalfyColors.Background, 0.75f), LocalfyColors.Background)))) {
                     if (hero) {
-                        Box(Modifier.fillMaxWidth().height(if (wide) 300.dp else 360.dp)) {
+                        // Keep the moving photo inside the area covered by its fade.
+                        Box(Modifier.fillMaxWidth().height(if (wide) 300.dp else 360.dp).clipToBounds()) {
                             Artwork(
                                 art,
                                 Modifier.fillMaxSize().graphicsLayer {
@@ -158,7 +160,7 @@ fun CollectionScreen(
                             }
                         }
                     } else {
-                        Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 52.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = 52.dp, bottom = 8.dp).clipToBounds(), contentAlignment = Alignment.Center) {
                             val m = Modifier.fillMaxWidth(0.62f).aspectRatio(1f)
                                 .graphicsLayer {
                                     val s = 1f - collapse * 0.25f
