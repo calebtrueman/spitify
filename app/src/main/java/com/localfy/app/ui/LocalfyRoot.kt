@@ -249,7 +249,8 @@ fun LocalfyRoot(activity: Activity) {
                 }
             }
             LaunchedEffect(playerExpanded) { settle(if (playerExpanded) 1f else 0f) }
-            val sheetScroll = remember(collapsedPx) {
+            val collapseDistance = with(density) { 110.dp.toPx() }
+            val sheetScroll = remember(collapsedPx, collapseDistance) {
                 object : NestedScrollConnection {
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                         if (available.y < 0 && sheet < 1f && source == NestedScrollSource.UserInput) { settleJob?.cancel(); sheet = (sheet - available.y / collapsedPx).coerceIn(0f, 1f); return Offset(0f, available.y) }
@@ -261,7 +262,7 @@ fun LocalfyRoot(activity: Activity) {
                     }
                     override suspend fun onPreFling(available: Velocity): Velocity {
                         if (sheet < 1f) {
-                            val collapse = available.y > 1200f || (available.y >= -1200f && sheet < 0.7f)
+                            val collapse = available.y > 1200f || (available.y >= -1200f && collapsedPx * (1f - sheet) >= collapseDistance)
                             playerExpanded = !collapse
                             settle(if (collapse) 0f else 1f, -available.y / collapsedPx)
                             return available

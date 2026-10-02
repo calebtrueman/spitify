@@ -25,6 +25,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -116,6 +118,7 @@ private fun RankRow(rank: Int, title: String, subtitle: String, art: ArtKey, cir
 }
 
 @Composable
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 fun SettingsScreen() {
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
@@ -142,6 +145,11 @@ fun SettingsScreen() {
             SwitchRow("Show recommendations", "Show suggested mixes, artist radio, throwbacks and top artists. Turn this off for a simpler Home screen. You can turn it back on anytime.", showRecommendations, app.repo::setShowRecommendations, Modifier.padding(horizontal = 16.dp))
         }
         item { SectionHeader("Playback") }
+        item {
+            val scope = rememberCoroutineScope()
+            TextButton(onClick = { scope.launch(kotlinx.coroutines.Dispatchers.IO) { com.localfy.app.data.music.ListeningCache.clear(nativeApp) } }) { Text("Clear listening cache") }
+            Text("Streaming keeps up to 1 GB of temporary audio. Older streams are cleared automatically. Downloads stay until you remove them.", Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall)
+        }
         item { SwitchRow("Download over Wi-Fi only", "Use Wi-Fi when saving music.", wifiDownloads, nativeApp.musicDownloads::setWifiOnly, Modifier.padding(horizontal = 16.dp)) }
         item { SwitchRow("Full-screen lock-screen art", "Keep album art while playing or paused. Restore your still wallpaper when playback stops, Spitify closes, or you pause for 10 minutes. Live wallpapers stay unchanged.", lockScreenArt, wallpaper::setEnabled, Modifier.padding(horizontal = 16.dp)) }
         if (lockScreenArt && !wallpaperAllowed) item {

@@ -32,6 +32,8 @@ final class Player {
     private var artworkIdleTask: Task<Void, Never>?
     private var portraitArtKey: String?
     private var portraitArt: Any?
+    private var nowPlayingID: String?
+    private var artworkLoad: Task<Void, Never>?
     var crossfade: Double = UserDefaults.standard.double(forKey: "crossfade") { didSet { UserDefaults.standard.set(crossfade, forKey: "crossfade") } }
     var keepAlbumsGapless: Bool = UserDefaults.standard.object(forKey: "gaplessAlbums") as? Bool ?? true { didSet { UserDefaults.standard.set(keepAlbumsGapless, forKey: "gaplessAlbums") } }
     var eq: EQSettings = { (UserDefaults.standard.data(forKey: "eq")).flatMap { try? JSONDecoder().decode(EQSettings.self, from: $0) } ?? EQSettings() }() {
@@ -63,6 +65,9 @@ final class Player {
         engine.apply(eq)
         engine.onFinished = { [weak self] in self?.trackEnded() }
         stream.onFinished = { [weak self] in self?.trackEnded() }
+        stream.onError = { [weak self] in
+            self?.pause(); self?.flash("Couldn’t play this song. Check your connection and try again.")
+        }
         configureSession()
         updateAudioOutput()
         configureRemote()
@@ -101,6 +106,7 @@ final class Player {
 
     func resume() {
         guard current != nil else { return }
+        if usingStream && stream.failed { startCurrent(at: position, play: true); return }
         activateSession()
         if usingStream { stream.play() } else { engine.play() }
         isPlaying = true
@@ -128,7 +134,7 @@ final class Player {
 
     func stop() {
         pause()
-        artworkSessionActive = false; artworkIdleTask?.cancel()
+        artworkSessionActive = false; artworkIdleTask?.cancel(); artworkLoad?.cancel(); artworkLoad = nil; nowPlayingID = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -267,12 +273,19 @@ final class Player {
     // MARK: - Core
 
     private func url(for s: Song) -> URL? {
+        if let track = MusicStreams.shared.track(s), let local = library?.rawSongs.first(where: {
+            SearchMatch.sameSong($0, track) && AudioFallback.sameRelease($0.album, track.album)
+        }) { return library?.fileURL(local) }
         if s.kind == .remote { return URL(string: s.location) }
         return library?.fileURL(s)
     }
 
     private func startCurrent(at seconds: Double, play: Bool) {
-        guard let song = current, let url = url(for: song) else { return }
+        guard let song = current else { return }
+        guard let url = url(for: song) else { stop(); flash("This song is no longer available."); return }
+        // Publish the selected song before loading audio; never leave the previous title visible during a load.
+        position = seconds; duration = Double(song.durationMs) / 1000; isPlaying = play
+        updateNowPlaying()
         activateSession()
         fading = false
         listenedMs = 0
@@ -291,8 +304,10 @@ final class Player {
                 duration = Double(song.durationMs) / 1000
             }
         } catch {
+            engine.stop(); stream.stop(); isPlaying = false
             flash("Can't play “\(song.title)” — skipping")
             if index + 1 < queue.count { index += 1; startCurrent(at: 0, play: play) }
+            else { updateNowPlaying() }
             return
         }
         engine.setRate(speed); stream.setRate(speed)
@@ -475,7 +490,15 @@ final class Player {
         c.nextTrackCommand.isEnabled = !spoken || index + 1 < queue.count
         c.previousTrackCommand.isEnabled = !spoken
         guard let s = current else { MPNowPlayingInfoCenter.default().nowPlayingInfo = nil; return }
+        if nowPlayingID != s.id {
+            nowPlayingID = s.id; artworkLoad?.cancel(); artworkLoad = nil
+            portraitArtKey = nil; portraitArt = nil
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
         var info: [String: Any] = [
+            MPNowPlayingInfoPropertyExternalContentIdentifier: s.id,
+            MPNowPlayingInfoPropertyPlaybackQueueIndex: index,
+            MPNowPlayingInfoPropertyPlaybackQueueCount: queue.count,
             MPMediaItemPropertyTitle: s.title, MPMediaItemPropertyArtist: s.artist, MPMediaItemPropertyAlbumTitle: s.album,
             MPMediaItemPropertyPlaybackDuration: duration, MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(speed) : 0, MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(speed),
@@ -492,15 +515,24 @@ final class Player {
                 }
                 if let artwork = portraitArt as? MPMediaItemAnimatedArtwork { info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = artwork }
             }
-        } else if artworkSessionActive, let remote = s.artURL {
-            Task { if await ArtCache.shared.load(key: s.albumKey, remote: remote) != nil, self.current == s { self.updateNowPlaying() } }
+        } else if artworkSessionActive, let remote = s.artURL, artworkLoad == nil {
+            artworkLoad = Task { [weak self] in
+                let image = await ArtCache.shared.load(key: s.albumKey, remote: remote)
+                guard !Task.isCancelled, let self, self.current?.id == s.id else { return }
+                if image != nil { self.updateNowPlaying() }
+            }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     private func updateNowPlayingElapsed() {
-        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+        guard let current else { return }
+        guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo,
+              info[MPNowPlayingInfoPropertyExternalContentIdentifier] as? String == current.id else {
+            updateNowPlaying(); return
+        }
+        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? Double(speed) : 0
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = position
         info[MPMediaItemPropertyPlaybackDuration] = duration
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info

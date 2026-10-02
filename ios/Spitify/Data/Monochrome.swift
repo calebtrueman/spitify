@@ -17,6 +17,7 @@ struct OnlineTrack: Codable, Identifiable, Hashable {
     var audioExtension: String? = nil
     var fallbackTried: Bool? = nil
     var attemptedSources: [String]? = nil
+    var audioByteCount: Int64? = nil
 }
 
 struct OnlineAlbum: Identifiable, Hashable {

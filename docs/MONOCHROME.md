@@ -1,6 +1,6 @@
 # Monochrome music downloads
 
-Search finds saved music and songs and albums from Monochrome in one list. Album and song results open the normal full-page layout. Missing songs stay grey until saved; compact circles show download progress. The download button sits beside the play controls. Saved songs keep their usual menus and queue gestures. Downloaded music joins the normal library, so likes, playlists, recommendations and offline playback work as before. The app does not need a new hosted server.
+Search finds saved music and songs and albums from Monochrome in one list. Album and song results open the normal full-page layout. Songs can stream before they are downloaded; compact circles show deliberate download progress. Add to Library saves a song without downloading it. See [Streaming](STREAMING.md) for cache behavior. The download button sits beside the play controls. Saved songs keep their usual menus and queue gestures. Downloaded music joins the normal library, so likes, playlists, recommendations and offline playback work as before. The app does not need a new hosted server.
 
 ## Connection
 

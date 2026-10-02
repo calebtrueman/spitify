@@ -55,7 +55,7 @@ enum AudioFallback {
                 let match = release.first(where: { $0.id == choice.id }), sameRelease(track.album, match.album) else { continue }
             var result = track
             result.audioURL = try MonochromeClient.audioURL(match.id).absoluteString
-            result.audioExtension = "flac"; result.fallbackTried = false
+            result.audioExtension = "flac"; result.audioByteCount = nil; result.fallbackTried = false
             result.attemptedSources = Array(Set((track.attemptedSources ?? []) + [track.id, match.id])).sorted()
             return result
         }
@@ -88,7 +88,7 @@ enum AudioFallback {
         guard let audio = formats.filter({ ($0["mimeType"] as? String)?.hasPrefix("audio/mp4") == true && validAudioURL($0["url"] as? String ?? "") })
             .max(by: { ($0["bitrate"] as? Int ?? 0) < ($1["bitrate"] as? Int ?? 0) }), let url = audio["url"] as? String else { return nil }
         var result = track
-        result.playable = true; result.audioURL = url; result.audioExtension = "m4a"; result.fallbackTried = true
+        result.playable = true; result.audioURL = url; result.audioExtension = "m4a"; result.audioByteCount = Int64(audio["contentLength"] as? String ?? ""); result.fallbackTried = true
         return result
     }
     private static func request(_ path: String, _ payload: [String: Any]) async throws -> [String: Any] {

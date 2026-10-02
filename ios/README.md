@@ -2,6 +2,14 @@
 
 A SwiftUI port of Spitify. It has the same on-device recommendation engine (ported from Kotlin, with the same tests), synced lyrics, crossfade, a 10-band EQ, podcasts, LibriVox audiobooks, metadata/artwork fetching and editing, themes, and first-run profile setup. It runs on iOS 17+ (iPhone XS / XR and newer, including the iPhone 13).
 
+## Online music and saved listening
+
+Search for a song or album, then choose **Play**, **Add to Library**, or **Download**. Play starts audio as it arrives. Add to Library saves the song details; Download keeps an offline file. Streaming uses a separate 1 GB cache, with older audio removed first. Clear it in Settings without removing downloads. [More about streaming](../docs/STREAMING.md).
+
+Swipe down over the full player to return to the bottom rail. Lock-screen song details follow the current queue. On supported iOS versions, album artwork can appear expanded; iOS controls that presentation. EQ and crossfade apply to local files and downloads, while live streams use the system player.
+
+<img src="../docs/screenshots/ios-player.png" width="220" alt="iPhone player"> <img src="../docs/screenshots/ios-album.png" width="220" alt="iPhone album page">
+
 ## Adding music
 
 - **Files app:** On My iPhone › **Spitify** › `Music` (or `Audiobooks`). Drop files or folders in.

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Favorite
@@ -65,6 +66,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onNavigated: () -> Unit) {
     val app = LocalApp.current
+    val nativeApp = LocalContext.current.applicationContext as com.localfy.app.LocalfyApp
+    val streamTrack = nativeApp.musicStreams.track(song)
+    val scope = rememberCoroutineScope()
     val liked = song.id in app.repo.likedIds.collectAsStateWithLifecycle().value
     var info by remember { mutableStateOf(false) }
 
@@ -84,13 +88,23 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
                 }
             }
             HorizontalDivider(color = LocalfyColors.SurfaceHighest)
+            if (streamTrack != null) {
+                MenuItem(Icons.Rounded.Add, if (nativeApp.musicStreams.contains(streamTrack)) "Remove from Library" else "Add to Library") {
+                    if (nativeApp.musicStreams.contains(streamTrack)) nativeApp.musicStreams.remove(listOf(streamTrack)) else nativeApp.musicStreams.save(listOf(streamTrack))
+                    onDismiss()
+                }
+                MenuItem(Icons.Rounded.Download, "Download") {
+                    nativeApp.musicStreams.save(listOf(streamTrack))
+                    nativeApp.appScope.launch { nativeApp.musicDownloads.enqueue(listOf(streamTrack)) }; onDismiss()
+                }
+            }
             MenuItem(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { app.player.playNext(listOf(song)); onDismiss() }
             MenuItem(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { app.player.addToQueue(listOf(song)); onDismiss() }
             if (!song.isPodcast) MenuItem(Icons.Rounded.Radio, "Go to song radio") {
                 onDismiss()
                 app.player.playSongs(app.taste.songRadio(song), 0, shuffle = false, source = "${song.title} Radio")
             }
-            if (!song.isPodcast) MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { onDismiss(); app.addToPlaylist(listOf(song)) }
+            if (!song.isPodcast) MenuItem(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { streamTrack?.let { nativeApp.musicStreams.save(listOf(it)) }; onDismiss(); app.addToPlaylist(listOf(song)) }
             if (extras.onRemove != null) {
                 MenuItem(Icons.Rounded.RemoveCircleOutline, extras.removeLabel ?: "Remove") { extras.onRemove.invoke(); onDismiss() }
             }
@@ -108,10 +122,10 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
                     )
                 }
             } else {
-                MenuItem(Icons.Rounded.Album, "Go to album") { onDismiss(); onNavigated(); app.navigate(Routes.album(song.albumId)) }
+                MenuItem(Icons.Rounded.Album, "Go to album") { onDismiss(); onNavigated(); app.navigate(streamTrack?.let { Routes.catalogAlbum(com.localfy.app.data.music.OnlineAlbum(it.releaseId, it.album, it.artist, it.artwork)) } ?: Routes.album(song.albumId)) }
                 MenuItem(Icons.Rounded.PersonOutline, "Go to artist") { onDismiss(); onNavigated(); app.navigate(Routes.artist(song.artist)) }
             }
-            if (!song.isPodcast || song.isAudiobook && song.episodeId == null) MenuItem(Icons.Rounded.Edit, "Edit info & artwork") { onDismiss(); onNavigated(); app.editMetadata(listOf(app.rawFor(song)), false) }
+            if (streamTrack == null && (!song.isPodcast || song.isAudiobook && song.episodeId == null)) MenuItem(Icons.Rounded.Edit, "Edit info & artwork") { onDismiss(); onNavigated(); app.editMetadata(listOf(app.rawFor(song)), false) }
             if (!song.isPodcast) {
                 MenuItem(Icons.Rounded.Block, "Don't recommend this song") { app.taste.hideSong(song.id); onDismiss() }
                 MenuItem(Icons.Rounded.PersonOff, "Don't recommend ${song.artist}") { app.taste.hideArtist(song.artist); onDismiss() }

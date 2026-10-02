@@ -25,6 +25,10 @@ enum Store {
         return try? decoder.decode(type, from: data)
     }
 
+    static func flush() async {
+        await withCheckedContinuation { continuation in queue.async { continuation.resume() } }
+    }
+
     static func save<T: Encodable>(_ value: T, _ name: String) {
         guard let data = try? encoder.encode(value) else { return }
         queue.async { try? data.write(to: directory.appendingPathComponent("\(name).json"), options: .atomic) }

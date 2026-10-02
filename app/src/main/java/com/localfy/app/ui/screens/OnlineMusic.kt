@@ -9,6 +9,8 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
@@ -95,8 +97,8 @@ fun OnlineMusicPanel(query: String) {
 
 internal fun savedSong(track: OnlineTrack, songs: List<Song>, jobs: List<MusicDownloadEntity>): Song? {
     val uri = jobs.firstOrNull { it.id == track.id && it.state == "complete" }?.localUri
-    return songs.firstOrNull { uri != null && it.uri.toString() == uri } ?: songs.firstOrNull {
-        SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) &&
+    return songs.filter { it.sourceUri?.scheme != "spitify" }.firstOrNull { uri != null && it.uri.toString() == uri } ?: songs.firstOrNull {
+        it.sourceUri?.scheme != "spitify" && SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) &&
             (track.album.isEmpty() || AudioFallback.sameRelease(it.album, track.album))
     }
 }
@@ -117,7 +119,8 @@ private fun DownloadMark(complete: Boolean, active: Boolean, progress: Float = 0
 @Composable
 internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay: ((Song) -> Unit)? = null) {
     val actions = LocalApp.current
-    val downloads = (LocalContext.current.applicationContext as LocalfyApp).musicDownloads
+    val downloadsContext = LocalContext.current
+    val downloads = (downloadsContext.applicationContext as LocalfyApp).musicDownloads
     val jobs by downloads.jobs.collectAsStateWithLifecycle()
     val progress by downloads.progress.collectAsStateWithLifecycle()
     val library by actions.repo.library.collectAsStateWithLifecycle()
@@ -125,17 +128,27 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
     val song = savedSong(track, library.songs, jobs)
     var preparing by remember(track.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    if (song != null && onPlay != null) {
+    if (onPlay != null) {
+        val streams = (LocalContext.current.applicationContext as LocalfyApp).musicStreams
+        val playable = song ?: streams.song(track)
         val player = com.localfy.app.ui.player.rememberPlayerState()
-        SongRow(song = song, trackNumber = trackNumber, subtitle = track.artist, downloaded = true,
-            isCurrent = player.currentId == song.id, isPlaying = player.isPlaying,
-            onClick = { onPlay(song) }, onMore = { actions.openSongMenu(song, SongMenuExtras()) })
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SongRow(song = playable, modifier = Modifier.weight(1f), trackNumber = trackNumber, subtitle = track.artist, downloaded = song != null,
+                isCurrent = player.currentId == playable.id, isPlaying = player.isPlaying,
+                onClick = { streams.register(track); onPlay(playable) }, onMore = { streams.register(track); actions.openSongMenu(playable, SongMenuExtras()) })
+            if (song == null) IconButton(onClick = {
+                if (job?.active == true) downloads.cancel(track.id)
+                else { streams.save(listOf(track)); scope.launch { downloads.enqueue(listOf(track)) } }
+            }, modifier = Modifier.semantics { contentDescription = if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
+                DownloadMark(false, job?.active == true, progress[track.id] ?: 0f)
+            }
+        }
         return
     }
-    Row(Modifier.fillMaxWidth().padding(horizontal = if (onPlay == null) 0.dp else 16.dp, vertical = 6.dp),
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable(enabled = onPlay == null || song != null) {
-            if (onPlay != null) song?.let(onPlay) else actions.navigate(Routes.catalogSong(track))
+        Row(Modifier.weight(1f).clickable {
+            actions.navigate(Routes.catalogSong(track))
         }, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             val textColor = if (song == null) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
             if (trackNumber != null) Text(trackNumber.toString(), Modifier.width(26.dp), color = textColor)
@@ -153,6 +166,7 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
                     try {
                         val enriched = if (track.album.isEmpty() && track.releaseId.isNotEmpty())
                             runCatching { Monochrome.album(track.releaseId).firstOrNull { it.id == track.id } }.getOrNull() ?: track else track
+                        (downloadsContext.applicationContext as LocalfyApp).musicStreams.save(listOf(enriched))
                         downloads.enqueue(listOf(enriched))
                     } finally { preparing = false }
                 }
@@ -196,21 +210,30 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
         } catch (e: Exception) { if (e is CancellationException) throw e; failed = tracks.isEmpty() }
         finally { loading = false }
     }
-    val songs = tracks.mapNotNull { savedSong(it, library.songs, jobs) }
+    val streams = (LocalContext.current.applicationContext as LocalfyApp).musicStreams
+    val saved by streams.saved.collectAsStateWithLifecycle()
+    LaunchedEffect(tracks) { tracks.forEach(streams::register) }
+    val songs = tracks.map { savedSong(it, library.songs, jobs) ?: streams.song(it) }
+    val downloaded = tracks.count { savedSong(it, library.songs, jobs) != null }
+    val inLibrary = tracks.isNotEmpty() && tracks.all { track -> saved.any { it.id == MusicStreams.streamId(track.id) } }
     val albumJobs = jobs.filter { j -> tracks.any { it.id == j.id } }
     val active = albumJobs.any { it.active }
-    val complete = tracks.isNotEmpty() && songs.size == tracks.size
+    val complete = tracks.isNotEmpty() && downloaded == tracks.size
     val art = songs.firstOrNull()?.artKey ?: ArtKey(album.id.hashCode().toLong(), album.id.hashCode().toLong(), single?.artwork ?: album.artwork)
     CollectionScreen(title = single?.title ?: album.title, kindLabel = if (single == null) "Album" else "Song", subtitle = album.artist,
         art = art, songs = songs, trackNumbers = single == null, catalogTracks = tracks,
         headerActions = {
+            IconButton(enabled = tracks.isNotEmpty(), onClick = { if (inLibrary) streams.remove(tracks) else streams.save(tracks) }) {
+                Icon(if (inLibrary) androidx.compose.material.icons.Icons.Rounded.CheckCircle else androidx.compose.material.icons.Icons.Rounded.AddCircleOutline,
+                    if (inLibrary) "Remove from Library" else "Add to Library")
+            }
             IconButton(enabled = tracks.isNotEmpty() && !complete && !adding, onClick = {
                 if (active) albumJobs.filter { it.active }.forEach { downloads.cancel(it.id) }
-                else { adding = true; scope.launch { try { downloads.enqueue(tracks) } finally { adding = false } } }
+                else { streams.save(tracks); adding = true; scope.launch { try { downloads.enqueue(tracks) } finally { adding = false } } }
             }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (active) "Cancel downloads" else if (single == null) "Download album" else "Download song" }) {
-                DownloadMark(complete, active || adding, if (tracks.isEmpty()) 0f else (songs.size + albumJobs.filter { it.active }.sumOf { (progress[it.id] ?: 0f).toDouble() }).toFloat() / tracks.size)
+                DownloadMark(complete, active || adding, if (tracks.isEmpty()) 0f else (downloaded + albumJobs.filter { it.active }.sumOf { (progress[it.id] ?: 0f).toDouble() }).toFloat() / tracks.size)
             }
-            if (songs.isNotEmpty()) IconButton(onClick = { actions.editMetadata(songs, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
+            if (downloaded > 0) IconButton(onClick = { actions.editMetadata(songs.filter { it.sourceUri?.scheme != "spitify" }, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
         }, beforeSongs = {
             if (loading) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             if (failed) item { TextButton(onClick = { reload++ }) { Text("Couldn't load songs. Try again") } }

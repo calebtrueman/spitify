@@ -113,7 +113,7 @@ struct AlbumView: View {
     @Environment(Router.self) private var router
     var body: some View {
         if let a = app.library.library.albumById[id] {
-            if let track = app.musicDownloads.jobs.map(\.track).first(where: {
+            if let track = (app.musicDownloads.jobs.map(\.track) + Array(app.musicStreams.tracks.values)).first(where: {
                 SearchMatch.fold($0.album) == SearchMatch.fold(a.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(a.artist) && !$0.releaseID.isEmpty
             }) {
                 OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: a.title, artist: a.artist, artwork: track.artwork))

@@ -8,6 +8,7 @@ actor ArchiveAudio {
         let title: String
         let durationMs: Int64?
         let ext: String
+        var byteCount: Int64? = nil
     }
     private var cached: [String: (Date, [Candidate])] = [:]
     private var loading: [String: Task<[Candidate], Error>] = [:]
@@ -34,12 +35,18 @@ actor ArchiveAudio {
             ($0.durationMs == nil || abs($0.durationMs! - track.durationMs) <= 3000)
         }) else { return nil }
         var result = track
-        result.audioURL = choice.url; result.audioExtension = choice.ext; result.playable = true
+        result.audioURL = choice.url; result.audioExtension = choice.ext; result.audioByteCount = choice.byteCount; result.playable = true
         result.fallbackTried = false
         result.attemptedSources = Array(tried.union([choice.url])).sorted()
         return result
     }
 
+    nonisolated static func archiveEntrySize(_ row: String) -> Int64? {
+        guard let expression = try? NSRegularExpression(pattern: "id=\"size\">([0-9]+)"),
+              let match = expression.firstMatch(in: row, range: NSRange(row.startIndex..., in: row)),
+              let range = Range(match.range(at: 1), in: row), let size = Int64(row[range]), size > 0 else { return nil }
+        return size
+    }
     nonisolated static func albumName(_ value: String) -> String {
         SearchMatch.fold(value.replacingOccurrences(of: "(?i)\\s*[\\(\\[](?:(?:19|20)\\d{2}|bonus track version|deluxe(?: edition| version)?|special version)[\\)\\]]", with: "", options: .regularExpression))
     }
@@ -109,7 +116,7 @@ actor ArchiveAudio {
                     guard validURL(url) else { continue }
                     let length = Double(file["length"] as? String ?? "").map { Int64($0 * 1000) }
                     result.append(Candidate(url: url, title: file["title"] as? String ?? ((name as NSString).lastPathComponent as NSString).deletingPathExtension,
-                        durationMs: length, ext: ext))
+                        durationMs: length, ext: ext, byteCount: Int64(file["size"] as? String ?? "")))
                 }
             }
             // Archive exposes individual public ZIP entries; the app never downloads or unpacks an album ZIP.
@@ -124,7 +131,9 @@ actor ArchiveAudio {
                     let link = "https:" + String(html[range]).replacingOccurrences(of: "&amp;", with: "&")
                     guard link.hasPrefix(prefix), validURL(link), let url = URL(string: link) else { continue }
                     let file = (url.path as NSString).lastPathComponent
-                    result.append(Candidate(url: link, title: (file as NSString).deletingPathExtension, durationMs: nil, ext: url.pathExtension.lowercased()))
+                    let afterLink = String(html[range.upperBound...].prefix(2000)).components(separatedBy: "</tr>").first ?? ""
+                    let size = archiveEntrySize(afterLink)
+                    result.append(Candidate(url: link, title: (file as NSString).deletingPathExtension, durationMs: nil, ext: url.pathExtension.lowercased(), byteCount: size))
                 }
             }
             if !result.isEmpty { break }

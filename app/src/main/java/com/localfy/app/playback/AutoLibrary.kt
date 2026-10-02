@@ -171,7 +171,7 @@ class AutoLibrary(private val context: Context) {
         awaitLibrary()
         val prefs = context.getSharedPreferences(PlayerPrefs.FILE, Context.MODE_PRIVATE)
         val ids = prefs.getString("queue", null)?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
-        if (ids.any { it < 0 }) withTimeoutOrNull(3_000) { app.podcasts.episodeSongs.first { it.isNotEmpty() } }
+        if (ids.any { it < 0 && app.musicStreams.lookup(it) == null }) withTimeoutOrNull(3_000) { app.podcasts.episodeSongs.first { it.isNotEmpty() } }
         val manual = prefs.getString("manual_queue_indices", null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
         val items = ids.mapIndexedNotNull { i, id -> app.resolve(id)?.toMediaItem()?.withArt()?.let { if (i in manual) it.asManualQueueItem() else it } }
         if (items.isEmpty()) return null

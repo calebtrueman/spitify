@@ -53,11 +53,12 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val profiles by lazy { com.localfy.app.data.taste.ProfileRepository(this, appScope) }
     val taste by lazy { com.localfy.app.data.taste.TasteRepository(this, database, appScope, library, profiles).also { it.start() } }
     val podcasts by lazy { PodcastRepository(this, database, appScope) }
+    val musicStreams by lazy { com.localfy.app.data.music.MusicStreams(this) }
     val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 
     /** Resolves any queue id: MediaStore songs, local podcast files, or podcast episodes (negative ids). */
     fun resolve(id: Long): com.localfy.app.data.Song? =
-        if (id < 0) podcasts.episodeSongs.value[id]
+        if (id < 0) musicStreams.lookup(id) ?: podcasts.episodeSongs.value[id]
         else library.library.value.songById[id] ?: library.localPodcasts.value.firstOrNull { it.id == id }
             ?: library.localBooks.value.firstOrNull { it.id == id }
 

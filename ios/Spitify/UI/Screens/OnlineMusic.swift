@@ -125,7 +125,7 @@ struct DownloadMark: View {
 @MainActor func savedSong(_ track: OnlineTrack, app: AppModel) -> Song? {
     if let job = app.musicDownloads.jobs.first(where: { $0.id == track.id && $0.state == .complete }),
        let song = app.library.library.songs.first(where: { $0.location == job.relativePath }) { return song }
-    return app.library.library.songs.first { SearchMatch.sameSong($0, track) && (track.album.isEmpty || AudioFallback.sameRelease($0.album, track.album)) }
+    return app.library.library.songs.first { $0.kind != .remote && SearchMatch.sameSong($0, track) && (track.album.isEmpty || AudioFallback.sameRelease($0.album, track.album)) }
 }
 
 struct OnlineTrackRow: View {
@@ -139,8 +139,20 @@ struct OnlineTrackRow: View {
     var body: some View {
         let job = app.musicDownloads.jobs.first { $0.id == track.id }
         let song = savedSong(track, app: app)
-        if let song, let onPlay {
-            SongRow(song: song, trackNumber: trackNumber, subtitle: track.artist, downloaded: true, onTap: { onPlay(song) })
+        if let onPlay {
+            let playable = song ?? MusicStreams.song(track)
+            HStack(spacing: 0) {
+                SongRow(song: playable, trackNumber: trackNumber, subtitle: track.artist, downloaded: song != nil, onTap: {
+                    app.musicStreams.register(track); onPlay(playable)
+                })
+                if song == nil {
+                    Button {
+                        if job?.state.active == true { app.musicDownloads.cancel(track.id) }
+                        else { app.musicStreams.save([track]); Task { _ = await app.musicDownloads.enqueue([track]) } }
+                    } label: { DownloadMark(active: job?.state.active == true, progress: app.musicDownloads.progress[track.id] ?? 0).frame(width: 44, height: 44) }
+                        .buttonStyle(.plain).padding(.trailing, 8).accessibilityLabel(job?.state.active == true ? "Cancel download" : "Download \(track.title)")
+                }
+            }.onAppear { app.musicStreams.register(track) }
         } else {
         HStack(spacing: 12) {
             Button {
@@ -166,7 +178,7 @@ struct OnlineTrackRow: View {
                         if track.album.isEmpty, !track.releaseID.isEmpty,
                            let album = try? await MonochromeClient().albumTracks(track.releaseID),
                            let match = album.first(where: { $0.id == track.id }) { enriched = match }
-                        _ = await app.musicDownloads.enqueue([enriched]); preparing = false
+                        app.musicStreams.save([enriched]); _ = await app.musicDownloads.enqueue([enriched]); preparing = false
                     }
                 }
             } label: {
@@ -189,16 +201,16 @@ struct OnlineAlbumView: View {
     @State private var adding = false
     @State private var reload = 0
     var body: some View {
-        let songs = tracks.compactMap { savedSong($0, app: app) }
+        let songs = tracks.map { savedSong($0, app: app) ?? MusicStreams.song($0) }
         CollectionView(title: single?.title ?? album.title, kind: single == nil ? "Album" : "Song", subtitle: album.artist,
             art: songs.first, songs: songs, trackNumbers: single == nil,
-            toolbarExtra: AnyView(downloadButton),
+            toolbarExtra: AnyView(HStack(spacing: 4) { libraryButton; downloadButton }),
             catalogTracks: tracks, remoteArt: single?.artwork ?? album.artwork) {
                 if loading { ProgressView().frame(maxWidth: .infinity).padding() }
                 if failed { Button("Couldn't load songs. Try again") { reload += 1 }.padding() }
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
-                if !songs.isEmpty { Button { appRouterEdit(songs) } label: { Image(systemName: "pencil") }.accessibilityLabel("Edit song details") }
+                if songs.contains(where: { $0.kind != .remote }) { Button { appRouterEdit(songs.filter { $0.kind != .remote }) } label: { Image(systemName: "pencil") }.accessibilityLabel("Edit song details") }
             } }
             .task(id: reload) {
                 loading = true; failed = false
@@ -210,8 +222,16 @@ struct OnlineAlbumView: View {
                     tracks = single.map { chosen in loaded.filter { $0.id == chosen.id } } ?? loaded
                     if tracks.isEmpty, let single { tracks = [single] }
                 } catch { failed = tracks.isEmpty }
+                tracks.forEach { app.musicStreams.register($0) }
                 loading = false
             }
+    }
+    private var libraryButton: some View {
+        let saved = !tracks.isEmpty && tracks.allSatisfy { app.musicStreams.savedIDs.contains($0.id) }
+        return Button {
+            if saved { app.musicStreams.remove(tracks) } else { app.musicStreams.save(tracks) }
+        } label: { Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle").font(.system(size: 24)).frame(width: 44, height: 44) }
+            .disabled(tracks.isEmpty).accessibilityLabel(saved ? "Remove from Library" : "Add to Library")
     }
     private var downloadButton: some View {
         let songs = tracks.compactMap { savedSong($0, app: app) }
@@ -224,7 +244,7 @@ struct OnlineAlbumView: View {
         let label = complete ? "Downloaded" : active ? "Cancel downloads" : single == nil ? "Download album" : "Download song"
         return Button {
             if active { for job in jobs where job.state.active { app.musicDownloads.cancel(job.id) } }
-            else { adding = true; Task { _ = await app.musicDownloads.enqueue(tracks); adding = false } }
+            else { app.musicStreams.save(tracks); adding = true; Task { _ = await app.musicDownloads.enqueue(tracks); adding = false } }
         } label: {
             DownloadMark(complete: complete, active: active || adding, progress: progress).frame(width: 44, height: 44)
         }.disabled(complete || adding || tracks.isEmpty).accessibilityLabel(label)

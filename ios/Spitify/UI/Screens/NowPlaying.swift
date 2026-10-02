@@ -54,6 +54,8 @@ struct NowPlayingView: View {
     @State private var tint = Color(hex: 0x2A2A2E)
     @State private var sheet: Sheet?
     @State private var dragDown: CGFloat = 0
+    @State private var scrollTop: CGFloat = 0
+    @State private var canCollapse: Bool?
     enum Sheet: String, Identifiable { case lyrics, queue, sleep, playback; var id: String { rawValue } }
 
     var body: some View {
@@ -77,15 +79,26 @@ struct NowPlayingView: View {
                             .frame(width: outer.size.width, height: outer.size.height)
                             cards(s).padding(.horizontal, 16).padding(.bottom, 40).frame(width: outer.size.width)
                         }
+                        .background(GeometryReader { geometry in
+                            Color.clear.preference(key: PlayerScrollTop.self, value: geometry.frame(in: .named("player-scroll")).minY)
+                        })
                     }
+                    .coordinateSpace(name: "player-scroll")
+                    .onPreferenceChange(PlayerScrollTop.self) { scrollTop = $0 }
                     .scrollIndicators(.hidden)
                 }
             }
         }
         .background { Backdrop(song: player.current, tint: tint) }
         .offset(y: max(0, dragDown))
-        .gesture(DragGesture().onChanged { v in if v.translation.height > 0 && v.startLocation.y < 140 { dragDown = v.translation.height } }
-            .onEnded { v in if dragDown > 140 { dismiss() }; withAnimation(.spring) { dragDown = 0 } })
+        .simultaneousGesture(DragGesture(minimumDistance: 14).onChanged { value in
+            if canCollapse == nil { canCollapse = scrollTop >= -2 && value.translation.height > abs(value.translation.width) * 1.3 }
+            if canCollapse == true { dragDown = max(0, value.translation.height) }
+        }.onEnded { value in
+            if canCollapse == true && PlayerDismissGesture.shouldDismiss(distance: dragDown, predicted: value.predictedEndTranslation.height) { dismiss() }
+            canCollapse = nil
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragDown = 0 }
+        })
         .artColor(player.current, into: $tint)
         .preferredColorScheme(.dark)
         .sheet(item: $sheet) { which in
@@ -686,7 +699,7 @@ struct PlaybackSettings: View {
                 HStack { Text("Crossfade").text(.titleS); Spacer(); Text(player.crossfade == 0 ? "Off" : "\(Int(player.crossfade))s").text(.label).foregroundStyle(p.accent) }
                 Slider(value: $player.crossfade, in: 0...12, step: 1)
                 Toggle("Keep albums gapless", isOn: $player.keepAlbumsGapless).text(.body)
-                Text("Crossfade applies to songs in your Spitify folder. Podcasts and books never crossfade.").text(.caption).foregroundStyle(p.secondary)
+                Text("Crossfade applies to downloads and music files you add. Live streams, podcasts and books do not crossfade.").text(.caption).foregroundStyle(p.secondary)
             }
         }
     }
@@ -695,4 +708,15 @@ struct PlaybackSettings: View {
 struct DismissButton: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View { Button("Done") { dismiss() }.bold() }
+}
+
+private struct PlayerScrollTop: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+enum PlayerDismissGesture {
+    static func shouldDismiss(distance: CGFloat, predicted: CGFloat) -> Bool {
+        distance >= 110 || (distance >= 45 && predicted >= 220)
+    }
 }

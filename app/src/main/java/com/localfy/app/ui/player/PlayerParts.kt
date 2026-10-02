@@ -135,12 +135,13 @@ fun rememberPlayerState(): PlayerUiState = LocalApp.current.player.state.collect
 @Composable
 fun rememberSongLookup(): (Long) -> Song? {
     val app = LocalApp.current
+    val streams = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicStreams
     val library by app.repo.library.collectAsStateWithLifecycle()
     val local by app.repo.localPodcasts.collectAsStateWithLifecycle()
     val episodes by app.podcasts.episodeSongs.collectAsStateWithLifecycle()
     return remember(library, local, episodes) {
         val localById = local.associateBy { it.id }
-        val fn: (Long) -> Song? = { id -> if (id < 0) episodes[id] else library.songById[id] ?: localById[id] }
+        val fn: (Long) -> Song? = { id -> if (id < 0) streams.lookup(id) ?: episodes[id] else library.songById[id] ?: localById[id] }
         fn
     }
 }

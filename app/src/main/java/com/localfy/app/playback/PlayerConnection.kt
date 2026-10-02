@@ -164,7 +164,7 @@ class PlayerConnection(
                 if (error.errorCode in PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)
                     "Can't play “$title”" + (ext?.let { " ($it isn't supported)" } ?: "") + " — skipping"
                 else if (error.errorCode in PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED..PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT)
-                    "No connection — download episodes to listen offline"
+                    "No connection. Downloads can play offline."
                 else "Couldn't play “$title”",
             )
         }
@@ -204,7 +204,7 @@ class PlayerConnection(
         val id = lastSongId
         val heard = listenedMs
         listenedMs = 0
-        if (id == null || id < 0 || heard < 3_000) return
+        if (id == null || resolve(id)?.let { it.isPodcast || it.isAudiobook } != false || heard < 3_000) return
         val dur = lastDuration
         val completed = auto || (dur > 0 && heard >= dur * 0.85)
         val skipped = !completed && heard < minOf(30_000L, if (dur > 0) dur / 2 else 30_000L)
@@ -545,8 +545,8 @@ class PlayerConnection(
     private suspend fun restoreQueue(c: MediaController) {
         val ids = prefs.getString(KEY_QUEUE, null)?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
         if (ids.isEmpty()) return
-        withTimeoutOrNull(5_000) { repo.library.first { !it.isEmpty } } ?: return
-        if (ids.any { it < 0 }) withTimeoutOrNull(3_000) { podcasts.episodeSongs.first { it.isNotEmpty() } }
+        if (ids.any { it >= 0 }) withTimeoutOrNull(5_000) { repo.library.first { !it.isEmpty } }
+        if (ids.any { it < 0 && resolve(it) == null }) withTimeoutOrNull(3_000) { podcasts.episodeSongs.first { it.isNotEmpty() } }
         val manual = prefs.getString(KEY_MANUAL, null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
         val restored = ids.mapIndexedNotNull { i, id -> resolve(id)?.let { i to it } }
         val songs = restored.map { it.second }

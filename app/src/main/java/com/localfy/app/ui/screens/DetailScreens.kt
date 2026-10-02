@@ -46,7 +46,8 @@ fun AlbumScreen(albumId: Long) {
     val album = library.albumById[albumId] ?: return EmptyState("Album not found", "It may have been removed from this device.")
     val downloads = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicDownloads
     val jobs by downloads.jobs.collectAsStateWithLifecycle()
-    val catalog = jobs.map { com.localfy.app.data.music.Monochrome.parseTrack(org.json.JSONObject(it.trackJson)) }.filterNotNull().firstOrNull {
+    val streams = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicStreams
+    val catalog = (album.songs.mapNotNull(streams::track) + jobs.map { com.localfy.app.data.music.Monochrome.parseTrack(org.json.JSONObject(it.trackJson)) }.filterNotNull()).firstOrNull {
         com.localfy.app.data.music.SearchMatch.fold(it.album) == com.localfy.app.data.music.SearchMatch.fold(album.title) &&
             com.localfy.app.data.music.SearchMatch.fold(it.artist) == com.localfy.app.data.music.SearchMatch.fold(album.artist) && it.releaseId.isNotEmpty()
     }

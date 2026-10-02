@@ -73,8 +73,10 @@ class LibraryRepository(
     val rawSongs: StateFlow<List<Song>> = _raw.asStateFlow()
     private val _rawBooks = MutableStateFlow<List<Song>>(emptyList())
 
-    val library: StateFlow<Library> = combine(_raw, metadata.overrides, metadata.artVersions) { raw, o, _ ->
-        Library.from(mergeAlbums(raw.map { metadata.apply(it, o[it.id]) }))
+    val library: StateFlow<Library> = combine(_raw, metadata.overrides, metadata.artVersions, (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.saved) { raw, o, _, saved ->
+        val local = raw.map { metadata.apply(it, o[it.id]) }
+        val remote = saved.filter { stream -> local.none { com.localfy.app.data.music.SearchMatch.sameSong(it.title, it.artist, it.durationMs, stream.title, stream.artist, stream.durationMs) && com.localfy.app.data.music.AudioFallback.sameRelease(it.album, stream.album) } }
+        Library.from(mergeAlbums(local + remote))
     }.stateIn(scope, SharingStarted.Eagerly, Library())
 
     /** A corrected song whose album already exists on the device joins that album instead of duplicating it. */
@@ -121,7 +123,7 @@ class LibraryRepository(
             Playlist(
                 id = p.id,
                 name = p.name,
-                songs = byPlaylist[p.id].orEmpty().mapNotNull { lib.songById[it.songId] },
+                songs = byPlaylist[p.id].orEmpty().mapNotNull { lib.songById[it.songId] ?: (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.lookup(it.songId) },
                 updatedAt = p.updatedAt,
             )
         }

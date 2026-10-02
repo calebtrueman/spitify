@@ -41,6 +41,7 @@ final class AppModel {
     let lyrics = LyricsService()
     let player = Player()
     let musicDownloads = MusicDownloads.shared
+    let musicStreams = MusicStreams.shared
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes() } }
@@ -58,6 +59,7 @@ final class AppModel {
     static var photoURL: URL { Store.directory.appendingPathComponent("profile.jpg") }
 
     init() {
+        musicStreams.onChanged = { [weak self] in self?.library.rebuild() }
         player.library = library
         player.shows = shows
         library.onScanCompleted = { [weak self] in Task { await self?.backgroundFixes() } }
@@ -94,7 +96,7 @@ final class AppModel {
     }
 
     func lookup(_ id: String) -> Song? {
-        library.library.songById[id] ?? library.books.first { $0.id == id } ?? shows.allEpisodeSongs[id]
+        library.library.songById[id] ?? library.books.first { $0.id == id } ?? shows.allEpisodeSongs[id] ?? musicStreams.lookup(id)
     }
 
     // MARK: Recommendations

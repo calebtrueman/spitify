@@ -189,28 +189,49 @@ final class EngineBackend {
 }
 
 /// Streams (podcasts, LibriVox) and Music-library songs, which AVAudioEngine can't open.
+@MainActor
 final class StreamBackend {
     let player = AVPlayer()
     var onFinished: (() -> Void)?
     private var endObserver: Any?
+    private var resourceLoader: MusicResourceLoader?
+    private var statusObserver: NSKeyValueObservation?
+    var onError: (() -> Void)?
     private var rate: Float = 1
 
     func load(_ url: URL, at seconds: Double, play: Bool) {
-        let item = AVPlayerItem(url: url)
+        resourceLoader?.stop(); resourceLoader = nil
+        let item: AVPlayerItem
+        if url.scheme == "spitify", let track = MusicStreams.shared.tracks[url.lastPathComponent] {
+            let loader = MusicResourceLoader(track: track); resourceLoader = loader
+            item = AVPlayerItem(asset: loader.asset())
+        } else { item = AVPlayerItem(url: url) }
+        item.preferredForwardBufferDuration = 10
+        statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            guard item.status == .failed else { return }
+            Task { @MainActor in
+                guard let self, self.player.currentItem === item else { return }
+                self.resourceLoader?.stop(discard: true); self.resourceLoader = nil
+                self.onError?()
+            }
+        }
         item.audioTimePitchAlgorithm = .timeDomain
         if let o = endObserver { NotificationCenter.default.removeObserver(o) }
-        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in self?.onFinished?() }
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self, weak item] _ in
+            MainActor.assumeIsolated { guard let self, self.player.currentItem === item else { return }; self.onFinished?() }
+        }
         player.replaceCurrentItem(with: item)
         if seconds > 0 { player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600)) }
         if play { self.play() }
     }
     func play() { player.playImmediately(atRate: rate) }
     func pause() { player.pause() }
-    func stop() { player.pause(); player.replaceCurrentItem(with: nil) }
+    func stop() { player.pause(); statusObserver = nil; player.replaceCurrentItem(with: nil); resourceLoader?.stop(); resourceLoader = nil }
     func seek(_ s: Double) { player.seek(to: CMTime(seconds: s, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
     func setRate(_ r: Float) { rate = r; if player.rate != 0 { player.rate = r } }
     func setVolume(_ v: Float) { player.volume = v }
     var currentTime: Double { player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0 }
     var duration: Double { let d = player.currentItem?.duration.seconds ?? 0; return d.isFinite ? d : 0 }
     var isPlaying: Bool { player.rate != 0 }
+    var failed: Bool { player.currentItem?.status == .failed }
 }

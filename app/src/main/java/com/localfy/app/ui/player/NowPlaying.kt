@@ -233,6 +233,24 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
     BackHandler { if (overlay != null) overlay = null else onCollapse() }
     val tint = rememberPlayerTint(song)
     val listState = rememberLazyListState()
+    val collapseDistance = with(androidx.compose.ui.platform.LocalDensity.current) { 110.dp.toPx() }
+    val fallbackScroll = remember(onCollapse, collapseDistance) {
+        object : NestedScrollConnection {
+            var pulled = 0f
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && available.y > 0) {
+                    pulled += available.y; return androidx.compose.ui.geometry.Offset(0f, available.y)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                val collapse = pulled >= collapseDistance || (pulled > collapseDistance * 0.4f && available.y > 1200f)
+                pulled = 0f
+                if (collapse) { onCollapse(); return available }
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         ArtBackdrop(song)
@@ -247,7 +265,7 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
             val pageHeight = maxHeight
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().let { m -> nestedScroll?.let { m.nestedScroll(it) } ?: m },
+                modifier = Modifier.fillMaxSize().nestedScroll(nestedScroll ?: fallbackScroll),
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
                 item(key = "player") {

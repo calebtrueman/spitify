@@ -92,15 +92,21 @@ struct SongMenuItems: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     var body: some View {
-        if !song.isSpoken {
+        if let track = app.musicStreams.track(song) {
+            Button(app.musicStreams.savedIDs.contains(track.id) ? "Remove from Library" : "Add to Library", systemImage: "plus.circle") {
+                if app.musicStreams.savedIDs.contains(track.id) { app.musicStreams.remove([track]) } else { app.musicStreams.save([track]) }
+            }
+            Button("Download", systemImage: "arrow.down.circle") {
+                app.musicStreams.save([track]); Task { _ = await app.musicDownloads.enqueue([track]) }
+            }
         }
         Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { app.player.playNext([song]) }
         Button("Add to queue", systemImage: "text.line.last.and.arrowtriangle.forward") { app.player.addToQueue([song]) }
         if !song.isSpoken {
             Button("Go to song radio", systemImage: "dot.radiowaves.left.and.right") { app.player.play(app.songRadio(song), shuffle: false, source: "\(song.title) Radio") }
-            Button("Add to playlist", systemImage: "text.badge.plus") { router.addingToPlaylist = [song] }
+            Button("Add to playlist", systemImage: "text.badge.plus") { if let track = app.musicStreams.track(song) { app.musicStreams.save([track]) }; router.addingToPlaylist = [song] }
             Divider()
-            Button("Go to album", systemImage: "square.stack") { router.go(.album(song.albumKey)) }
+            Button("Go to album", systemImage: "square.stack") { if let track = app.musicStreams.track(song) { router.go(.catalogAlbum(OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork))) } else { router.go(.album(song.albumKey)) } }
             Button("Go to artist", systemImage: "person") { router.go(.artist(song.artist)) }
         }
         if song.kind != .remote { Button("Edit info & artwork", systemImage: "pencil") { router.playerOpen = false; router.editing = ([song], false) } }
@@ -232,10 +238,11 @@ struct PlayButton: View {
 }
 
 struct PlaylistButton: View {
+    @Environment(AppModel.self) private var app
     var song: Song
     @Environment(Router.self) private var router
     var body: some View {
-        Button { router.addingToPlaylist = [song] } label: {
+        Button { if let track = app.musicStreams.track(song) { app.musicStreams.save([track]) }; router.addingToPlaylist = [song] } label: {
             Image(systemName: "text.badge.plus").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44)
         }.accessibilityLabel("Add to playlist")
     }

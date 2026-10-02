@@ -252,6 +252,13 @@ final class IntegratedAlbumTests: XCTestCase {
         XCTAssertTrue(album.waitForExistence(timeout: 25)); album.tap()
         let download = app.buttons["Download album"]
         XCTAssertTrue(download.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["Play"].firstMatch.isEnabled)
+        let addButton = app.buttons["Add to Library"]
+        if addButton.exists { addButton.tap() }
+        let remove = app.buttons["Remove from Library"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 5)); remove.tap()
+        XCTAssertTrue(app.buttons["Add to Library"].waitForExistence(timeout: 5))
+        XCTAssertTrue(download.exists)
         XCTAssertFalse(app.buttons["Done"].exists)
         XCTAssertFalse(app.staticTexts["Downloads"].exists)
         XCTAssertFalse(app.staticTexts["Checking audio…"].exists)
@@ -283,5 +290,30 @@ final class PartialAlbumTests: XCTestCase {
         XCTAssertFalse(app.buttons["Download Because"].exists)
         XCTAssertTrue(app.buttons["Play"].firstMatch.isEnabled)
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = "Saved and missing songs together"; shot.lifetime = .keepAlways; add(shot)
+    }
+}
+
+final class PlayerCollapseTests: XCTestCase {
+    func testDownwardSwipeOverArtworkCollapsesAndKeepsPlaying() {
+        let app = XCUIApplication(); app.launch()
+        let allSongs = app.buttons.matching(NSPredicate(format: "label CONTAINS 'All Songs'")).firstMatch
+        XCTAssertTrue(allSongs.waitForExistence(timeout: 10)); allSongs.tap()
+        let song = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Stream Gesture Test'")).firstMatch
+        XCTAssertTrue(song.waitForExistence(timeout: 8)); song.tap()
+        let mini = app.buttons["miniPlayer"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5)); mini.tap()
+        let close = app.buttons["Close player"].firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        let playerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); playerShot.name = "iPhone full player"; playerShot.lifetime = .keepAlways; add(playerShot)
+        // Start well below the old 140-point header-only drag area.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.34))
+        let finish = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.69))
+        start.press(forDuration: 0.08, thenDragTo: finish)
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        XCTAssertFalse(close.exists)
+        XCTAssertTrue(mini.isHittable)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = "Player collapsed to rail"; shot.lifetime = .keepAlways; add(shot)
+        mini.tap(); XCTAssertTrue(close.waitForExistence(timeout: 5)); close.tap()
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
     }
 }

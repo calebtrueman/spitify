@@ -21,7 +21,11 @@ struct SettingsView: View {
                 Toggle("Show recommendations", isOn: $app.showRecommendations)
             } header: { Text("Home") } footer: { Text("Show suggested mixes, artist radio, throwbacks and top artists. Turn this off for a simpler Home screen. You can turn it back on anytime.") }
             Section("Playback") { PlaybackSettings().padding(.vertical, 6) }
-            Section("Downloads") { Toggle("Download over Wi-Fi only", isOn: $downloads.wifiOnly) }
+            Section("Downloads & listening") {
+                Toggle("Download over Wi-Fi only", isOn: $downloads.wifiOnly)
+                Button("Clear listening cache") { ListeningCache.clear() }
+                Text("Streaming uses a temporary cache of up to 1 GB. Older streams are cleared automatically. Downloads stay until you remove them.").font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Toggle("Full-screen lock-screen art", isOn: $player.lockScreenArt)
             } header: { Text("Lock screen") } footer: { Text("Show portrait album art on iOS 26 and later, including while paused. Tap the lock-screen artwork to expand it. Stopping or 10 minutes paused removes the artwork while Spitify is running; your wallpaper is never replaced.") }
@@ -121,7 +125,7 @@ struct EqualizerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    VStack(alignment: .leading) { Text("10-band precision EQ").text(.title); Text("Applies to songs in your Spitify folder").text(.caption).foregroundStyle(p.secondary) }
+                    VStack(alignment: .leading) { Text("10-band precision EQ").text(.title); Text("Applies to downloads and music files you add").text(.caption).foregroundStyle(p.secondary) }
                     Spacer()
                     Toggle("", isOn: $player.eq.enabled).labelsHidden()
                 }.padding(16)

@@ -192,7 +192,7 @@ fun CollectionScreen(
                         IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)
                         }
-                        IconButton(onClick = { app.player.addToQueue(songs) }, enabled = songs.isNotEmpty()) {
+                        if (catalogTracks == null) IconButton(onClick = { app.player.addToQueue(songs) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.Rounded.AddToQueue, "Add all to queue", tint = LocalfyColors.TextSecondary)
                         }
                         Spacer(Modifier.weight(1f))

@@ -2,10 +2,10 @@
 
 # Spitify
 
-**A Spotify-style player for the music, podcasts and audiobooks on your phone.**
-Built for the Samsung Galaxy Z Fold8, with an iPhone version too. No account, no streaming service, no ads. Your recommendations are learned on the device.
+**Music, podcasts and audiobooks for Android and iPhone.**
+Play your own files, find online music, stream it, or download it for offline listening. No Spitify account or ads. Your recommendations are learned on your device. The Android app also adapts to Samsung Galaxy Z Fold screens.
 
-Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager · Android Auto
+Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · AVFoundation · iOS 17+
 
 <img src="docs/screenshots/home-unfolded.jpg" width="720" alt="Spitify on the unfolded Galaxy Z Fold8: library on the left half, player on the right">
 
@@ -14,6 +14,16 @@ Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager �
 ---
 
 ## Screenshots
+
+### iPhone
+
+| Full player | Album page | Small player |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/ios-player.png" width="220" alt="iPhone full player"> | <img src="docs/screenshots/ios-album.png" width="220" alt="iPhone album page with separate library and download controls"> | <img src="docs/screenshots/ios-mini-player.png" width="220" alt="iPhone song list with the player collapsed to the bottom rail"> |
+
+<sub>Current iPhone simulator captures. Player screens use a generated test song; the album page shows an online search result.</sub>
+
+### Android
 
 | Cover screen | Player | Made for you | daylist |
 |:---:|:---:|:---:|:---:|
@@ -34,14 +44,17 @@ Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager �
 ### 🎵 Your music, Spotify-style
 - Home with quick picks, generated playlists, Jump back in, Recently added and top artists.
 - Search across songs, artists, albums and playlists, plus browsing by genre and folder.
-- Optional **Search → Online** finds songs and albums on Monochrome and downloads FLAC files into your library. Includes a saved queue, Wi-Fi-only downloads, cancellation and retries on Android and iPhone. See [how it works and how to test it](docs/MONOCHROME.md).
+- Search finds local and online songs and albums. **Play** streams online audio as it arrives. **Add to Library** saves the song without downloading it. **Download** keeps an offline copy with song details and cover art.
+- Temporary listening audio has a separate 1 GB cache. Older audio is removed first; Settings can clear it without touching downloads. See [streaming and saved music](docs/STREAMING.md).
+- Downloads include Wi-Fi-only mode, cancellation, retries, and matched backup sources when the first source fails. Online availability varies. See [music sources and checks](docs/MONOCHROME.md).
 - Your Library with filters, sorting, and grid or list view.
 - Album, artist and playlist pages with collapsing headers coloured from the artwork.
 - Liked Songs, playlists, and a queue you can reorder by dragging.
 - Shuffle that reorders the real queue, so "Next up" shows what will actually play.
 - Sleep timer with fade-out, playback speed, skip silence, gapless playback, and 0–12 s **crossfade**.
 - **Synced lyrics** from file tags, `.lrc` files, or [LRCLIB](https://lrclib.net), fetched automatically when you're online. They follow playback and you can tap a line to jump to it.
-- Lock screen, notification, Bluetooth controls and resume-on-reboot. Swiping Spitify away from Recents stops playback.
+- Lock-screen and Bluetooth playback controls. On iPhone, song details follow the current queue and supported iOS versions can show expanded album artwork.
+- Swipe down over the full player to collapse it to the small player. Android also supports notification controls and resume-on-reboot; swiping it away from Recents stops playback.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -84,9 +97,10 @@ Spitify works in Android Auto, Android Automotive, Assistant and Bluetooth head 
 - **Auto-fix:** untagged songs are matched on Deezer or iTunes, and books on Open Library. A match is only accepted when the length matches within 3 s.
 - **Missing covers:** fetched automatically.
 - **Manual editing:** edit any song, album or book, with online suggestions or your own image.
-- **Your files are never modified.** Edits live in the app, so *Reset* always works.
+- Android manual edits stay in the app. On iPhone, automatic fill can write missing tags and artwork into local files; Music app library files stay read-only. Downloads include tags and cover art.
 
 ### 🔊 Formats & sound
+These format and sound options describe the Android app. For iPhone formats, see [the iOS guide](ios/README.md). On iPhone, EQ and crossfade apply to local files and downloads; live music streams use the system player.
 - **Formats:** MP3, AAC/M4A, **ALAC**, **FLAC** (incl. 24-bit/96 kHz), Opus, Vorbis, WAV, **AIFF/AIFF-C**, AC-3/E-AC-3, DTS, TrueHD, AMR and more. Bundled FFmpeg decoders cover what the phone can't, and Spitify adds its own AIFF reader.
 - **Unsupported:** WMA, APE, WavPack and DSD files are shown greyed out.
 - **Equaliser:** an in-app **10-band** EQ with a curve you drag directly, 15 presets, bass boost, surround, loudness and a limiter.
@@ -102,15 +116,17 @@ Spitify works in Android Auto, Android Automotive, Assistant and Bluetooth head 
 
 There's a SwiftUI version in [`ios/`](ios/) with the same recommendation engine, lyrics, crossfade, EQ, podcasts, audiobooks and metadata tools. It runs on iOS 17+. See [ios/README.md](ios/README.md) for building, and for installing without a paid developer account (SideStore / AltStore auto-refresh).
 
-<img src="docs/screenshots/ios-player.png" width="220" alt="Spitify on iPhone">
+Online search, streaming, Add to Library, downloads, playlists, and the playback queue work on iPhone too. Swipe down to close the full player. Lock-screen artwork uses Apple’s Now Playing support; iOS controls whether it appears expanded. Siri shortcuts are included. A separate CarPlay browsing interface requires Apple’s approved signing profile, so it is not enabled in the normal SideStore build.
 
 ## Install
 
-Download the APK from [Releases](../../releases) (or build it yourself, below) and sideload it:
+**Android:** download the APK from [Releases](../../releases) and open it on your phone, or install with:
 
 ```bash
 adb install -r app-release.apk
 ```
+
+**iPhone:** download the unsigned IPA from [Releases](../../releases) and sign/install it with SideStore or AltStore. You can also add the [Spitify SideStore source](https://raw.githubusercontent.com/calebtrueman/spitify/main/ios/sidestore-source.json) to receive release updates. See the [iPhone setup and build guide](ios/README.md). An unsigned IPA cannot be installed by opening it directly.
 
 On a Fold, set **Settings › Display › Screen continuity** to *Always* for Spitify, so it keeps playing on the cover screen when you close the phone.
 
@@ -161,11 +177,11 @@ scripts/          emulator setup, test music, FFmpeg build
 
 ## Privacy
 
-Your library, listening history, taste profile, name and photo stay on the phone. Spitify only goes online when a feature needs it. Online music search sends your query to Monochrome; choosing an album or download sends its source ID. Music downloads only start when you request them. The other optional lookups can be switched off in Settings:
+Your library, listening history, taste profile, name and photo stay on the phone. Spitify goes online when a feature needs it. Music search sends your query to Monochrome. Playing or downloading online music contacts the audio source; backup matching can send song, artist and album details to a public source. Streaming writes temporary audio to the listening cache. Permanent music downloads start when you request them. Other optional lookups can be switched off in Settings:
 
 | Feature | Service |
 |---|---|
-| Online music search and requested downloads | Monochrome Tracks |
+| Online music search, streaming and downloads | Monochrome Tracks; matched public backup sources, including Internet Archive |
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
 | Synced lyrics | LRCLIB |

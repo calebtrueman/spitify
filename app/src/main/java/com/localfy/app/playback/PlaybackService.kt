@@ -365,7 +365,8 @@ fun buildPlayer(context: android.content.Context): ExoPlayer.Builder =
         androidx.media3.exoplayer.DefaultRenderersFactory(context)
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true),
-        androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalfyExtractors),
+        androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalfyExtractors)
+            .setDataSourceFactory(com.localfy.app.data.music.ListeningCache.factory(context)),
     )
 
 /** Same-process handoff of the ExoPlayer audio session so the UI can open the system equaliser. */

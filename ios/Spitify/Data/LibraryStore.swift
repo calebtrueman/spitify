@@ -146,7 +146,9 @@ final class LibraryStore {
     func rebuild() {
         let applied = rawSongs.map { apply($0) }
         books = applied.filter(\.isAudiobook)
-        library = Library.build(applied.filter { !$0.isSpoken })
+        let local = applied.filter { !$0.isSpoken }
+        let remote = MusicStreams.shared.savedSongs.filter { stream in !local.contains { SearchMatch.fold($0.title) == SearchMatch.fold(stream.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(stream.artist) && AudioFallback.sameRelease($0.album, stream.album) } }
+        library = Library.build(local + remote)
         onTasteInputChanged?()
     }
 
@@ -231,7 +233,7 @@ final class LibraryStore {
     }
     func rename(_ id: String, to name: String) { if let i = playlists.firstIndex(where: { $0.id == id }) { playlists[i].name = name } }
     func deletePlaylist(_ id: String) { playlists.removeAll { $0.id == id } }
-    func songs(of p: Playlist) -> [Song] { p.songIds.compactMap { library.songById[$0] } }
+    func songs(of p: Playlist) -> [Song] { p.songIds.compactMap { library.songById[$0] ?? MusicStreams.shared.lookup($0) } }
 
     func saveFiles(_ edit: MetadataOverride, for songs: [Song], artwork: Data? = nil) async throws {
         guard songs.allSatisfy({ $0.kind == .file }) else {
