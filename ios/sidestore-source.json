@@ -32,10 +32,10 @@
         {
           "version": "1.0.8",
           "buildVersion": "9",
-          "date": "2026-10-02T06:39:05Z",
-          "localizedDescription": "Queue picks play first. Missing song details and covers fill automatically and save into files. Fixed player spacing, removed Discover and Release Radar, and added voice actions. Full CarPlay browsing requires an approved Apple signing profile.",
+          "date": "2026-10-02T06:50:47Z",
+          "localizedDescription": "- Songs you add to the queue now play before the rest of the album or library, in the order you added them. Your picks are shown separately.\n- Missing song details and covers are filled automatically and saved into local music files. Existing tags and artwork are kept. Android may ask for permission to update files added by another app.\n- New downloads include their song details and cover art in the file. Manual edits also save into the file.\n- Pages stop above the bottom player. Discover Weekly and Release Radar have been removed.\n- Added Siri shortcuts and Android voice-search handling for music, playlists, podcasts, and books. Try \u201cPlay [name] in Spitify\u201d on Siri. Real Siri/Gemini recognition still needs a phone check.\n- Added iPhone CarPlay browsing screens. The separate Spitify icon requires an Apple-approved CarPlay signing profile; the normal SideStore build keeps that restricted permission off. The car's built-in Now Playing screen uses Spitify's existing playback controls.\n\nThe combined local/online search and All Songs library entry are planned for the next release.\n\nChecks: 24 Android unit tests, three Android device tests, 22 iPhone unit tests, and an iPhone player-spacing check passed. The optional live download test was skipped.\n\nInstall the APK on Android or the unsigned IPA through SideStore on iPhone. The mapping text file is only for decoding Android crash reports.",
           "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.8/Spitify-1.0.8-unsigned.ipa",
-          "size": 2361622,
+          "size": 2353705,
           "minOSVersion": "17.0"
         },
         {
