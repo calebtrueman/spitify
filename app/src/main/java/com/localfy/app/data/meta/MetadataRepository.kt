@@ -138,11 +138,11 @@ class MetadataRepository(
 
     /** Sets album art from a picked image (content Uri) or a downloaded candidate (http URL). */
     fun setArt(albumId: Long, source: String) = scope.launch(Dispatchers.IO) {
-        val bytes = runCatching {
-            if (source.startsWith("http")) getBytes(source)
-            else context.contentResolver.openInputStream(Uri.parse(source))?.use { it.readBytes() }
-        }.getOrNull() ?: return@launch
-        File(artDir, "$albumId.jpg").writeBytes(bytes)
+        val image = if (source.startsWith("http")) {
+            val bytes = runCatching { getBytes(source) }.getOrNull() ?: return@launch
+            android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))
+        } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(source))
+        if (!com.localfy.app.data.saveSquareImage(image, File(artDir, "$albumId.jpg"), 1200)) return@launch
         bumpArt(albumId)
     }
 

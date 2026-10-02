@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// Album artwork on disk (Caches/Spitify/art) + in memory, and the dominant colour of each cover.
 /// Order of preference: custom art the user picked → embedded/Music-library art → art fetched online.
@@ -32,8 +33,8 @@ final class ArtCache: @unchecked Sendable {
     }
 
     func storeCustom(_ data: Data, key: String) {
-        guard let img = UIImage(data: data) else { return }
-        try? Self.downscaled(img, 1000).jpegData(compressionQuality: 0.9)?.write(to: customURL(key), options: .atomic)
+        guard let jpeg = Self.squareJPEG(data, side: 1000) else { return }
+        try? jpeg.write(to: customURL(key), options: .atomic)
         invalidate(key)
     }
 
@@ -73,6 +74,25 @@ final class ArtCache: @unchecked Sendable {
         let c = Self.dominant(image)
         lock.lock(); colors[key] = c; lock.unlock()
         return c
+    }
+
+    /// Centre-cropped square JPEG of at most `side` px. ImageIO applies the EXIF orientation (photos are
+    /// stored sideways) and decodes straight to a small size, so a 48 MP photo never sits in memory whole.
+    static func squareJPEG(_ data: Data, side: Int) -> Data? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        // Long edge such that the short edge still covers `side` after cropping.
+        let longEdge = Int((Double(side) * Double(max(w, h)) / Double(max(1, min(w, h)))).rounded(.up))
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: min(longEdge, max(w, h)),
+        ]
+        guard let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        let s = min(thumb.width, thumb.height)
+        guard let square = thumb.cropping(to: CGRect(x: (thumb.width - s) / 2, y: (thumb.height - s) / 2, width: s, height: s)) else { return nil }
+        return UIImage(cgImage: square).jpegData(compressionQuality: 0.9)
     }
 
     static func downscaled(_ img: UIImage, _ max: CGFloat) -> UIImage {

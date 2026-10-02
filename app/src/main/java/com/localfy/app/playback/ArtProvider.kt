@@ -48,18 +48,18 @@ class ArtProvider : ContentProvider() {
 
     private fun albumBitmap(ctx: Context, albumId: Long, songId: Long): Bitmap? {
         val app = ctx.applicationContext as LocalfyApp
-        app.metadata.customArt(albumId)?.let { return BitmapFactory.decodeFile(it.path) }
+        app.metadata.customArt(albumId)?.let { return com.localfy.app.ui.art.decodeSampled(it, 720) }
         if (songId > 0) runCatching {
             return ctx.contentResolver.loadThumbnail(ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, songId), Size(512, 512), null)
         }
         if (albumId > 0) runCatching {
             return ctx.contentResolver.loadThumbnail(ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, albumId), Size(512, 512), null)
         }
-        app.onlineArt.cached(albumId)?.let { return BitmapFactory.decodeFile(it.path) }
+        app.onlineArt.cached(albumId)?.let { return com.localfy.app.ui.art.decodeSampled(it, 720) }
         // No embedded art: try the online lookup (we're on a binder thread, blocking is fine).
         val album = app.library.library.value.albumById[albumId]
         if (album != null) {
-            kotlinx.coroutines.runBlocking { app.onlineArt.fetch(albumId, album.artist, album.title) }?.let { return BitmapFactory.decodeFile(it.path) }
+            kotlinx.coroutines.runBlocking { app.onlineArt.fetch(albumId, album.artist, album.title) }?.let { return com.localfy.app.ui.art.decodeSampled(it, 720) }
         }
         return placeholder(album?.title ?: app.library.localBooks.value.firstOrNull { it.albumId == albumId }?.album ?: "♪", albumId)
     }

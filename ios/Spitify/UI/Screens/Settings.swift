@@ -282,11 +282,8 @@ struct ProfileView: View {
 }
 
 @MainActor func saveProfilePhoto(_ data: Data, _ app: AppModel) {
-    guard let img = UIImage(data: data) else { return }
-    let side = min(img.size.width, img.size.height)
-    let crop = img.cgImage?.cropping(to: CGRect(x: (img.size.width * img.scale - side * img.scale) / 2, y: (img.size.height * img.scale - side * img.scale) / 2, width: side * img.scale, height: side * img.scale))
-    let square = crop.map { UIImage(cgImage: $0) } ?? img
-    try? ArtCache.downscaled(square, 512).jpegData(compressionQuality: 0.9)?.write(to: AppModel.photoURL, options: .atomic)
+    guard let jpeg = ArtCache.squareJPEG(data, side: 512) else { return }
+    try? jpeg.write(to: AppModel.photoURL, options: .atomic)
     app.profile.photoVersion += 1
 }
 

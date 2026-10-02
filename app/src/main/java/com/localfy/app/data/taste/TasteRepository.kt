@@ -52,14 +52,8 @@ class ProfileRepository(private val context: Context, private val scope: Corouti
     }
 
     fun setPhoto(uri: Uri?) = scope.launch(Dispatchers.IO) {
-        if (uri == null) photoFile.delete() else context.contentResolver.openInputStream(uri)?.use { input ->
-            // Downscale so the avatar file stays small.
-            val bmp = android.graphics.BitmapFactory.decodeStream(input) ?: return@use
-            val side = minOf(bmp.width, bmp.height)
-            val square = android.graphics.Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
-            val scaled = android.graphics.Bitmap.createScaledBitmap(square, 512, 512, true)
-            photoFile.outputStream().use { scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }
-        }
+        if (uri == null) photoFile.delete()
+        else if (!com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(context.contentResolver, uri), photoFile, 512)) return@launch
         prefs.edit { putLong("photoVersion", System.currentTimeMillis()) }
         _profile.value = load()
     }

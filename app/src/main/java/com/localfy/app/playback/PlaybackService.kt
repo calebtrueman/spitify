@@ -302,12 +302,12 @@ class PlaybackService : MediaLibraryService() {
                             ?: throw java.io.IOException("No artwork for $uri")
                     }
                     uri.lastPathSegment?.toLongOrNull()?.let { (application as com.localfy.app.LocalfyApp).metadata.customArt(it) }
-                        ?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+                        ?.let { com.localfy.app.ui.art.decodeSampled(it, 720) }
                         ?: runCatching { contentResolver.loadThumbnail(uri, Size(720, 720), null) }.getOrNull()
                         // No embedded art: fall back to the cover Localfy fetched online.
                         ?: uri.lastPathSegment?.toLongOrNull()
                             ?.let { id -> (application as com.localfy.app.LocalfyApp).let { it.metadata.customArt(id) ?: it.onlineArt.cached(id) } }
-                            ?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+                            ?.let { com.localfy.app.ui.art.decodeSampled(it, 720) }
                         ?: throw java.io.IOException("No artwork for $uri")
                 }
             } else {
