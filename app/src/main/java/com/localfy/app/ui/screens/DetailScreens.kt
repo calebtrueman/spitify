@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -169,13 +170,34 @@ fun SmartScreen(kindName: String) {
     val app = LocalApp.current
     val smart by app.repo.smart.collectAsStateWithLifecycle()
     val kind = runCatching { SmartCollection.Kind.valueOf(kindName) }.getOrNull() ?: return
-    val songs = smart[kind]?.songs.orEmpty()
+    var sort by rememberSaveable { mutableStateOf("Title") }
+    var sortOpen by remember { mutableStateOf(false) }
+    val stats by app.repo.stats.collectAsStateWithLifecycle()
+    val songs = smart[kind]?.songs.orEmpty().let { source ->
+        if (kind != SmartCollection.Kind.AllSongs) source else when (sort) {
+            "Most Played" -> source.sortedWith(compareByDescending<com.localfy.app.data.Song> { stats[it.id]?.playCount ?: 0 }.thenBy { it.title.lowercase() }.thenBy { it.id })
+            "Recently Added" -> source.sortedWith(compareByDescending<com.localfy.app.data.Song> { it.dateAddedSec }.thenBy { it.title.lowercase() })
+            "Artist" -> source.sortedWith(compareBy<com.localfy.app.data.Song> { it.artist.lowercase() }.thenBy { it.title.lowercase() })
+            "Album" -> source.sortedWith(compareBy<com.localfy.app.data.Song> { it.album.lowercase() }.thenBy { it.disc }.thenBy { it.track })
+            else -> source.sortedWith(compareBy<com.localfy.app.data.Song> { it.title.lowercase() }.thenBy { it.id })
+        }
+    }
     CollectionScreen(
         title = kind.title,
         kindLabel = "Smart playlist",
         subtitle = kind.subtitle,
         art = songs.firstOrNull()?.artKey,
         songs = songs,
+        headerActions = {
+            if (kind == SmartCollection.Kind.AllSongs) androidx.compose.foundation.layout.Box {
+                TextButton(onClick = { sortOpen = true }) { Text("Sort: $sort") }
+                androidx.compose.material3.DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
+                    listOf("Title", "Artist", "Album", "Recently Added", "Most Played").forEach { choice ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(choice) }, onClick = { sort = choice; sortOpen = false })
+                    }
+                }
+            }
+        },
         emptyText = when (kind) {
             SmartCollection.Kind.AllSongs -> "Download or import music to add it to your library."
             SmartCollection.Kind.MostPlayed, SmartCollection.Kind.RecentlyPlayed -> "Listen to a few songs and this fills itself in."

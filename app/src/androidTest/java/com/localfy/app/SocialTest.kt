@@ -29,7 +29,7 @@ class SocialTest {
         for (title in listOf("Video Games", "Born To Die")) {
             assertTrue(com.localfy.app.data.music.MusicVideoLookup.matches(title, "Lana Del Rey", 282000, "Lana Del Rey - $title", "Lana Del Rey", 287000))
             assertTrue(com.localfy.app.data.music.MusicVideoLookup.matches(title, "Lana Del Rey", 282000, "Lana Del Rey - $title", "LanaDelReyVEVO", 287000))
-            assertFalse(com.localfy.app.data.music.MusicVideoLookup.matches(title, "Lana Del Rey", 282000, "Lana Del Rey - $title", "Lana Del Rey Fan Videos", 287000))
+            assertTrue(com.localfy.app.data.music.MusicVideoLookup.matches(title, "Lana Del Rey", 282000, "Lana Del Rey - $title", "Lana Del Rey Fan Videos", 287000))
         }
     }
     @Test fun roomRequiresExplicitJoinAndRejectsLateUpdatesAfterLeaving() {

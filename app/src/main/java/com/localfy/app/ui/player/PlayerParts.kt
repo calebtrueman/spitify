@@ -581,8 +581,8 @@ fun SecondaryControls(
     }
         val output by rememberAudioOutput()
         Text("Audio: $output", style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+            color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.pressable(onClick = { showAudioOutputs(context) }).padding(horizontal = 8.dp, vertical = 12.dp))
     }
 
     if (showSleep) SleepTimerDialog(sleep, onDismiss = { showSleep = false })

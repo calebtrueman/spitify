@@ -1,17 +1,41 @@
 <!doctype html>
-<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:100vw;height:56.25vw;min-width:177.78vh;min-height:100vh;border:0;pointer-events:none}</style></head>
-<body><div id="video"></div><script>
+<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#stage{position:fixed;inset:0;overflow:hidden;background:#000}#video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0;pointer-events:none}</style></head>
+<body><div id="stage"><div id="video"></div></div><script>
 'use strict';
 let player, ready = false, desired = {position:0, playing:false, speed:1}, lastSeek = 0;
 function report(state) {
   if (window.webkit && window.webkit.messageHandlers.videoState) window.webkit.messageHandlers.videoState.postMessage(state);
   console.log('SPITIFY_VIDEO_' + state);
 }
+function spitifyHideCaptions() {
+  if (!player) return;
+  // Caption modules can arrive after the player is ready.
+  try { if (typeof player.unloadModule === 'function') player.unloadModule('captions'); } catch (_) {}
+  try { if (typeof player.setOption === 'function') player.setOption('captions', 'track', {}); } catch (_) {}
+}
+let lastWidth = 0, lastHeight = 0;
+function spitifyResize() {
+  if (!player || !ready) return;
+  const stage = document.getElementById('stage');
+  const width = stage.clientWidth, height = stage.clientHeight;
+  if (width <= 0 || height <= 0) return;
+  const videoWidth = Math.ceil(Math.max(width, height * 16 / 9));
+  const videoHeight = Math.ceil(Math.max(height, width * 9 / 16));
+  if (videoWidth === lastWidth && videoHeight === lastHeight) return;
+  lastWidth = videoWidth; lastHeight = videoHeight;
+  player.setSize(videoWidth, videoHeight);
+  const frame = document.getElementById('video');
+  frame.style.width = videoWidth + 'px'; frame.style.height = videoHeight + 'px';
+}
+window.addEventListener('resize', spitifyResize);
+if (window.ResizeObserver) new ResizeObserver(spitifyResize).observe(document.getElementById('stage'));
 function spitifySync(position, playing, speed) {
   desired = {position: Math.max(0, Number(position)||0), playing: Boolean(playing), speed: Number(speed)||1};
   if (!ready) return;
+  spitifyResize();
+  spitifyHideCaptions();
   player.mute(); player.setVolume(0);
   const current = player.getCurrentTime(), now = Date.now();
   if (Math.abs(current - desired.position) > 1.25 && now-lastSeek > 750) {
@@ -27,10 +51,11 @@ function spitifyStop() { desired.playing = false; ready = false; if (player) { p
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('video', {
     videoId: '__VIDEO_ID__', width:'100%', height:'100%',
-    playerVars: {autoplay:0, controls:0, playsinline:1, fs:0, rel:0, origin:location.origin},
+    playerVars: {autoplay:0, cc_load_policy:0, controls:0, playsinline:1, fs:0, rel:0, origin:location.origin},
     events: {
-      onReady: function() { player.mute(); player.setVolume(0); ready=true; report('READY'); spitifySync(desired.position, desired.playing, desired.speed); },
-      onStateChange: function() { player.mute(); player.setVolume(0); },
+      onReady: function() { player.mute(); player.setVolume(0); ready=true; spitifyResize(); spitifySync(desired.position, desired.playing, desired.speed); },
+      onApiChange: spitifyHideCaptions,
+      onStateChange: function(event) { spitifyHideCaptions(); player.mute(); player.setVolume(0); if(event.data === 1 || event.data === 2) report('READY'); },
       onError: function() { ready=false; report('ERROR'); }
     }
   });

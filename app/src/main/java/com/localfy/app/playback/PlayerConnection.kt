@@ -184,6 +184,7 @@ class PlayerConnection(
             }
             countedCurrent = false
             lastSongId = mediaItem?.mediaId?.toLongOrNull()
+            lastSongId?.let(resolve)?.let { com.localfy.app.data.music.MusicVideoLookup.prepare(it, context) }
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && _sleepTimer.value == SleepTimer.EndOfTrack) {
                 controller?.pause()
                 controller?.seekTo(0)

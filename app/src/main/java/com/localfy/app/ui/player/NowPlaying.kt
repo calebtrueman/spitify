@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -254,6 +255,10 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
 
     Box(Modifier.fillMaxSize()) {
         ArtBackdrop(song)
+        if (app.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) {
+            Box(Modifier.fillMaxSize().clickable { app.musicVideoEnabled.value = false })
+            return@Box
+        }
         if (song == null) {
             Column(Modifier.statusBarsPadding()) {
                 PlayerTopBar(null, onCollapse, {})
@@ -464,6 +469,10 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
     var tab by rememberSaveable { mutableIntStateOf(0) }
     Box(modifier.fillMaxHeight()) {
         ArtBackdrop(song, strength = 0.9f)
+        if (app.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) {
+            Box(Modifier.fillMaxSize().clickable { app.musicVideoEnabled.value = false })
+            return@Box
+        }
         // Light theme uses dark status icons; give them a light strip to sit on over the dark pane.
 
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
@@ -520,6 +529,10 @@ fun TheaterPlayer(hingeLeft: Dp, hingeWidth: Dp, onExit: () -> Unit) {
     BackHandler(onBack = onExit)
     Box(Modifier.fillMaxSize()) {
         ArtBackdrop(song)
+        if (app.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) {
+            Box(Modifier.fillMaxSize().clickable { app.musicVideoEnabled.value = false })
+            return@Box
+        }
         Row(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
             Column(Modifier.width(hingeLeft).fillMaxHeight().padding(horizontal = 28.dp, vertical = 12.dp)) {
                 PlayerTopBar(app.player.state.collectAsStateWithLifecycle().value.source, onExit, { song?.let { app.openSongMenu(it, SongMenuExtras()) } }, Icons.Rounded.CloseFullscreen)
@@ -560,6 +573,10 @@ fun TabletopPlayer(posture: FoldPosture, onExit: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         ArtBackdrop(song)
+        if (app.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) {
+            Box(Modifier.fillMaxSize().clickable { app.musicVideoEnabled.value = false })
+            return@Box
+        }
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(topHeight).statusBarsPadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (song == null) { EmptyState("Flex mode", "Start some music and the controls will live down here on the desk."); return@Row }

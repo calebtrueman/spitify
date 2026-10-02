@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.13",
+          "buildVersion": "17",
+          "date": "2026-10-02T20:18:36Z",
+          "localizedDescription": "Full-screen videos with tap to exit, broader matching, background preparation, and captions off. All Songs sorting includes Most Played. Tap the accent-coloured audio output to change device.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.13/Spitify-1.0.13-unsigned.ipa",
+          "size": 7272972,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.10",
           "buildVersion": "11",
           "date": "2026-10-02T10:17:56Z",

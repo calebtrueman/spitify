@@ -190,15 +190,35 @@ struct MixView: View {
 
 struct SmartView: View {
     var kind: SmartKind
+    @AppStorage("allSongsSort") private var sort = "Title"
     @Environment(AppModel.self) private var app
     var body: some View {
         let lib = app.library
         let songs: [Song] = switch kind {
-        case .allSongs: lib.library.songs
+        case .allSongs: sorted(lib.library.songs, counts: lib.playCounts)
         case .recentlyAdded: lib.recentlyAdded
         case .recentlyPlayed: lib.recentlyPlayed
         case .mostPlayed: { let c = lib.playCounts; return lib.library.songs.filter { (c[$0.id] ?? 0) > 0 }.sorted { (c[$0.id] ?? 0) > (c[$1.id] ?? 0) }.prefix(50).map { $0 } }()
         }
         CollectionView(title: kind.rawValue, kind: kind == .allSongs ? "Library" : "Smart playlist", subtitle: kind == .allSongs ? "Every song in your library" : "Updated as you listen", art: songs.first, songs: songs)
+            .toolbar {
+                if kind == .allSongs {
+                    Menu { Picker("Sort songs", selection: $sort) { ForEach(["Title", "Artist", "Album", "Recently Added", "Most Played"], id: \.self) { Text($0).tag($0) } } }
+                    label: { Label("Sort: " + sort, systemImage: "arrow.up.arrow.down") }
+                }
+            }
+    }
+    private func sorted(_ songs: [Song], counts: [String: Int]) -> [Song] {
+        songs.sorted { a, b in
+            switch sort {
+            case "Most Played": if counts[a.id, default: 0] != counts[b.id, default: 0] { return counts[a.id, default: 0] > counts[b.id, default: 0] }
+            case "Recently Added": if a.dateAdded != b.dateAdded { return a.dateAdded > b.dateAdded }
+            case "Artist": if a.artist != b.artist { return a.artist.localizedCaseInsensitiveCompare(b.artist) == .orderedAscending }
+            case "Album": if a.album != b.album { return a.album.localizedCaseInsensitiveCompare(b.album) == .orderedAscending }; if a.disc != b.disc { return a.disc < b.disc }; if a.track != b.track { return a.track < b.track }
+            default: break
+            }
+            if a.title != b.title { return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending }
+            return a.id < b.id
+        }
     }
 }

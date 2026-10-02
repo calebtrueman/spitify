@@ -308,7 +308,7 @@ final class Player {
         // Publish the selected song before loading audio; never leave the previous title visible during a load.
         needsLoad = false
         position = seconds; duration = Double(song.durationMs) / 1000; isPlaying = play
-        if play { hasStartedPlayback = true }
+        if play { hasStartedPlayback = true; MusicVideoLookup.prepare(song) }
         activateSession()
         updateNowPlaying()
         fading = false

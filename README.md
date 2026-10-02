@@ -75,7 +75,11 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
 
 ### Music videos
-Tap the video icon in the full player to fill the player with a matching music video, behind the title and controls. Tap it again to return to album art. The video stays muted and follows the song's position, pause state and speed. Your existing song audio continues. Closing the view or putting the app in the background stops the visuals.
+Tap the video icon for an edge-to-edge video, including behind the status bar. Song controls stay hidden; tap the video to return to the player. The video stays muted and follows the song's position, pause state and speed. Your existing song audio continues. Closing the view or putting the app in the background pauses the visuals.
+
+Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse. This is not an offline video download. Artwork stays visible while the video gets ready, without a loading message. The player requests captions off; words burned into the video itself cannot be removed.
+
+All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
 
 Videos use YouTube's embedded player. Some songs have no matching video, and some videos block embedding or show provider ads. The song keeps playing if the video cannot load.
 

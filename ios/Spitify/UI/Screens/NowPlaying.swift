@@ -63,7 +63,9 @@ struct NowPlayingView: View {
         let player = app.player
         ZStack {
             Color.clear
-            if let s = player.current {
+            if videoOpen && player.current?.isSpoken == false {
+                Color.clear.contentShape(Rectangle()).ignoresSafeArea().onTapGesture { videoOpen = false }
+            } else if let s = player.current {
                 // Measure once, outside the scroll view, so the player page always fits the screen exactly.
                 GeometryReader { outer in
                     ScrollView {
@@ -126,7 +128,6 @@ struct NowPlayingView: View {
             VStack(spacing: 2) {
                 Text("PLAYING FROM").text(.labelS).foregroundStyle(.white.opacity(0.7))
                 Text(app.player.source ?? "Your library").text(.titleS).lineLimit(1)
-                Text("Audio: \(app.player.audioOutput)").text(.labelS).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
             }
             Spacer()
             SongMenu(song: s) { Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).frame(width: 44, height: 44) }
@@ -381,6 +382,7 @@ struct Secondary: View {
     @Environment(\.palette) private var palette
     var body: some View {
         let p = app.player
+        VStack(spacing: 0) {
         HStack {
             item(p.sleep == nil ? "moon.zzz" : "moon.zzz.fill", "Sleep timer", p.sleep != nil) { sheet = .sleep }
             Spacer()
@@ -391,6 +393,8 @@ struct Secondary: View {
             item(p.current?.isSpoken == true ? "text.alignleft" : "quote.bubble", p.current?.isSpoken == true ? "Notes" : "Lyrics", false) { sheet = .lyrics }
             Spacer()
             item("list.bullet", "Queue", false) { sheet = .queue }
+        }
+        AudioOutputPicker(output: p.audioOutput, accent: palette.accent).frame(height: 44)
         }
     }
     private func item(_ icon: String, _ label: String, _ on: Bool, _ a: @escaping () -> Void) -> some View {

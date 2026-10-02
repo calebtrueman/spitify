@@ -50,3 +50,12 @@ internal fun rememberAudioOutput(): State<String> {
         }
     }
 }
+
+/** Let Android route media, including Bluetooth and the phone speaker. */
+internal fun showAudioOutputs(context: Context) {
+    if (Build.VERSION.SDK_INT >= 34 && runCatching { android.media.MediaRouter2.getInstance(context).showSystemOutputSwitcher() }.getOrDefault(false)) return
+    val panel = android.content.Intent(android.provider.Settings.Panel.ACTION_VOLUME)
+    runCatching { context.startActivity(panel) }.onFailure {
+        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+    }
+}

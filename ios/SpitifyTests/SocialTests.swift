@@ -2,6 +2,12 @@ import XCTest
 @testable import Spitify
 
 final class SocialTests: XCTestCase {
+    func testMusicVideosAllowLabelUploadsAndLongerEdits() {
+        XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller (2009 Remastered Version)", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Michael Jackson - Thriller (Official Video)", channel: "Sony Music", videoDurationMs: 840000))
+        XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 0, videoTitle: "Michael Jackson - Thriller", channel: "Epic Records", videoDurationMs: 357000))
+        XCTAssertFalse(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Michael Jackson - Thriller cover", channel: "Someone Else", videoDurationMs: 357000))
+        XCTAssertFalse(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Another Artist - Thriller", channel: "Epic Records", videoDurationMs: 357000))
+    }
     func testMusicVideoRejectsDifferentVersionsAndWrongChannels() {
         XCTAssertTrue(MusicVideoLookup.matches(title: "Summertime Sadness", artist: "Lana Del Rey", durationMs: 265000, videoTitle: "Lana Del Rey - Summertime Sadness (Official Music Video)", channel: "Lana Del Rey", videoDurationMs: 266000))
         XCTAssertFalse(MusicVideoLookup.matches(title: "Summertime Sadness", artist: "Lana Del Rey", durationMs: 265000, videoTitle: "Summertime Sadness Live (Official Video)", channel: "Lana Del Rey", videoDurationMs: 266000))
@@ -11,7 +17,7 @@ final class SocialTests: XCTestCase {
         for title in ["Video Games", "Born To Die"] {
             XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "Lana Del Rey", videoDurationMs: 287000))
             XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "LanaDelReyVEVO", videoDurationMs: 287000))
-            XCTAssertFalse(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "Lana Del Rey Fan Videos", videoDurationMs: 287000))
+            XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "Lana Del Rey Fan Videos", videoDurationMs: 287000))
         }
     }
     @MainActor func testPlaylistReusesPreviouslyMatchedSongWithoutSearch() async throws {
