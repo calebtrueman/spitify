@@ -77,8 +77,11 @@ class PodcastRepository(
     /** Subscribe by feed URL; returns the podcast id or null if the feed couldn't be read. */
     suspend fun searchBooks(term: String): List<BookSearchResult> = withContext(Dispatchers.IO) { runCatching { LibriVox.search(term) }.getOrDefault(emptyList()) }
 
-    suspend fun subscribe(feedUrl: String, artworkHint: String? = null, kind: String = KIND_PODCAST, titleHint: String? = null, authorHint: String? = null, descriptionHint: String? = null): Long? = withContext(Dispatchers.IO) {
-        dao.byFeed(feedUrl)?.let { return@withContext it.id }
+    suspend fun subscribe(feedUrl: String, artworkHint: String? = null, kind: String = KIND_PODCAST, titleHint: String? = null, authorHint: String? = null, descriptionHint: String? = null, follow: Boolean = true): Long? = withContext(Dispatchers.IO) {
+        dao.byFeed(feedUrl)?.let {
+            if (follow && it.subscribedAt == 0L) dao.setFollowing(it.id, System.currentTimeMillis())
+            return@withContext it.id
+        }
         val feed = runCatching {
             if (feedUrl.startsWith("archive:")) LibriVox.chapters(feedUrl.removePrefix("archive:"))
             else Http.open(feedUrl) { FeedParser.parse(it) }
@@ -87,10 +90,20 @@ class PodcastRepository(
         val id = dao.insertPodcast(
             PodcastEntity(feedUrl = feedUrl, title = titleHint ?: feed.title, author = authorHint ?: feed.author,
                 description = descriptionHint?.takeIf { it.isNotBlank() } ?: feed.description,
-                artworkUrl = artworkHint ?: feed.artworkUrl, lastRefreshed = now, subscribedAt = now, kind = kind),
+                artworkUrl = artworkHint ?: feed.artworkUrl, lastRefreshed = now, subscribedAt = if (follow) now else 0L, kind = kind),
         )
+        if (id == -1L) {
+            val existing = dao.byFeed(feedUrl) ?: return@withContext null
+            if (follow && existing.subscribedAt == 0L) dao.setFollowing(existing.id, now)
+            return@withContext existing.id
+        }
         dao.insertEpisodes(feed.episodes.map { it.toEntity(id) })
         id
+    }
+
+    // A zero follow date marks a cached preview; its episodes can still be played.
+    fun setFollowing(id: Long, follow: Boolean) = scope.launch(Dispatchers.IO) {
+        dao.setFollowing(id, if (follow) System.currentTimeMillis() else 0L)
     }
 
     fun unsubscribe(id: Long) = scope.launch(Dispatchers.IO) {
@@ -102,7 +115,7 @@ class PodcastRepository(
     fun refreshAll() = scope.launch(Dispatchers.IO) {
         _refreshing.value = true
         try {
-            dao.podcasts().filter { !it.feedUrl.startsWith("archive:") }.forEach { pod ->
+            dao.podcasts().filter { it.subscribedAt > 0L && !it.feedUrl.startsWith("archive:") }.forEach { pod ->
                 val feed = runCatching { Http.open(pod.feedUrl) { FeedParser.parse(it) } }.getOrNull() ?: return@forEach
                 dao.insertEpisodes(feed.episodes.map { it.toEntity(pod.id) }) // IGNORE keeps progress/downloads
                 // Books keep the nicer LibriVox title/cover; podcasts follow their feed.

@@ -111,6 +111,7 @@ struct NowPlayingView: View {
             VStack(spacing: 2) {
                 Text("PLAYING FROM").text(.labelS).foregroundStyle(.white.opacity(0.7))
                 Text(app.player.source ?? "Your library").text(.titleS).lineLimit(1)
+                Text("Audio: \(app.player.audioOutput)").text(.labelS).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
             }
             Spacer()
             SongMenu(song: s) { Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).frame(width: 44, height: 44) }

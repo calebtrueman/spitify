@@ -21,6 +21,7 @@ final class Player {
     private(set) var repeatMode = RepeatMode(rawValue: UserDefaults.standard.integer(forKey: "repeat")) ?? .off
     private(set) var sleep: SleepTimer?
     private(set) var message: String?
+    private(set) var audioOutput = "Audio output unavailable"
     var speed: Float { current?.isSpoken == true ? speedSpoken : speedMusic }
     var crossfade: Double = UserDefaults.standard.double(forKey: "crossfade") { didSet { UserDefaults.standard.set(crossfade, forKey: "crossfade") } }
     var keepAlbumsGapless: Bool = UserDefaults.standard.object(forKey: "gaplessAlbums") as? Bool ?? true { didSet { UserDefaults.standard.set(keepAlbumsGapless, forKey: "gaplessAlbums") } }
@@ -52,6 +53,7 @@ final class Player {
         engine.onFinished = { [weak self] in self?.trackEnded() }
         stream.onFinished = { [weak self] in self?.trackEnded() }
         configureSession()
+        updateAudioOutput()
         configureRemote()
     }
 
@@ -141,10 +143,14 @@ final class Player {
     }
 
     func addToQueue(_ songs: [Song]) {
-        guard current != nil else { return play(songs) }
-        queue.append(contentsOf: songs.filter(\.playable))
-        unshuffled?.append(contentsOf: songs)
-        flash("Added to queue")
+        guard !songs.isEmpty else { return }
+        let usable = songs.filter(\.playable)
+        guard !usable.isEmpty else { flash("These files aren't supported"); return }
+        if current == nil { play(usable) }
+        else { queue.append(contentsOf: usable); unshuffled?.append(contentsOf: usable) }
+        let skipped = songs.count - usable.count
+        flash("Added \(usable.count) \(usable.count == 1 ? "song" : "songs") to queue" +
+              (skipped > 0 ? " • \(skipped) unsupported skipped" : ""))
     }
 
     func remove(at i: Int) { guard queue.indices.contains(i), i != index else { return }; let s = queue.remove(at: i); if i < index { index -= 1 }; unshuffled?.removeAll { $0 == s } }
@@ -338,15 +344,30 @@ final class Player {
             }
         }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
-            guard let raw = n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt, AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
-            MainActor.assumeIsolated { self?.pause() } // headphones unplugged
+            MainActor.assumeIsolated {
+                self?.updateAudioOutput()
+                if let raw = n.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                   AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable {
+                    self?.pause()
+                }
+            }
         }
         NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine.engine, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { if self?.isPlaying == true { self?.engine.startEngine(); self?.engine.play() } }
         }
     }
 
-    private func activateSession() { try? AVAudioSession.sharedInstance().setActive(true) }
+    private func updateAudioOutput() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs.map {
+            $0.portType == .builtInSpeaker ? "Phone speaker" : $0.portName
+        }
+        audioOutput = outputs.isEmpty ? "Audio output unavailable" : outputs.joined(separator: " + ")
+    }
+
+    private func activateSession() {
+        try? AVAudioSession.sharedInstance().setActive(true)
+        updateAudioOutput()
+    }
 
     private func configureRemote() {
         let c = MPRemoteCommandCenter.shared()

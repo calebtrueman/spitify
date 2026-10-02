@@ -12,6 +12,7 @@ struct Show: Identifiable, Codable, Hashable {
     var kind: Kind
     var subscribedAt: Date
     var episodes: [Episode]
+    var following: Bool { subscribedAt.timeIntervalSince1970 > 0 }
 }
 
 struct Episode: Identifiable, Codable, Hashable {
@@ -112,13 +113,22 @@ final class FeedParser: NSObject, XMLParserDelegate {
 /// Podcasts (Apple directory + any RSS) and LibriVox audiobooks (via the Internet Archive).
 @MainActor @Observable
 final class ShowsStore {
-    var shows: [Show] = Store.load([Show].self, "shows") ?? [] { didSet { Store.save(shows, "shows") } }
-    var resume: [String: Resume] = Store.load([String: Resume].self, "resume") ?? [:] { didSet { Store.save(resume, "resume") } }
+    private let persist: Bool
+    var shows: [Show] = [] { didSet { if persist { Store.save(shows, "shows") } } }
+    var resume: [String: Resume] = [:] { didSet { if persist { Store.save(resume, "resume") } } }
+
+    init(persist: Bool = true) {
+        self.persist = persist
+        if persist {
+            shows = Store.load([Show].self, "shows") ?? []
+            resume = Store.load([String: Resume].self, "resume") ?? [:]
+        }
+    }
     private(set) var downloads: [String: Double] = [:]
     private(set) var refreshing = false
     static let downloadDir: URL = { let d = Store.directory.appendingPathComponent("Downloads"); try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true); return d }()
 
-    var podcasts: [Show] { shows.filter { $0.kind == .podcast } }
+    var podcasts: [Show] { shows.filter { $0.kind == .podcast && $0.following } }
     var books: [Show] { shows.filter { $0.kind == .audiobook } }
 
     func song(_ e: Episode, in show: Show) -> Song {
@@ -164,11 +174,19 @@ final class ShowsStore {
     // MARK: Subscribe
 
     @discardableResult
-    func subscribe(feedURL: String, art: String? = nil) async -> Show? {
-        if let s = shows.first(where: { $0.feedURL == feedURL }) { return s }
+    func subscribe(feedURL: String, art: String? = nil, follow: Bool = true) async -> Show? {
+        if let i = shows.firstIndex(where: { $0.feedURL == feedURL }) {
+            if follow && !shows[i].following { shows[i].subscribedAt = Date() }
+            return shows[i]
+        }
         guard let data = await HTTP.get(feedURL), let feed = FeedParser.parse(data) else { return nil }
+        // Another tap can finish loading this feed while the request is in flight.
+        if let i = shows.firstIndex(where: { $0.feedURL == feedURL }) {
+            if follow && !shows[i].following { shows[i].subscribedAt = Date() }
+            return shows[i]
+        }
         let show = Show(id: stableId(feedURL), feedURL: feedURL, title: feed.title, author: feed.author, summary: feed.summary,
-                        artworkURL: feed.art ?? art, kind: .podcast, subscribedAt: Date(), episodes: feed.episodes)
+                        artworkURL: feed.art ?? art, kind: .podcast, subscribedAt: follow ? Date() : Date(timeIntervalSince1970: 0), episodes: feed.episodes)
         shows.insert(show, at: 0)
         return show
     }
@@ -194,6 +212,11 @@ final class ShowsStore {
         return show
     }
 
+    func setFollowing(_ show: Show, _ follow: Bool) {
+        guard let i = shows.firstIndex(where: { $0.id == show.id }) else { return }
+        shows[i].subscribedAt = follow ? Date() : Date(timeIntervalSince1970: 0)
+    }
+
     func remove(_ show: Show) {
         for e in show.episodes { if let f = e.localFile { try? FileManager.default.removeItem(at: Self.downloadDir.appendingPathComponent(f)) } }
         shows.removeAll { $0.id == show.id }
@@ -202,7 +225,7 @@ final class ShowsStore {
     func refreshAll() async {
         refreshing = true
         defer { refreshing = false }
-        for (i, show) in shows.enumerated() where show.kind == .podcast {
+        for (i, show) in shows.enumerated() where show.kind == .podcast && show.following {
             guard let data = await HTTP.get(show.feedURL), let feed = FeedParser.parse(data) else { continue }
             let known = Set(show.episodes.map(\.id))
             let fresh = feed.episodes.filter { !known.contains($0.id) }

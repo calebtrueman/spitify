@@ -47,6 +47,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import com.localfy.app.ui.LocalApp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,9 +106,37 @@ fun SongRow(
     onMore: (() -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
+    val app = LocalApp.current
+    var swipe by remember(song.id) { mutableFloatStateOf(0f) }
+    var dragging by remember(song.id) { mutableStateOf(false) }
+    val threshold = with(LocalDensity.current) { 72.dp.toPx() }
+    val animatedSwipe by animateFloatAsState(swipe, spring(stiffness = Spring.StiffnessMedium), label = "queue swipe")
+    Box(modifier.fillMaxWidth().clipToBounds()) {
+        if (swipe > 0f || animatedSwipe > 1f) {
+            Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)), contentAlignment = Alignment.CenterStart) {
+                Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp))
+            }
+        }
     Row(
-        modifier
+        Modifier
             .fillMaxWidth()
+            .graphicsLayer { translationX = if (dragging) swipe else animatedSwipe }
+            .pointerInput(song.id, threshold) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true },
+                    onDragCancel = { dragging = false; swipe = 0f },
+                    onDragEnd = {
+                        if (swipe >= threshold && app.player.addToQueue(listOf(song))) {
+                            haptics(HapticFeedbackType.Confirm)
+                        }
+                        dragging = false
+                        swipe = 0f
+                    },
+                ) { change, amount ->
+                    change.consume()
+                    swipe = (swipe + amount).coerceIn(0f, threshold * 1.6f)
+                }
+            }
             .graphicsLayer { alpha = if (song.playable) 1f else 0.45f }
             .combinedClickable(onClick = onClick, onLongClick = onMore?.let { { haptics(HapticFeedbackType.LongPress); it() } })
             .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
@@ -146,6 +184,7 @@ fun SongRow(
         if (onMore != null) {
             IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, "More options", tint = LocalfyColors.TextSecondary) }
         }
+    }
     }
 }
 

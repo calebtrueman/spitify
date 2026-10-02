@@ -334,11 +334,21 @@ class PlayerConnection(
         unshuffledOrder = unshuffledOrder?.let { it + songs.map(Song::id) }
     }
 
-    fun addToQueue(songs: List<Song>) {
-        val c = controller ?: return
-        if (c.mediaItemCount == 0) return playSongs(songs)
-        c.addMediaItems(songs.map { it.toMediaItem() })
-        unshuffledOrder = unshuffledOrder?.let { it + songs.map(Song::id) }
+    fun addToQueue(songs: List<Song>): Boolean {
+        val c = controller ?: run { _messages.tryEmit("Player is connecting. Please try again."); return false }
+        if (songs.isEmpty()) return false
+        val usable = songs.filter { it.playable }
+        if (usable.isEmpty()) { _messages.tryEmit("These files aren't supported"); return false }
+        if (c.mediaItemCount == 0) playSongs(usable)
+        else {
+            c.addMediaItems(usable.map { it.toMediaItem() })
+            unshuffledOrder = unshuffledOrder?.let { it + usable.map(Song::id) }
+        }
+        val count = usable.size
+        val skipped = songs.size - count
+        _messages.tryEmit("Added $count ${if (count == 1) "song" else "songs"} to queue" +
+            if (skipped > 0) " • $skipped unsupported skipped" else "")
+        return true
     }
 
     fun togglePlay() {

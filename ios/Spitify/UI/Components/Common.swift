@@ -10,9 +10,12 @@ struct SongRow: View {
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
 
+    @State private var swipeX: CGFloat = 0
+    @State private var suppressTapUntil = Date.distantPast
+
     var body: some View {
         let isCurrent = app.player.current?.id == song.id
-        Button(action: { Haptics.tap(); onTap() }) {
+        Button(action: { if Date() >= suppressTapUntil { Haptics.tap(); onTap() } }) {
             HStack(spacing: 12) {
                 if let n = trackNumber {
                     ZStack {
@@ -41,6 +44,33 @@ struct SongRow: View {
             .contentShape(Rectangle())
             .opacity(song.playable ? 1 : 0.45)
         }
+        .offset(x: swipeX)
+        .background(alignment: .leading) {
+            if swipeX > 0 {
+                ZStack(alignment: .leading) {
+                    p.accent.opacity(0.16)
+                    Image(systemName: "text.line.last.and.arrowtriangle.forward")
+                        .foregroundStyle(p.accent).padding(.leading, 20)
+                }
+            }
+        }
+        .clipped()
+        .simultaneousGesture(DragGesture(minimumDistance: 20)
+            .onChanged { value in
+                let x = value.translation.width
+                guard x > abs(value.translation.height) * 1.5 else { swipeX = 0; return }
+                suppressTapUntil = Date().addingTimeInterval(0.4)
+                swipeX = min(x, 115)
+            }
+            .onEnded { value in
+                if swipeX >= 72 && value.translation.width > abs(value.translation.height) * 1.5 {
+                    suppressTapUntil = Date().addingTimeInterval(0.4)
+                    app.player.addToQueue([song])
+                    if song.playable { Haptics.tap() }
+                }
+                withAnimation(.spring(response: 0.25)) { swipeX = 0 }
+            })
+        .accessibilityAction(named: "Add to queue") { app.player.addToQueue([song]) }
         .buttonStyle(.pressable(0.98))
         .contextMenu { SongMenuItems(song: song, removeLabel: removeLabel, onRemove: onRemove) }
     }

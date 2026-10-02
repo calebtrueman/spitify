@@ -65,20 +65,26 @@ struct PodcastsView: View {
     }
 
     private func resultRow(_ r: ShowSearchResult, following: Bool) -> some View {
-        Button {
-            Task { if let s = await app.shows.subscribe(feedURL: r.feedURL, art: r.artworkURL) { router.go(.show(s.id)) } }
-        } label: {
-            HStack(spacing: 12) {
-                ArtworkView(key: r.feedURL, remote: r.artworkURL, cornerRadius: 8).frame(width: 64, height: 64)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(r.title).text(.titleS).foregroundStyle(p.text).lineLimit(2)
-                    Text([r.author, r.genre].compactMap { $0 }.joined(separator: " • ")).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
-                }
-                Spacer()
+        HStack(spacing: 12) {
+            Button {
+                Task { if let s = await app.shows.subscribe(feedURL: r.feedURL, art: r.artworkURL, follow: false) { router.go(.show(s.id)) } }
+            } label: {
+                HStack(spacing: 12) {
+                    ArtworkView(key: r.feedURL, remote: r.artworkURL, cornerRadius: 8).frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(r.title).text(.titleS).foregroundStyle(p.text).lineLimit(2)
+                        Text([r.author, r.genre].compactMap { $0 }.joined(separator: " • ")).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                }.contentShape(Rectangle())
+            }.buttonStyle(.pressable(0.98))
+            Button {
+                Task { if let s = await app.shows.subscribe(feedURL: r.feedURL, art: r.artworkURL) { router.go(.show(s.id)) } }
+            } label: {
                 Text(following ? "Following" : "Follow").text(.label).foregroundStyle(following ? p.text : p.onAccent)
                     .padding(.horizontal, 14).padding(.vertical, 7).background(following ? p.tint : p.accent, in: Capsule())
-            }.padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.pressable(0.98))
+            }.buttonStyle(.plain)
+        }.padding(.horizontal, 16).padding(.vertical, 6)
     }
 }
 
@@ -162,7 +168,7 @@ struct ShowView: View {
                         }
                     }.padding(16)
                     HStack {
-                        Button { dismiss(); app.shows.remove(show) } label: { Text("Following").text(.label).foregroundStyle(p.text).padding(.horizontal, 16).padding(.vertical, 8).background(p.tint, in: Capsule()) }
+                        Button { app.shows.setFollowing(show, !show.following) } label: { Text(show.following ? "Following" : "Follow").text(.label).foregroundStyle(p.text).padding(.horizontal, 16).padding(.vertical, 8).background(p.tint, in: Capsule()) }
                         Spacer()
                         if let latest = app.shows.songs(show).first {
                             Button { app.player.playEpisode(latest) } label: { Label("Latest episode", systemImage: "play.fill").text(.label).foregroundStyle(p.onAccent).padding(.horizontal, 16).padding(.vertical, 10).background(p.accent, in: Capsule()) }

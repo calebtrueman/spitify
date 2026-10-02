@@ -101,7 +101,7 @@ fun PodcastsScreen() {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
-    val shows = app.podcasts.shows.collectAsStateWithLifecycle().value.filter { it.podcast.kind == com.localfy.app.data.podcast.KIND_PODCAST }
+    val shows = app.podcasts.shows.collectAsStateWithLifecycle().value.filter { it.podcast.kind == com.localfy.app.data.podcast.KIND_PODCAST && it.podcast.subscribedAt > 0L }
     val resume by app.podcasts.resume.collectAsStateWithLifecycle()
     val refreshing by app.podcasts.refreshing.collectAsStateWithLifecycle()
     val local by app.repo.localPodcasts.collectAsStateWithLifecycle()
@@ -239,16 +239,17 @@ private fun SearchResultRow(r: PodcastSearchResult, subscribed: Boolean) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    val open = {
+    fun open(follow: Boolean) {
+        if (busy) return
         busy = true
         scope.launch {
-            val id = app.podcasts.subscribe(r.feedUrl, r.artworkUrl)
+            val id = app.podcasts.subscribe(r.feedUrl, r.artworkUrl, follow = follow)
             busy = false
             if (id != null) app.navigate(Routes.show(id))
         }
     }
     Row(
-        Modifier.fillMaxWidth().pressable(pressedScale = 0.98f) { open() }.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().pressable(pressedScale = 0.98f) { open(false) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Artwork(ArtKey(r.feedUrl.hashCode().toLong(), r.feedUrl.hashCode().toLong(), r.artworkUrl), Modifier.size(64.dp), RoundedCornerShape(8.dp))
@@ -259,7 +260,7 @@ private fun SearchResultRow(r: PodcastSearchResult, subscribed: Boolean) {
         }
         Spacer(Modifier.width(8.dp))
         if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-        else FollowButton(subscribed) { open() }
+        else FollowButton(subscribed) { open(true) }
     }
 }
 
@@ -384,8 +385,8 @@ fun PodcastShowScreen(id: Long) {
         art = podcastArt(show.podcast.artworkUrl, show.id),
         episodes = songs,
         resume = resume.mapValues { it.value.played },
-        following = true,
-        onFollow = { app.podcasts.unsubscribe(show.id); app.nav.popBackStack() },
+        following = show.podcast.subscribedAt > 0L,
+        onFollow = { app.podcasts.setFollowing(show.id, show.podcast.subscribedAt == 0L) },
     )
 }
 

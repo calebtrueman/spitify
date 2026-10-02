@@ -71,7 +71,7 @@ class AutoLibrary(private val context: Context) {
             parentId == LIB_ARTISTS -> lib.artists.map { a -> folder("artist:${a.name}", a.name, MediaMetadata.MEDIA_TYPE_ARTIST, a.cover, "${a.songs.size} songs") }
             parentId == LIB_GENRES -> lib.genres.map { g -> folder("genre:${g.name}", g.name, MediaMetadata.MEDIA_TYPE_GENRE, g.songs.first(), "${g.songs.size} songs") }
             parentId == TAB_PODCASTS -> buildList {
-                app.podcasts.shows.value.filter { it.podcast.kind == KIND_PODCAST }.forEach { s ->
+                app.podcasts.shows.value.filter { it.podcast.kind == KIND_PODCAST && it.podcast.subscribedAt > 0L }.forEach { s ->
                     add(folder("show:${s.id}", s.podcast.title, MediaMetadata.MEDIA_TYPE_PODCAST, null, s.podcast.author, artUrl = s.podcast.artworkUrl, grid = true))
                 }
                 if (app.library.localPodcasts.value.isNotEmpty()) add(folder(LOCAL_PODCASTS, "On this device", MediaMetadata.MEDIA_TYPE_FOLDER_PODCASTS))

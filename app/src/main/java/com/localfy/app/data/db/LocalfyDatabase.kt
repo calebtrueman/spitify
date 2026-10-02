@@ -172,6 +172,9 @@ interface PodcastDao {
     @Query("SELECT * FROM podcasts WHERE feedUrl = :url")
     suspend fun byFeed(url: String): PodcastEntity?
 
+    @Query("UPDATE podcasts SET subscribedAt = :since WHERE id = :id")
+    suspend fun setFollowing(id: Long, since: Long)
+
     @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
     suspend fun insertPodcast(p: PodcastEntity): Long
 

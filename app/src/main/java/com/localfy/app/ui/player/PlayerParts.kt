@@ -511,13 +511,19 @@ fun SecondaryControls(
     val eqLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {}
     val tweaked = state.speed != 1f || state.crossfadeMs > 0 || state.skipSilence
 
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         ToggleIcon(if (sleep != null) Icons.Rounded.Bedtime else Icons.Rounded.BedtimeOff, "Sleep timer", sleep != null) { showSleep = true }
         ToggleIcon(Icons.Rounded.Tune, "Playback settings", tweaked) { showPlayback = true }
         val eqOn = EqStore.state.collectAsStateWithLifecycle().value.enabled
         ToggleIcon(Icons.Rounded.Equalizer, "Equaliser", eqOn) { app.openEqualizer() }
         if (onLyrics != null) ToggleIcon(Icons.Rounded.Lyrics, "Lyrics", lyricsSelected, onLyrics)
         if (onQueue != null) ToggleIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", queueSelected, onQueue)
+    }
+        val output by rememberAudioOutput()
+        Text("Audio: $output", style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
     }
 
     if (showSleep) SleepTimerDialog(sleep, onDismiss = { showSleep = false })
