@@ -127,6 +127,9 @@ final class AppModel {
                 if let url = await MusicCatalog.albumArt(artist: album.artist, album: album.title), let data = await HTTP.get(url) {
                     ArtCache.shared.storeEmbedded(data, key: album.id)
                     library.artVersion += 1
+                    for song in album.songs where song.kind == .file {
+                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(source: "online"), artwork: data)
+                    }
                 }
                 try? await Task.sleep(for: .milliseconds(800))
             }
@@ -136,8 +139,14 @@ final class AppModel {
                 tried.insert("tag:" + song.id)
                 if let c = MusicCatalog.confident(song, await MusicCatalog.search(MusicCatalog.query(for: song), durationMs: song.durationMs)) {
                     library.saveOverride(MetadataOverride(title: c.title, artist: c.artist, album: c.album, albumArtist: c.artist, genre: c.genre, year: c.year, track: c.track, disc: c.disc, source: "online"), for: [song])
+                    if song.kind == .file {
+                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(title: c.title, artist: c.artist, album: c.album, albumArtist: c.artist, genre: c.genre, year: c.year, track: c.track, disc: c.disc, source: "online"))
+                    }
                     let key = Song.albumKey(album: c.album, artist: c.artist)
-                    if !ArtCache.shared.hasArt(key), let art = c.artURL, let data = await HTTP.get(art) { ArtCache.shared.storeEmbedded(data, key: key); library.artVersion += 1 }
+                    if !ArtCache.shared.hasArt(key), let art = c.artURL, let data = await HTTP.get(art) {
+                        ArtCache.shared.storeEmbedded(data, key: key); library.artVersion += 1
+                        if song.kind == .file { try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(source: "online"), artwork: data) }
+                    }
                 }
                 try? await Task.sleep(for: .milliseconds(1100))
             }
@@ -149,7 +158,13 @@ final class AppModel {
                 let guess = first.album.replacingOccurrences(of: "_", with: " ")
                 if let hit = await OpenLibrary.search(guess).first(where: { foldForSearch($0.title).contains(foldForSearch(guess)) || foldForSearch(guess).contains(foldForSearch($0.title)) }) {
                     library.saveOverride(MetadataOverride(artist: hit.author, album: hit.title, albumArtist: hit.author, genre: "Audiobook", year: hit.year, source: "online"), for: chapters)
-                    if let c = hit.coverURL, let data = await HTTP.get(c) { ArtCache.shared.storeEmbedded(data, key: Song.albumKey(album: hit.title, artist: hit.author)); library.artVersion += 1 }
+                    var cover: Data?
+                    if let url = hit.coverURL { cover = await HTTP.get(url) }
+                    if let cover { ArtCache.shared.storeEmbedded(cover, key: Song.albumKey(album: hit.title, artist: hit.author)); library.artVersion += 1 }
+                    for chapter in chapters where chapter.kind == .file && library.overrides[chapter.id]?.source != "user" {
+                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(chapter.location),
+                            edit: MetadataOverride(artist: hit.author, album: hit.title, albumArtist: hit.author, genre: "Audiobook", year: hit.year, source: "online"), artwork: cover)
+                    }
                 }
             }
         }

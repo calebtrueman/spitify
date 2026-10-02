@@ -142,7 +142,7 @@ struct SongInfoSheet: View {
     private func row(_ k: String, _ v: String) -> some View { LabeledContent(k) { Text(v.isEmpty ? "—" : v).multilineTextAlignment(.trailing) } }
 }
 
-/// Edit tags + artwork (one song or a whole album/book). Stored in Spitify — files are never modified.
+/// Edit tags and artwork in one song or a whole album/book.
 struct MetadataEditor: View {
     var songs: [Song]
     var albumMode: Bool
@@ -161,6 +161,8 @@ struct MetadataEditor: View {
     @State private var photo: PhotosPickerItem?
     @State private var candidates: [MetadataCandidate]?
     @State private var searching = false
+    @State private var saving = false
+    @State private var saveError: String?
 
     var body: some View {
         let first = songs[0]
@@ -177,9 +179,9 @@ struct MetadataEditor: View {
                         VStack(alignment: .leading, spacing: 10) {
                             PhotosPicker("Choose image", selection: $photo, matching: .images)
                             if FileManager.default.fileExists(atPath: ArtCache.shared.customURL(first.albumKey).path) {
-                                Button("Remove custom art", role: .destructive) { ArtCache.shared.removeCustom(first.albumKey); app.library.artVersion += 1 }
+                                Button("Use file cover", role: .destructive) { ArtCache.shared.removeCustom(first.albumKey); app.library.artVersion += 1 }
                             }
-                            Text("Applies to the whole \(book ? "book" : "album")").font(.caption).foregroundStyle(.secondary)
+                            Text("Saved into the selected \(songs.count == 1 ? "file" : "files")").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -215,20 +217,25 @@ struct MetadataEditor: View {
                         TextField("Year", text: $year).keyboardType(.numberPad)
                         if !albumMode { TextField(book ? "Chapter" : "Track", text: $track).keyboardType(.numberPad); if !book { TextField("Disc", text: $disc).keyboardType(.numberPad) } }
                     }
-                } footer: { Text(albumMode ? "Applies to \(songs.count) \(book ? "chapters" : "tracks"). Your files aren't modified." : "Your file isn't modified — reset any time.") }
+                } footer: { Text(albumMode ? "Applies to \(songs.count) \(book ? "chapters" : "tracks"). Edits are saved into the files." : "Edits are saved into the file.") }
                 Section {
-                    Button("Reset to the file's original tags", role: .destructive) { app.library.resetOverrides(songs); ArtCache.shared.removeCustom(first.albumKey); app.library.artVersion += 1; dismiss() }
+                    Button("Reload tags from the file", role: .destructive) { app.library.resetOverrides(songs); ArtCache.shared.removeCustom(first.albumKey); app.library.artVersion += 1; dismiss() }
                 }
             }
+            .disabled(saving)
             .navigationTitle(albumMode ? (book ? "Edit book" : "Edit album") : "Edit info").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.bold() }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) { Button(saving ? "Saving…" : "Save") { save() }.bold().disabled(saving) }
             }
             .onAppear {
                 title = first.title; artist = first.artist; album = first.album; albumArtist = first.albumArtist; genre = first.genre ?? ""
                 year = first.year > 0 ? String(first.year) : ""; track = first.track > 0 ? String(first.track) : ""; disc = first.disc > 1 ? String(first.disc) : ""
             }
+            .interactiveDismissDisabled(saving)
+            .alert("Could not save all files", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK") { saveError = nil }
+            } message: { Text(saveError ?? "") }
             .onChange(of: photo) { _, item in Task { newArt = try? await item?.loadTransferable(type: Data.self); newArtURL = nil } }
         }
     }
@@ -260,11 +267,25 @@ struct MetadataEditor: View {
     private func save() {
         let o = MetadataOverride(title: albumMode ? nil : t(title), artist: t(artist), album: t(album), albumArtist: t(albumArtist) ?? t(artist), genre: t(genre),
                                  year: Int(year), track: albumMode ? nil : Int(track), disc: albumMode ? nil : Int(disc), source: "user")
-        app.library.saveOverride(o, for: songs)
-        let key = Song.albumKey(album: t(album) ?? songs[0].album, artist: t(albumArtist) ?? t(artist) ?? songs[0].albumArtist)
-        if let d = newArt { ArtCache.shared.storeCustom(d, key: key); app.library.artVersion += 1 }
-        else if let u = newArtURL { Task { if let d = await HTTP.get(u) { ArtCache.shared.storeCustom(d, key: key); app.library.artVersion += 1 } } }
-        Haptics.success()
-        dismiss()
+        saving = true
+        Task {
+            defer { saving = false }
+            do {
+                var data = newArt
+                if let url = newArtURL {
+                    guard let downloaded = await HTTP.get(url) else { throw NSError(domain: "Spitify.FileTags", code: 3, userInfo: [NSLocalizedDescriptionKey: "The cover could not be downloaded. Please try again."]) }
+                    data = downloaded
+                }
+                let key = Song.albumKey(album: t(album) ?? songs[0].album, artist: t(albumArtist) ?? t(artist) ?? songs[0].albumArtist)
+                if data == nil {
+                    data = (try? Data(contentsOf: ArtCache.shared.customURL(songs[0].albumKey)))
+                        ?? (try? Data(contentsOf: ArtCache.shared.embeddedURL(songs[0].albumKey)))
+                }
+                try await app.library.saveFiles(o, for: songs, artwork: data)
+                if let data { ArtCache.shared.storeCustom(data, key: key); app.library.artVersion += 1 }
+                Haptics.success()
+                dismiss()
+            } catch { saveError = error.localizedDescription }
+        }
     }
 }

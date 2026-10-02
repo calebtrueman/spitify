@@ -164,30 +164,56 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
         val file = temp(job.id)
         check(expectedSize <= 0 || file.length() == expectedSize) { "The audio download is incomplete." }
         val info = FlacInfo.read(file, track.durationMs)
-        val resolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(MediaStore.Audio.Media.DISPLAY_NAME, "${job.id}.flac")
-            put(MediaStore.Audio.Media.MIME_TYPE, "audio/flac")
-            put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Spitify/Monochrome/${track.releaseId.takeIf(Monochrome::validId) ?: "Singles"}/")
-            put(MediaStore.Audio.Media.IS_PENDING, 1)
-            put(MediaStore.Audio.Media.IS_MUSIC, 1)
-        }
-        val uri = job.localUri?.let(Uri::parse) ?: checkNotNull(resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)) { "Could not create the music file." }
-        dao.put(job.copy(state = "checking", localUri = uri.toString(), quality = info.label))
-        resolver.openOutputStream(uri, "wt").use { output ->
-            checkNotNull(output) { "Could not open the music file." }
-            file.inputStream().use { it.copyTo(output) }
-        }
-        val songId = android.content.ContentUris.parseId(uri)
-        if (db.metadata().get(songId)?.fileName != "${job.id}.flac") {
-            db.metadata().put(MetadataOverrideEntity(songId = songId, fileName = "${job.id}.flac", title = track.title,
-                artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.artist,
-                genre = null, year = null, track = track.track.takeIf { it > 0 }, disc = track.disc,
-                source = "online", updatedAt = System.currentTimeMillis()))
-        }
-        check(resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null) == 1) { "Could not finish adding the song." }
-        dao.put(job.copy(state = "complete", localUri = uri.toString(), quality = info.label, error = null))
-        withContext(Dispatchers.Main) { (context.applicationContext as LocalfyApp).library.refresh() }
+        val tagged = File.createTempFile("tagged-", ".flac", context.cacheDir)
+        try {
+            file.copyTo(tagged, overwrite = true)
+            val artwork = track.artwork?.let { url ->
+                val conn = java.net.URL(url).openConnection().apply { connectTimeout = 10_000; readTimeout = 15_000 }
+                val data = conn.getInputStream().use { input ->
+                    val bytes = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        check(bytes.size() + count <= 20_000_000) { "The cover image is too large." }
+                        bytes.write(buffer, 0, count)
+                    }
+                    bytes.toByteArray()
+                }
+                val cover = File.createTempFile("cover-", ".jpg", context.cacheDir)
+                try {
+                    check(com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(data)), cover, 1200)) { "Could not read the cover image." }
+                    cover.readBytes()
+                } finally { cover.delete() }
+            }
+            com.localfy.app.data.meta.FileTags.tag(tagged, com.localfy.app.data.meta.MetadataEdit(
+                title = track.title, artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.artist,
+                track = track.track.takeIf { it > 0 }, disc = track.disc), artwork)
+            val resolver = context.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.Audio.Media.DISPLAY_NAME, "${job.id}.flac")
+                put(MediaStore.Audio.Media.MIME_TYPE, "audio/flac")
+                put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Spitify/Monochrome/${track.releaseId.takeIf(Monochrome::validId) ?: "Singles"}/")
+                put(MediaStore.Audio.Media.IS_PENDING, 1)
+                put(MediaStore.Audio.Media.IS_MUSIC, 1)
+            }
+            val uri = job.localUri?.let(Uri::parse) ?: checkNotNull(resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)) { "Could not create the music file." }
+            dao.put(job.copy(state = "checking", localUri = uri.toString(), quality = info.label))
+            resolver.openOutputStream(uri, "wt").use { output ->
+                checkNotNull(output) { "Could not open the music file." }
+                tagged.inputStream().use { it.copyTo(output) }
+            }
+            val songId = android.content.ContentUris.parseId(uri)
+            if (db.metadata().get(songId)?.fileName != "${job.id}.flac") {
+                db.metadata().put(MetadataOverrideEntity(songId = songId, fileName = "${job.id}.flac", title = track.title,
+                    artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.artist,
+                    genre = null, year = null, track = track.track.takeIf { it > 0 }, disc = track.disc,
+                    source = "online", updatedAt = System.currentTimeMillis()))
+            }
+            check(resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null) == 1) { "Could not finish adding the song." }
+            dao.put(job.copy(state = "complete", localUri = uri.toString(), quality = info.label, error = null))
+            withContext(Dispatchers.Main) { (context.applicationContext as LocalfyApp).library.refresh() }
+        } finally { tagged.delete() }
     }
 
     companion object {

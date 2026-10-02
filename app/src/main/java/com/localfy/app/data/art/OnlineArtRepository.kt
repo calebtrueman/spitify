@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  * for a week so we don't keep asking. Only the artist and album names are sent.
  */
 class OnlineArtRepository(context: Context) {
+    var onDownloaded: (suspend (Long, File) -> Unit)? = null
     private val prefs = context.getSharedPreferences("online_art", Context.MODE_PRIVATE)
     private val dir = File(context.filesDir, "art").apply { mkdirs() }
     private val inFlight = ConcurrentHashMap<Long, CompletableDeferred<File?>>()
@@ -53,6 +54,7 @@ class OnlineArtRepository(context: Context) {
         if (existing != null) return existing.await()
         val result = runCatching { lookup(artist, album)?.let { download(it, albumId) } }.getOrNull()
         if (result == null) prefs.edit { putLong("miss_$albumId", System.currentTimeMillis()) }
+        if (result != null) runCatching { onDownloaded?.invoke(albumId, result) }
         mine.complete(result)
         inFlight.remove(albumId)
         return result

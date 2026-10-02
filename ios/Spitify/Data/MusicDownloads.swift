@@ -153,16 +153,26 @@ final class MusicDownloads {
         persist()
         do {
             let info = try FLACInfo.read(file, expectedDurationMs: jobs[index].track.durationMs)
-            let destination = root.appendingPathComponent(jobs[index].relativePath)
+            let track = jobs[index].track
+            var artwork: Data?
+            if let art = track.artwork {
+                guard let data = await HTTP.get(art) else { throw MusicSourceError.message("Could not download the cover. Please retry.") }
+                artwork = data
+            }
+            try await FileTags.shared.write(file, edit: MetadataOverride(title: track.title, artist: track.artist,
+                album: track.album.isEmpty ? nil : track.album, albumArtist: track.artist,
+                track: track.trackNumber > 0 ? track.trackNumber : nil, disc: track.discNumber, source: "online"), artwork: artwork)
+            guard let currentIndex = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .checking }) else { throw CancellationError() }
+            let destination = root.appendingPathComponent(jobs[currentIndex].relativePath)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
                 // A crash may have happened after the final move. Never overwrite an existing file.
-                _ = try FLACInfo.read(destination, expectedDurationMs: jobs[index].track.durationMs)
+                _ = try FLACInfo.read(destination, expectedDurationMs: jobs[currentIndex].track.durationMs)
             } else { try FileManager.default.moveItem(at: file, to: destination) }
-            jobs[index].quality = info.label
-            jobs[index].error = nil
-            jobs[index].state = .complete
-            progress[jobs[index].id] = nil
+            jobs[currentIndex].quality = info.label
+            jobs[currentIndex].error = nil
+            jobs[currentIndex].state = .complete
+            progress[jobs[currentIndex].id] = nil
             persist()
             await onImported?()
         } catch { failed(attempt: attempt, error: error) }

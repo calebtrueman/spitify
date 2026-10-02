@@ -53,8 +53,8 @@ data class MetadataEdit(
 )
 
 /**
- * Metadata corrections and custom artwork, layered over the files' own tags inside Localfy.
- * Files are never modified, so "Reset" always restores the original tags.
+ * Keeps library edits in sync with file tags. Manual saves report write failures;
+ * online fixes also try to update files when Android already allows it.
  */
 class MetadataRepository(
     private val context: Context,
@@ -117,6 +117,7 @@ class MetadataRepository(
         songs.forEach { song ->
             val existing = dao.get(song.id)?.takeIf { it.fileName == song.fileName }
             if (source == SOURCE_ONLINE && existing?.source == SOURCE_USER) return@forEach
+            if (source == SOURCE_ONLINE) runCatching { FileTags.write(context, song, edit) }
             dao.put(
                 MetadataOverrideEntity(
                     songId = song.id, fileName = song.fileName,
@@ -128,6 +129,44 @@ class MetadataRepository(
                 ),
             )
         }
+    }
+
+    suspend fun saveFiles(songs: List<Song>, edit: MetadataEdit, artSource: String?) = withContext(Dispatchers.IO) {
+        // Ask for permission before changing any file in a batch.
+        for (song in songs) checkNotNull(context.contentResolver.openFileDescriptor(song.uri, "rw")).close()
+        val image = if (artSource != null) {
+            val source = if (artSource.startsWith("http")) {
+                val bytes = checkNotNull(getBytes(artSource)) { "The cover could not be downloaded. Please try again." }
+                check(bytes.size <= 20_000_000) { "The cover image is too large." }
+                android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))
+            } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(artSource))
+            val temp = File.createTempFile("cover-", ".jpg", context.cacheDir)
+            try {
+                check(com.localfy.app.data.saveSquareImage(source, temp, 1200)) { "The cover image could not be read." }
+                temp.readBytes()
+            } finally { temp.delete() }
+        } else {
+            val app = context.applicationContext as com.localfy.app.LocalfyApp
+            val cached = customArt(songs.first().albumId) ?: app.onlineArt.cached(songs.first().albumId)
+            cached?.let {
+                val temp = File.createTempFile("cover-", ".jpg", context.cacheDir)
+                try {
+                    check(com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(it), temp, 1200)) { "The cover image could not be read." }
+                    temp.readBytes()
+                } finally { temp.delete() }
+            }
+        }
+        for (song in songs) {
+            FileTags.write(context, song, edit, image)
+            save(listOf(song), edit).join()
+        }
+        if (image != null) {
+            val first = songs.first()
+            val target = if (edit.album != null || edit.albumArtist != null) syntheticAlbumId(edit.album ?: first.album, edit.albumArtist ?: edit.artist ?: first.albumArtist) else first.albumId
+            File(artDir, "$target.jpg").writeBytes(image)
+            bumpArt(target)
+        }
+        withContext(Dispatchers.Main) { (context.applicationContext as com.localfy.app.LocalfyApp).library.refresh() }
     }
 
     fun reset(songs: List<Song>) = scope.launch(Dispatchers.IO) { songs.forEach { dao.delete(it.id) } }
@@ -144,6 +183,19 @@ class MetadataRepository(
         } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(source))
         if (!com.localfy.app.data.saveSquareImage(image, File(artDir, "$albumId.jpg"), 1200)) return@launch
         bumpArt(albumId)
+        embedArt(albumId, File(artDir, "$albumId.jpg"))
+    }
+
+    suspend fun embedArt(albumId: Long, image: File) = withContext(Dispatchers.IO) {
+        val app = context.applicationContext as com.localfy.app.LocalfyApp
+        val songs = app.library.library.value.songs + app.library.localBooks.value
+        val jpeg = File.createTempFile("cover-", ".jpg", context.cacheDir)
+        try {
+            if (com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(image), jpeg, 1200)) {
+                val data = jpeg.readBytes()
+                songs.filter { it.albumId == albumId }.forEach { song -> runCatching { FileTags.write(context, song, MetadataEdit(), data) } }
+            }
+        } finally { jpeg.delete() }
     }
 
     fun removeArt(albumId: Long) = scope.launch(Dispatchers.IO) {

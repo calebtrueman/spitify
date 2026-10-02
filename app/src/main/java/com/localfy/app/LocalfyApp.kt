@@ -18,6 +18,7 @@ import com.localfy.app.data.meta.MetadataRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class LocalfyApp : Application(), SingletonImageLoader.Factory {
 
@@ -26,13 +27,16 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
         CrashReport.install(this)
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
-        musicDownloads.start()
+        appScope.launch {
+            com.localfy.app.data.meta.FileTags.recover(this@LocalfyApp)
+            musicDownloads.start()
+        }
     }
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val database by lazy { LocalfyDatabase.create(this) }
-    val metadata by lazy { MetadataRepository(this, database, appScope) }
-    val library by lazy {
+    val metadata: MetadataRepository by lazy { MetadataRepository(this, database, appScope) }
+    val library: LibraryRepository by lazy {
         LibraryRepository(this, database, appScope, metadata).also { repo ->
             repo.onScanned = { music, books ->
                 metadata.autoFixAll(music) { albumId, url -> if (metadata.customArt(albumId) == null && onlineArt.cached(albumId) == null) metadata.setArt(albumId, url) }
@@ -43,7 +47,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val player by lazy { PlayerConnection(this, library, appScope, ::resolve, podcasts) { taste.record(it) } }
     val lyrics by lazy { LyricsRepository(this, database, appScope) }
     val theme by lazy { ThemeRepository(this) }
-    val onlineArt by lazy { OnlineArtRepository(this) }
+    val onlineArt: OnlineArtRepository by lazy { OnlineArtRepository(this).also { it.onDownloaded = { albumId, file -> metadata.embedArt(albumId, file) } } }
     val profiles by lazy { com.localfy.app.data.taste.ProfileRepository(this, appScope) }
     val taste by lazy { com.localfy.app.data.taste.TasteRepository(this, database, appScope, library, profiles).also { it.start() } }
     val podcasts by lazy { PodcastRepository(this, database, appScope) }

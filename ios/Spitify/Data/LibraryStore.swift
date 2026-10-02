@@ -229,6 +229,18 @@ final class LibraryStore {
     func deletePlaylist(_ id: String) { playlists.removeAll { $0.id == id } }
     func songs(of p: Playlist) -> [Song] { p.songIds.compactMap { library.songById[$0] } }
 
+    func saveFiles(_ edit: MetadataOverride, for songs: [Song], artwork: Data? = nil) async throws {
+        guard songs.allSatisfy({ $0.kind == .file }) else {
+            throw NSError(domain: "Spitify.FileTags", code: 2, userInfo: [NSLocalizedDescriptionKey: "Copy this song into Spitify's Music folder first. Apple Music files cannot be changed here."])
+        }
+        for song in songs {
+            try await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: edit, artwork: artwork)
+            cache[song.location] = nil
+            saveOverride(edit, for: [song])
+        }
+        await scan()
+    }
+
     func saveOverride(_ o: MetadataOverride, for songs: [Song]) {
         var all = overrides
         for s in songs {

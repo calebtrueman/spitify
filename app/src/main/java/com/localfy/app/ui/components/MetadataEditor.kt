@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Edit tags + artwork for one song, or (album mode) every track of an album/book at once.
- * Changes live in Localfy's database - the files are never touched - so Reset is always possible.
+ * Saves checked edits into the selected files, asking Android for write access when needed.
  */
 @Composable
 fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit) {
@@ -84,6 +84,38 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
     var pendingArt by remember { mutableStateOf<String?>(null) }
     var candidates by remember { mutableStateOf<List<MetadataCandidate>?>(null) }
     var searching by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var retrySave by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val writePermission = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) retrySave?.invoke()
+        else { saving = false; saveError = "Permission was not granted. You can try Save again." }
+        retrySave = null
+    }
+    fun saveFiles(edit: MetadataEdit, mayAsk: Boolean = true) {
+        saving = true
+        saveError = null
+        scope.launch {
+            try {
+                repo.saveFiles(songs, edit, pendingArt)
+                saving = false
+                onDismiss()
+            } catch (error: SecurityException) {
+                saving = false
+                val uris = songs.map { it.uri }.filter { it.authority == android.provider.MediaStore.AUTHORITY }
+                if (mayAsk && uris.size == songs.size) {
+                    try {
+                        retrySave = { saveFiles(edit, false) }
+                        val request = android.provider.MediaStore.createWriteRequest(context.contentResolver, uris)
+                        writePermission.launch(androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build())
+                    } catch (denied: Exception) { saveError = "Could not get permission to edit these files: ${denied.message}" }
+                } else saveError = "Spitify cannot write to this file. Choose a writable copy in your Music folder."
+            } catch (error: Exception) {
+                saving = false
+                saveError = error.message ?: "Could not save the file."
+            }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) pendingArt = uri.toString() }
 
     fun applyCandidate(c: MetadataCandidate) {
@@ -93,16 +125,16 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
         c.artUrl?.let { pendingArt = it }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(LocalfyColors.Background)) {
             LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(bottom = 120.dp)) {
                 item {
                     Row(Modifier.statusBarsPadding().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Cancel") }
+                        IconButton(onClick = onDismiss, enabled = !saving) { Icon(Icons.Rounded.Close, "Cancel") }
                         Column(Modifier.weight(1f)) {
                             Text(if (albumMode) (if (book) "Edit book" else "Edit album") else "Edit info", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                if (albumMode) "Applies to ${songs.size} ${if (book) "chapters" else "tracks"} · your files aren't modified" else "Your file isn't modified — reset any time",
+                                if (albumMode) "Applies to ${songs.size} ${if (book) "chapters" else "tracks"} · saved into the files" else "Saved into the music file",
                                 style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary,
                             )
                         }
@@ -117,18 +149,12 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                                 track = if (albumMode) null else track.toIntOrNull(),
                                 disc = if (albumMode) null else disc.toIntOrNull(),
                             )
-                            repo.save(songs, edit)
-                            pendingArt?.let { art ->
-                                // Art belongs to the (possibly renamed) album.
-                                val regrouped = album.trim() != first.album || albumArtist.trim() != first.albumArtist
-                                val target = if (regrouped) repo.syntheticAlbumId(album.trim(), albumArtist.trim().ifEmpty { artist.trim() }) else first.albumId
-                                repo.setArt(target, art)
-                            }
-                            onDismiss()
-                        }) { Text("Save", style = MaterialTheme.typography.labelLarge) }
+                            saveFiles(edit)
+                        }, enabled = !saving) { Text(if (saving) "Saving…" else "Save", style = MaterialTheme.typography.labelLarge) }
                     }
                 }
 
+                if (saveError != null) item { Text(saveError!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
                 // Artwork
                 item {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -139,8 +165,8 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                         Spacer(Modifier.width(16.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             ActionChip(Icons.Rounded.Image, "Choose image") { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                            if (repo.customArt(first.albumId) != null) ActionChip(Icons.Rounded.DeleteOutline, "Remove custom art") { repo.removeArt(first.albumId); pendingArt = null }
-                            Text(if (pendingArt != null) "New artwork — tap Save to keep it" else "Applies to the whole ${if (book) "book" else "album"}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
+                            if (repo.customArt(first.albumId) != null) ActionChip(Icons.Rounded.DeleteOutline, "Use file cover") { repo.removeArt(first.albumId); pendingArt = null }
+                            Text(if (pendingArt != null) "New artwork — tap Save to keep it" else "Saved into the selected ${if (songs.size == 1) "file" else "files"}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
                         }
                     }
                 }
@@ -187,8 +213,8 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                     }
                 }
                 item {
-                    TextButton(onClick = { repo.reset(songs); if (repo.customArt(first.albumId) != null) repo.removeArt(first.albumId); onDismiss() }, modifier = Modifier.padding(8.dp)) {
-                        Text("Reset to the file's original tags", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { repo.reset(songs); if (repo.customArt(first.albumId) != null) repo.removeArt(first.albumId); onDismiss() }, modifier = Modifier.padding(8.dp), enabled = !saving) {
+                        Text("Reload tags from the file", color = MaterialTheme.colorScheme.error)
                     }
                 }
                 if (!albumMode) item {

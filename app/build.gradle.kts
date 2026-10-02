@@ -16,8 +16,8 @@ android {
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 9
+        versionName = "1.0.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -40,6 +40,7 @@ android {
         compose = true
     }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/src/test/resources")
 }
 
 kotlin {
@@ -53,6 +54,7 @@ ksp {
 }
 
 dependencies {
+    implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
