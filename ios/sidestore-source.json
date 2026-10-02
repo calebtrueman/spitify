@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.7",
+          "buildVersion": "8",
+          "date": "2026-10-02T05:13:36Z",
+          "localizedDescription": "- Swipe a song right to add it to the queue, with haptic feedback and a brief confirmation.\n- Queue buttons now confirm how many songs were added. Unsupported files and a player that is still connecting get a clear message.\n- The player shows the current audio output, such as Phone speaker or the headphone name reported by your phone.\n- Opening a podcast search result no longer follows it. Tap Follow when you want to add it to Your shows.\n- Unfollowing a podcast keeps its cached episode details and downloads.\n- Keep scrolling artist and album artwork inside its frame, fixing the exposed strip below the artist photo.\n\nIncludes the Monochrome music downloads and Android icon change from 1.0.6.\n\nAndroid release build and unit tests passed. iPhone unit tests passed, including a check of podcast follow/unfollow behaviour. Physical-phone gestures, haptics and Bluetooth route names still need a device check.\n\nThe Android APK is attached. GitHub builds and attaches the iPhone IPA after publication, then updates SideStore.\n\nThe mapping text file is for decoding Android crash reports; you do not need it to install the app.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.7/Spitify-1.0.7-unsigned.ipa",
+          "size": 1897848,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.6",
           "buildVersion": "7",
           "date": "2026-10-02T04:54:19Z",
