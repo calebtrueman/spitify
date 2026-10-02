@@ -1,0 +1,7 @@
+Neon Harbor|Midnight Transit|Synthwave|2024|gradients=s=600x600:c0=0xff2a6d:c1=0x05d9e8:seed=1|220|Night Drive,Chrome Skyline,Afterglow,Signal Lost,Harbor Lights
+Neon Harbor|Glass Arcade|Synthwave|2022|gradients=s=600x600:c0=0x7b2ff7:c1=0xf107a3:seed=2|196|Glass Arcade,Pixel Heart,Overdrive
+Juniper Fields|Slow Rivers|Folk|2023|gradients=s=600x600:c0=0x2e8b57:c1=0xf4d35e:seed=3|262|Slow Rivers,Cedar Smoke,Lantern Song,Homeward
+Juniper Fields|Open Country|Folk|2020|gradients=s=600x600:c0=0xc97b28:c1=0x3a5a40:seed=4|247|Open Country,Wild Oats,Porch Light
+Atlas Quartet|Nocturnes|Classical|2019|gradients=s=600x600:c0=0x0b132b:c1=0x5bc0be:seed=5|174|Nocturne in Blue,Nocturne in Grey,Nocturne in Gold,Nocturne in White
+The Static Hours|Low Battery|Indie Rock|2025|gradients=s=600x600:c0=0xff9f1c:c1=0xe71d36:seed=6|294|Low Battery,Parking Lot,Static,Sunday Fever
+Mira Sol|Golden Hour|Synthwave|2025|gradients=s=600x600:c0=0xffb703:c1=0xfb8500:seed=7|233|Golden Hour,Solar Wind,Mirage

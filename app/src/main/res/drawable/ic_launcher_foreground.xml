@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Three sound arcs over a folder-ish base: "local" music. -->
+    <path
+        android:fillColor="#0B0B0D"
+        android:pathData="M54,30a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path
+        android:strokeColor="#1ED760"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M41,46 Q54,40 68,46" />
+    <path
+        android:strokeColor="#1ED760"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M43,54 Q54,49 65,54" />
+    <path
+        android:strokeColor="#1ED760"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M45.5,61.5 Q54,58 62.5,61.5" />
+</vector>
