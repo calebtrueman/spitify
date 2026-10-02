@@ -18,7 +18,7 @@ struct MiniPlayer: View {
                             Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                         }
                         Spacer()
-                        if !s.isSpoken { LikeButton(song: s) }
+                        if !s.isSpoken { PlaylistButton(song: s) }
                         Button { Haptics.tap(); app.player.toggle() } label: {
                             Image(systemName: app.player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                                 .contentTransition(.symbolEffect(.replace)).frame(width: 40, height: 40)
@@ -67,7 +67,7 @@ struct NowPlayingView: View {
                         VStack(spacing: 0) {
                             VStack(spacing: 0) {
                                 header(s)
-                                ArtPager(side: min(outer.size.width - 44, outer.size.height * 0.48)).frame(maxHeight: .infinity).padding(.vertical, 12)
+                                ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * 0.48))).frame(maxHeight: .infinity).padding(.vertical, 12)
                                 titleRow(s)
                                 SeekBar().padding(.top, 6)
                                 Transport().padding(.top, 2)
@@ -127,7 +127,7 @@ struct NowPlayingView: View {
             }
             .id(s.id).transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             Spacer()
-            if !s.isSpoken { LikeButton(song: s) }
+            if !s.isSpoken { PlaylistButton(song: s) }
         }
         .animation(.spring(duration: 0.35), value: s.id)
     }
@@ -174,6 +174,9 @@ struct ArtPager: View {
     var body: some View {
         let player = app.player
         let size = side * (theme.playerStyle == .minimal ? 0.72 : 1)
+        if theme.playerStyle == .vinyl, let song = player.current {
+            ScrubbableVinyl(song: song).frame(width: size, height: size).frame(maxWidth: .infinity).frame(height: side + 24)
+        } else {
         TabView(selection: $selection) {
             ForEach(Array(player.queue.enumerated()), id: \.offset) { i, s in
                 cover(s, current: i == player.index).frame(width: size, height: size).tag(i)
@@ -184,6 +187,7 @@ struct ArtPager: View {
         .onAppear { selection = max(0, player.index) }
         .onChange(of: player.index) { _, i in withAnimation(.spring(duration: 0.4)) { selection = max(0, i) } }
         .onChange(of: selection) { _, i in if i != player.index, player.queue.indices.contains(i) { Haptics.soft(); player.skip(to: i) } }
+        }
     }
 
     @ViewBuilder private func cover(_ s: Song, current: Bool) -> some View {
@@ -199,6 +203,75 @@ struct ArtPager: View {
         }
         .scaleEffect(breathe ? 0.88 : 1)
         .animation(.spring(response: 0.5, dampingFraction: 0.6), value: breathe)
+    }
+}
+
+enum VinylScrub {
+    static func delta(_ previous: Double, _ current: Double) -> Double {
+        var value = current - previous
+        while value > .pi { value -= 2 * .pi }
+        while value < -.pi { value += 2 * .pi }
+        return value
+    }
+    static func position(_ start: Double, _ radians: Double, _ duration: Double) -> Double {
+        min(max(0, start + radians / (2 * .pi) * 30), max(0, duration))
+    }
+}
+
+struct ScrubbableVinyl: View {
+    let song: Song
+    @Environment(AppModel.self) private var app
+    @Environment(\.themeSettings) private var theme
+    @State private var anchor = Date()
+    @State private var rotation = 0.0
+    @State private var dragging = false
+    @GestureState private var touching = false
+    @State private var previousAngle = 0.0
+    @State private var total = 0.0
+    @State private var start = 0.0
+    @State private var lastSeek = Date.distantPast
+
+    private func angle(at date: Date) -> Double {
+        rotation + (app.player.isPlaying && !theme.reduceMotion && !dragging ? date.timeIntervalSince(anchor) * 40 : 0)
+    }
+    var body: some View {
+        GeometryReader { geo in
+            TimelineView(.animation(paused: !app.player.isPlaying || theme.reduceMotion || dragging)) { context in
+                Vinyl(song: song).rotationEffect(.degrees(angle(at: context.date)))
+            }
+            .contentShape(Circle())
+            .highPriorityGesture(DragGesture(minimumDistance: 2).updating($touching) { _, active, _ in active = true }.onChanged { value in
+                guard app.player.duration > 0 else { return }
+                let x = value.location.x - geo.size.width / 2, y = value.location.y - geo.size.height / 2
+                let current = atan2(Double(y), Double(x))
+                if !dragging {
+                    rotation = angle(at: Date()); anchor = Date(); dragging = true
+                    previousAngle = atan2(Double(value.startLocation.y - geo.size.height / 2), Double(value.startLocation.x - geo.size.width / 2))
+                    total = 0; start = app.player.position
+                }
+                if x * x + y * y > geo.size.width * geo.size.width * 0.01 {
+                    let step = VinylScrub.delta(previousAngle, current)
+                    total += step; rotation += step * 180 / .pi
+                    if Date().timeIntervalSince(lastSeek) >= 0.06 {
+                        app.player.seek(VinylScrub.position(start, total, app.player.duration)); lastSeek = Date()
+                    }
+                }
+                previousAngle = current
+            }.onEnded { _ in
+                app.player.seek(VinylScrub.position(start, total, app.player.duration))
+                anchor = Date(); dragging = false
+            })
+        }
+        .accessibilityLabel("Record. Turn clockwise to move forward, or counterclockwise to rewind.")
+        .accessibilityAdjustableAction { direction in app.player.skip(by: direction == .increment ? 10 : -10) }
+        .onChange(of: app.player.isPlaying) { old, _ in
+            if old && !dragging && !theme.reduceMotion { rotation += Date().timeIntervalSince(anchor) * 40 }
+            anchor = Date()
+        }
+        .onChange(of: touching) { _, active in
+            if !active && dragging { anchor = Date(); dragging = false }
+        }
+        .onChange(of: song.id) { _, _ in dragging = false; rotation = 0; anchor = Date() }
     }
 }
 

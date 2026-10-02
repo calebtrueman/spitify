@@ -29,7 +29,7 @@ struct LibraryView: View {
                 }.padding(.horizontal, 16).padding(.bottom, 6)
 
                 if filter == nil || filter == .playlists {
-                    pinned("Liked Songs", "Pinned • \(songCount(lib.liked.count))", "heart.fill", [Color(hex: 0x4B2BD6), Color(hex: 0x9AB8F0)]) { router.go(.smart(.liked)) }
+                    pinned("All Songs", "Pinned • \(songCount(lib.library.songs.count))", "music.note.list", [Color(hex: 0x4B2BD6), Color(hex: 0x9AB8F0)]) { router.go(.smart(.allSongs)) }
                     if !lib.recentlyPlayed.isEmpty { pinned("On repeat", "Smart playlist", "sparkles", [Color(hex: 0x0E7A55), Color(hex: 0x1ED760)]) { router.go(.smart(.mostPlayed)) } }
                     pinned("Recently added", "Smart playlist • \(songCount(lib.recentlyAdded.count))", "clock.fill", [Color(hex: 0x0E7A55), Color(hex: 0x1ED760)]) { router.go(.smart(.recentlyAdded)) }
                 }
@@ -53,7 +53,6 @@ struct LibraryView: View {
         .navigationTitle("Your Library")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") } }
-            ToolbarItem(placement: .topBarLeading) { Button { router.go(.settings) } label: { Image(systemName: "gearshape") } }
         }
         .alert("Give your playlist a name", isPresented: $creating) {
             TextField("My playlist", text: $newName)

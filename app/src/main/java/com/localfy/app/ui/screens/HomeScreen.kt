@@ -70,6 +70,15 @@ import com.localfy.app.ui.player.rememberCurrentSong
 import com.localfy.app.ui.player.rememberPlayerState
 import com.localfy.app.ui.player.rememberPlayerTint
 import java.util.Calendar
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 
 private enum class HomeFilter(val label: String) { All("All"), Albums("Albums"), Artists("Artists"), Playlists("Playlists") }
 
@@ -85,7 +94,9 @@ fun HomeScreen() {
     // Snapshot the shelves while you're on Home (refreshed each time you come back), so nothing
     // reshuffles or pops in under your finger when a play gets counted mid-browse.
     val snapshot = remember(library, liveSmart.isNotEmpty(), liveMixes.isNotEmpty()) { Triple(liveSmart, liveMixes, liveStats) }
-    val (smart, mixes, stats) = snapshot
+    val showRecommendations by app.repo.showRecommendations.collectAsStateWithLifecycle()
+    val (smart, savedMixes, stats) = snapshot
+    val mixes = if (showRecommendations) savedMixes else emptyList()
     val player = rememberPlayerState()
     val current = rememberCurrentSong()
     val glow = rememberPlayerTint(current)
@@ -99,6 +110,18 @@ fun HomeScreen() {
         }
     }
 
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    ModalNavigationDrawer(drawerState = drawer, drawerContent = {
+        ModalDrawerSheet {
+            Text("Spitify", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(24.dp))
+            listOf("Profile" to Routes.PROFILE, "Settings" to Routes.SETTINGS).forEach { (label, route) ->
+                NavigationDrawerItem(label = { Text(label) }, selected = false, onClick = {
+                    scope.launch { drawer.close(); app.navigate(route) }
+                }, modifier = Modifier.padding(horizontal = 12.dp))
+            }
+        }
+    }) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 560.dp
         val tileWidth = if (wide) 164.dp else 144.dp
@@ -124,7 +147,7 @@ fun HomeScreen() {
             full("top") {
                 Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
                     Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        com.localfy.app.ui.components.Avatar(34.dp, Modifier.pressable { app.navigate(Routes.PROFILE) })
+                        com.localfy.app.ui.components.Avatar(34.dp, Modifier.semantics { contentDescription = "Open menu" }.pressable { scope.launch { drawer.open() } })
                         Spacer(Modifier.width(10.dp))
                         LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(HomeFilter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = f }) }
@@ -160,8 +183,8 @@ fun HomeScreen() {
                     return@LazyVerticalGrid
                 }
                 HomeFilter.Playlists -> {
-                    val liked = smart[SmartCollection.Kind.Liked]?.songs.orEmpty()
-                    item(key = "gl") { MediaTile(TileData("gl", "Liked Songs", songCount(liked.size), liked.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.Liked)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp)) }
+                    val liked = smart[SmartCollection.Kind.AllSongs]?.songs.orEmpty()
+                    item(key = "gl") { MediaTile(TileData("gl", "All Songs", songCount(liked.size), liked.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.AllSongs)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp)) }
                     items(playlists, key = { "gp${it.id}" }) { p ->
                         MediaTile(TileData("gp${p.id}", p.name, songCount(p.songs.size), p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
@@ -199,8 +222,8 @@ fun HomeScreen() {
             val recentAlbums = smart[SmartCollection.Kind.RecentlyPlayed]?.songs.orEmpty()
                 .map { it.albumId }.distinct().mapNotNull { library.albumById[it] }
             val quick = buildList {
-                val likedSongs = smart[SmartCollection.Kind.Liked]?.songs.orEmpty()
-                add(TileData("liked", "Liked Songs", songCount(likedSongs.size), likedSongs.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.Liked)) })
+                val likedSongs = smart[SmartCollection.Kind.AllSongs]?.songs.orEmpty()
+                add(TileData("liked", "All Songs", songCount(likedSongs.size), likedSongs.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.AllSongs)) })
                 playlists.take(3).forEach { p -> add(TileData("p${p.id}", p.name, "Playlist", p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }) }
                 recentAlbums.take(4).forEach { a -> add(TileData("ra${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }) }
                 mixes.take(4).forEach { m -> add(TileData("qm${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) }) }
@@ -244,7 +267,7 @@ fun HomeScreen() {
                     TileData("n${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }
                 }, tileWidth, action = "Show all") { app.navigate(Routes.smart(SmartCollection.Kind.RecentlyAdded)) }
             }
-            full("artists") {
+            if (showRecommendations) full("artists") {
                 val top = library.artists.sortedByDescending { a -> a.songs.sumOf { stats[it.id]?.playCount ?: 0 } * 10 + a.songs.size }.take(12)
                 TileShelf("Your top artists", top.map { a ->
                     TileData("ar${a.name}", a.name, "Artist", a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }
@@ -252,6 +275,8 @@ fun HomeScreen() {
             }
         }
     }
+}
+
 }
 
 private fun LazyGridScope.full(key: String, content: @Composable () -> Unit) =

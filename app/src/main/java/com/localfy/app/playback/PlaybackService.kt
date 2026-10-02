@@ -30,6 +30,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.guava.future
+import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
@@ -89,9 +95,10 @@ class PlaybackService : MediaLibraryService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         library = AutoLibrary(this)
+        val artLoader = MediaStoreBitmapLoader()
         session = MediaLibrarySession.Builder(this, player, SessionCallback())
             .setSessionActivity(openApp)
-            .setBitmapLoader(CacheBitmapLoader(MediaStoreBitmapLoader()))
+            .setBitmapLoader(CacheBitmapLoader(artLoader))
             .build()
 
         // Started by a car/Bluetooth/Assistant with the phone UI closed: bring the rest of the app up
@@ -100,6 +107,32 @@ class PlaybackService : MediaLibraryService() {
         app.podcasts.start()
         app.taste // recommendation engine (Daily Mixes etc. in the car too)
         app.player.connect()
+        scope.launch {
+            app.lockScreenArtReady.await()
+            val loader = artLoader
+            var playbackStarted = false
+            combine(app.lockScreenArt.enabled, app.lockScreenArt.allowed, app.player.state) { enabled, allowed, state ->
+                if (!state.connected || !state.hasMedia || state.playbackState == Player.STATE_ENDED || state.playbackState == Player.STATE_IDLE) playbackStarted = false
+                else if (state.isPlaying) playbackStarted = true
+                (if (enabled && allowed && playbackStarted) player.currentMediaItem?.mediaMetadata?.artworkUri else null) to state.isPlaying
+            }.distinctUntilChanged().collectLatest { (uri, playing) ->
+                if (uri == null) {
+                    withContext(NonCancellable) { app.lockScreenArt.restore() }
+                } else {
+                    delay(400)
+                    try {
+                        val cover = loader.loadBitmap(uri).await()
+                        // Complete each change before a pause/next-song request restores it.
+                        withContext(NonCancellable) { app.lockScreenArt.show(cover, uri.toString()) }
+                        if (!playing) {
+                            delay(10 * 60 * 1000L)
+                            withContext(NonCancellable) { app.lockScreenArt.restore() }
+                        }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) { withContext(NonCancellable) { app.lockScreenArt.restore() } }
+                }
+            }
+        }
         // New/updated mixes: tell connected cars to reload "For you".
         scope.launch { app.library.mixes.collect { session?.notifyChildrenChanged(AutoLibrary.TAB_HOME, it.size + 4, null) } }
         scope.launch {
@@ -113,9 +146,6 @@ class PlaybackService : MediaLibraryService() {
             CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds").setSessionCommand(SessionCommand(CMD_BACK, Bundle.EMPTY)).setSlots(CommandButton.SLOT_BACK_SECONDARY).build(),
             CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30).setDisplayName("Forward 30 seconds").setSessionCommand(SessionCommand(CMD_FORWARD, Bundle.EMPTY)).setSlots(CommandButton.SLOT_FORWARD_SECONDARY).build(),
         ) else listOf(
-            CommandButton.Builder(if (song != null && song.id in liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
-                .setDisplayName(if (song != null && song.id in liked) "Remove from Liked Songs" else "Like")
-                .setSessionCommand(SessionCommand(CMD_LIKE, Bundle.EMPTY)).setSlots(CommandButton.SLOT_BACK_SECONDARY).build(),
             CommandButton.Builder(if (shuffle) CommandButton.ICON_SHUFFLE_ON else CommandButton.ICON_SHUFFLE_OFF)
                 .setDisplayName(if (shuffle) "Shuffle on" else "Shuffle off")
                 .setSessionCommand(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY)).setSlots(CommandButton.SLOT_FORWARD_SECONDARY).build(),
@@ -168,6 +198,7 @@ class PlaybackService : MediaLibraryService() {
                 .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, packageName),
         )
         scope.cancel()
+        app.appScope.launch { app.lockScreenArt.restore() }
         crossfader?.release()
         effects?.release()
         s.player.release()
@@ -178,7 +209,6 @@ class PlaybackService : MediaLibraryService() {
         @OptIn(UnstableApi::class)
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
-                .add(SessionCommand(CMD_LIKE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BACK, Bundle.EMPTY))
                 .add(SessionCommand(CMD_FORWARD, Bundle.EMPTY))
@@ -200,7 +230,6 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
                 CMD_SKIP_SILENCE -> player.skipSilenceEnabled = args.getBoolean(EXTRA_ENABLED)
-                CMD_LIKE -> player.currentMediaItem?.mediaId?.toLongOrNull()?.takeIf { it >= 0 }?.let { app.library.toggleLike(it) }
                 CMD_SHUFFLE -> app.player.toggleShuffle()
                 CMD_BACK -> player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0))
                 CMD_FORWARD -> player.seekTo(player.currentPosition + 30_000)

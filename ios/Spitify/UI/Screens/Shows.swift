@@ -168,7 +168,7 @@ struct ShowView: View {
                         }
                     }.padding(16)
                     HStack {
-                        Button { app.shows.setFollowing(show, !show.following) } label: { Text(show.following ? "Following" : "Follow").text(.label).foregroundStyle(p.text).padding(.horizontal, 16).padding(.vertical, 8).background(p.tint, in: Capsule()) }
+                        Button { app.shows.setFollowing(show, !show.following) } label: { Text(show.following ? "Following" : "Follow").text(.label).foregroundStyle(show.following ? p.text : p.onAccent).padding(.horizontal, 16).padding(.vertical, 8).background(show.following ? p.tint : p.accent, in: Capsule()) }
                         Spacer()
                         if let latest = app.shows.songs(show).first {
                             Button { app.player.playEpisode(latest) } label: { Label("Latest episode", systemImage: "play.fill").text(.label).foregroundStyle(p.onAccent).padding(.horizontal, 16).padding(.vertical, 10).background(p.accent, in: Capsule()) }

@@ -51,20 +51,20 @@ final class MonochromeTests: XCTestCase {
         }
     }
 
-    @MainActor func testQueuePersistsDeduplicatesAndCancelsWithoutStartingNetwork() throws {
+    @MainActor func testQueuePersistsDeduplicatesAndCancelsWithoutStartingNetwork() async throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
         let store = MusicDownloads(root: dir, stateDirectory: dir, configuration: .ephemeral)
         let track = OnlineTrack(id: "123", title: "Song", artist: "Artist", album: "Album", releaseID: "456",
             durationMs: 10000, trackNumber: 1, discNumber: 1, artwork: nil, playable: true)
-        store.enqueue([track, track])
+        await store.enqueue([track, track])
         XCTAssertEqual(store.jobs.count, 1)
         XCTAssertEqual(store.jobs.first?.state, .queued)
         let restored = MusicDownloads(root: dir, stateDirectory: dir, configuration: .ephemeral)
         XCTAssertEqual(restored.jobs.first?.track, track)
         store.cancel(track.id)
         XCTAssertEqual(store.jobs.first?.state, .cancelled)
-        store.enqueue([track])
+        await store.enqueue([track])
         XCTAssertEqual(store.jobs.count, 1)
         XCTAssertEqual(store.jobs.first?.state, .queued)
     }
@@ -75,10 +75,10 @@ final class MonochromeTests: XCTestCase {
         let store = MusicDownloads(root: dir, stateDirectory: dir, configuration: .ephemeral)
         let track = OnlineTrack(id: "123", title: "Song", artist: "Artist", album: "Album", releaseID: "456",
             durationMs: 10000, trackNumber: 1, discNumber: 1, artwork: nil, playable: true)
-        store.enqueue([track])
+        await store.enqueue([track])
         let old = try XCTUnwrap(store.jobs.first)
         store.cancel(track.id)
-        store.enqueue([track])
+        await store.enqueue([track])
         let staleFile = dir.appendingPathComponent("old.flac")
         try Self.flacHeader().write(to: staleFile)
         await store.received(attempt: old.attempt, file: staleFile)
@@ -118,7 +118,7 @@ final class MonochromeLiveTests: XCTestCase {
         let downloads = MusicDownloads(stateDirectory: stateDir, configuration: configuration)
         downloads.wifiOnly = false
         downloads.start()
-        downloads.enqueue([track, track])
+        await downloads.enqueue([track, track])
         let deadline = Date().addingTimeInterval(120)
         while downloads.jobs.first?.state.active == true && Date() < deadline { try await Task.sleep(for: .milliseconds(200)) }
         XCTAssertEqual(downloads.jobs.count, 1)

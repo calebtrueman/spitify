@@ -39,6 +39,7 @@ data class PlayerUiState(
     val manualQueueIndices: Set<Int> = emptySet(),
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+    val playbackState: Int = Player.STATE_IDLE,
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val durationMs: Long = 0,
@@ -118,7 +119,7 @@ class PlayerConnection(
                     override fun onDisconnected(controller: MediaController) {
                         this@PlayerConnection.controller = null
                         ticker?.cancel()
-                        _state.value = _state.value.copy(isPlaying = false)
+                        _state.value = _state.value.copy(isPlaying = false, connected = false)
                     }
                 })
                 .buildAsync().let { f -> runCatching { f.await() } }
@@ -144,7 +145,7 @@ class PlayerConnection(
         ticker?.cancel()
         c.removeListener(listener)
         c.release()
-        _state.value = _state.value.copy(isPlaying = false)
+        _state.value = _state.value.copy(isPlaying = false, connected = false)
     }
 
     private val listener = object : Player.Listener {
@@ -234,6 +235,7 @@ class PlayerConnection(
         val ids = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
         _state.value = _state.value.copy(
             connected = true,
+            playbackState = c.playbackState,
             queue = ids,
             manualQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.toSet(),
             currentIndex = if (ids.isEmpty()) -1 else c.currentMediaItemIndex,

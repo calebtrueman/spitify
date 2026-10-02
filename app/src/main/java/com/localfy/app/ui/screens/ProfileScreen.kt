@@ -128,13 +128,12 @@ fun ProfileScreen() {
             }
         } else item {
             Text(
-                "Play some music and this fills in — Spitify learns from what you finish, skip, like and play together.",
+                "Play some music and this fills in — Spitify learns from what you finish, skip and play together.",
                 style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(16.dp),
             )
         }
         item { SectionHeader("Shortcuts") }
         item { ProfileRow("Your stats", "Top songs, artists and albums") { app.navigate(Routes.STATS) } }
-        item { ProfileRow("Settings", "Playback, lyrics, appearance and more") { app.navigate(Routes.SETTINGS) } }
         if (hiddenSongs.isNotEmpty() || hiddenArtists.isNotEmpty()) item {
             ProfileRow("Show hidden recommendations again", "${hiddenSongs.size} songs and ${hiddenArtists.size} artists are hidden from your mixes") { app.taste.unhideAll() }
         }

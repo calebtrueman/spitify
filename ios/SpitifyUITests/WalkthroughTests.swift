@@ -167,3 +167,34 @@ final class PlayerRailLayoutTests: XCTestCase {
         shot.name = "Home stays above player"; shot.lifetime = .keepAlways; add(shot)
     }
 }
+
+final class Release109Tests: XCTestCase {
+    func testMenuRecommendationsAndVinylPlayer() {
+        let app = XCUIApplication(); app.launch()
+        let menu = app.buttons["Open menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10)); menu.tap()
+        app.buttons["Settings"].tap()
+        let recommendations = app.switches["Show recommendations"]
+        XCTAssertTrue(recommendations.waitForExistence(timeout: 5))
+        if recommendations.value as? String == "1" {
+            recommendations.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(recommendations.value as? String, "0")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Your top artists"].exists)
+        let allSongs = app.buttons.matching(NSPredicate(format: "label CONTAINS 'All Songs'")).firstMatch
+        XCTAssertTrue(allSongs.waitForExistence(timeout: 5)); allSongs.tap()
+        let song = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Swipe Test'")).firstMatch
+        XCTAssertTrue(song.waitForExistence(timeout: 5)); song.tap()
+        let mini = app.buttons["miniPlayer"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5)); mini.tap()
+        let record = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Record. Turn'")).firstMatch
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        let start = record.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15))
+        let end = record.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(app.buttons["Close player"].exists)
+        let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); image.name = "109 vinyl player"; image.lifetime = .keepAlways; add(image)
+    }
+}

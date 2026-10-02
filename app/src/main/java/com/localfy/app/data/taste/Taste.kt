@@ -83,7 +83,6 @@ class TasteModel(val input: TasteInput) {
                 daypartSong.getOrPut(part) { HashMap() }.merge(s.id, w * decay, Double::plus)
             }
         }
-        for (id in input.liked) if (id in byId) songScore.merge(id, 2.5, Double::plus)
         // Cold start: artists picked during setup count as a few listens each.
         if (input.seedArtists.isNotEmpty()) input.songs.filter { it.artist in input.seedArtists }.forEach { songScore.merge(it.id, 0.8, Double::plus) }
 

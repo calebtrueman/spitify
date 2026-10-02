@@ -119,10 +119,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if app.player.hasMedia {
             rows.append(item("Now playing", detail: app.player.current?.title) { [weak self] in self?.nowPlaying() })
         }
-        rows.append(item("Liked songs", image: UIImage(systemName: "heart.fill")) { [weak self] in
-            self?.openSongs("Liked songs") { [weak self] in
+        rows.append(item("All songs", image: UIImage(systemName: "music.note.list")) { [weak self] in
+            self?.openSongs("All songs") { [weak self] in
                 guard let self else { return [] }
-                return self.app.library.liked.sorted { $0.value > $1.value }.compactMap { self.app.lookup($0.key) }
+                return self.app.library.library.songs
             }
         })
         for mix in app.mixes.prefix(20) {

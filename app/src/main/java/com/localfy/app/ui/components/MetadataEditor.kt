@@ -82,6 +82,10 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
     var track by remember { mutableStateOf(first.track.takeIf { it > 0 }?.toString().orEmpty()) }
     var disc by remember { mutableStateOf(first.disc.takeIf { it > 1 }?.toString().orEmpty()) }
     var pendingArt by remember { mutableStateOf<String?>(null) }
+    var artSource by remember { mutableStateOf<String?>(null) }
+    var artLoading by remember { mutableStateOf(false) }
+    var artError by remember { mutableStateOf<String?>(null) }
+    var artRequest by remember { mutableStateOf(0) }
     var candidates by remember { mutableStateOf<List<MetadataCandidate>?>(null) }
     var searching by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
@@ -116,13 +120,25 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
             }
         }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) pendingArt = uri.toString() }
+    fun selectArtwork(source: String) {
+        artSource = source; artLoading = true; artError = null; pendingArt = null
+        val request = ++artRequest
+        scope.launch {
+            try {
+                val ready = repo.prepareArtwork(source)
+                if (request == artRequest) pendingArt = ready
+            } catch (error: Exception) {
+                if (request == artRequest) artError = error.message ?: "Could not load the cover."
+            } finally { if (request == artRequest) artLoading = false }
+        }
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) selectArtwork(uri.toString()) }
 
     fun applyCandidate(c: MetadataCandidate) {
         if (!albumMode) { title = c.title; c.track?.let { track = it.toString() }; c.disc?.let { disc = it.toString() } }
         artist = c.artist; album = c.album; albumArtist = c.artist
         c.genre?.let { genre = it }; c.year?.let { year = it.toString() }
-        c.artUrl?.let { pendingArt = it }
+        c.artUrl?.takeIf { it.isNotBlank() }?.let { selectArtwork(it) }
     }
 
     Dialog(onDismissRequest = { if (!saving) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -150,7 +166,7 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                                 disc = if (albumMode) null else disc.toIntOrNull(),
                             )
                             saveFiles(edit)
-                        }, enabled = !saving) { Text(if (saving) "Saving…" else "Save", style = MaterialTheme.typography.labelLarge) }
+                        }, enabled = !saving && !artLoading) { Text(if (saving) "Saving…" else "Save", style = MaterialTheme.typography.labelLarge) }
                     }
                 }
 
@@ -165,8 +181,12 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                         Spacer(Modifier.width(16.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             ActionChip(Icons.Rounded.Image, "Choose image") { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                            if (repo.customArt(first.albumId) != null) ActionChip(Icons.Rounded.DeleteOutline, "Use file cover") { repo.removeArt(first.albumId); pendingArt = null }
-                            Text(if (pendingArt != null) "New artwork — tap Save to keep it" else "Saved into the selected ${if (songs.size == 1) "file" else "files"}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
+                            if (repo.customArt(first.albumId) != null) ActionChip(Icons.Rounded.DeleteOutline, "Use file cover") { repo.removeArt(first.albumId); artRequest++; pendingArt = null; artLoading = false; artError = null }
+                            if (artError != null) {
+                                Text(artError!! + " You can still save the details with the current cover.", color = MaterialTheme.colorScheme.error)
+                                TextButton(onClick = { artSource?.let { selectArtwork(it) } }, enabled = !artLoading && !saving) { Text("Retry cover") }
+                            }
+                            Text(if (artLoading) "Loading cover…" else if (pendingArt != null) "New artwork — tap Save to keep it" else "Current cover — kept when you save", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
                         }
                     }
                 }

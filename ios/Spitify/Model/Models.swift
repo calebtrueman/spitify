@@ -39,7 +39,11 @@ struct Song: Identifiable, Hashable, Codable {
     var fileName: String { (location as NSString).lastPathComponent }
 
     static func albumKey(album: String, artist: String) -> String {
-        "\(album.lowercased())\u{1}\(artist.lowercased())"
+        "\(album.trimmingCharacters(in: .whitespaces).lowercased())\u{1}\(albumArtist(artist).lowercased())"
+    }
+
+    static func albumArtist(_ credit: String) -> String {
+        credit.components(separatedBy: ";").first!.replacingOccurrences(of: "(?i)\\s+(?:feat\\.?|ft\\.?|featuring)\\s+.*$", with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
     }
 
     /// AVFoundation on iOS can't decode these.
@@ -101,11 +105,20 @@ struct Library {
 
     var isEmpty: Bool { songs.isEmpty }
 
-    static func build(_ input: [Song]) -> Library {
+    static func build(_ songs: [Song]) -> Library {
+        let credits = Dictionary(grouping: songs, by: { $0.album.trimmingCharacters(in: .whitespaces).lowercased() })
+            .mapValues { tracks in Set(tracks.map { Song.albumArtist($0.albumArtist) }).sorted { $0.count > $1.count } }
+        let input = songs.map { song -> Song in
+            var song = song
+            let credit = Song.albumArtist(song.albumArtist)
+            let candidates = credits[song.album.trimmingCharacters(in: .whitespaces).lowercased()] ?? []
+            song.albumArtist = candidates.first { credit.lowercased().hasPrefix($0.lowercased() + ", ") } ?? credit
+            return song
+        }
         let byTitle: (Song, Song) -> Bool = { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         let albums = Dictionary(grouping: input, by: \.albumKey).map { key, tracks -> Album in
             let sorted = tracks.sorted { ($0.disc, $0.track, $0.title.lowercased()) < ($1.disc, $1.track, $1.title.lowercased()) }
-            return Album(id: key, title: sorted[0].album, artist: sorted[0].albumArtist, year: sorted.map(\.year).max() ?? 0, songs: sorted)
+            return Album(id: key, title: sorted[0].album, artist: Song.albumArtist(sorted[0].albumArtist), year: sorted.map(\.year).max() ?? 0, songs: sorted)
         }.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         let albumsByArtist = Dictionary(grouping: albums, by: \.artist)
         let artists = Dictionary(grouping: input, by: \.artist).map { name, tracks -> Artist in

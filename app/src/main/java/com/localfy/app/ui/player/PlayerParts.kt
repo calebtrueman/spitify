@@ -24,6 +24,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Bedtime
@@ -77,6 +79,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
@@ -108,7 +113,6 @@ import com.localfy.app.ui.LocalApp
 import com.localfy.app.ui.art.Artwork
 import com.localfy.app.ui.art.artKey
 import com.localfy.app.ui.art.rememberArtColor
-import com.localfy.app.ui.components.LikeButton
 import com.localfy.app.ui.components.Pill
 import com.localfy.app.ui.components.formatDuration
 import com.localfy.app.ui.components.pressable
@@ -197,7 +201,7 @@ private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> 
                     Text(s.artist, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            LikeButton(liked, { app.repo.toggleLike(song.id) })
+            IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
             IconButton(onClick = { haptics(HapticFeedbackType.ContextClick); app.player.togglePlay() }) {
                 AnimatedContent(state.isPlaying, transitionSpec = { scaleIn() togetherWith scaleOut() }, label = "mini-play") { p ->
                     Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Pause" else "Play", modifier = Modifier.size(30.dp))
@@ -273,17 +277,11 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
         spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
         label = "breathe",
     )
-    // Vinyl style: the record spins while playing and eases to a stop on pause.
-    val spin = remember { Animatable(0f) }
-    LaunchedEffect(state.isPlaying, style, still) {
-        if (style == PlayerStyle.Vinyl && state.isPlaying && !still) {
-            while (true) spin.animateTo(spin.value + 360f, tween(9_000, easing = LinearEasing))
-        }
-    }
     BoxWithConstraints(modifier) {
         val side = minOf(maxWidth, maxHeight) * if (style == PlayerStyle.Minimal) 0.72f else 1f
         HorizontalPager(
             state = pager,
+            userScrollEnabled = style != PlayerStyle.Vinyl,
             modifier = Modifier.fillMaxSize(),
             pageSpacing = 16.dp,
             key = { "$it-${queue.getOrNull(it)}" },
@@ -299,10 +297,10 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
                         val s = lerp(1f, 0.85f, pageOffset) * if (isCurrent) playingScale else 1f
                         scaleX = s; scaleY = s
                         alpha = lerp(1f, 0.5f, pageOffset)
-                        if (style == PlayerStyle.Vinyl && isCurrent) rotationZ = spin.value % 360f
+
                     }
                 if (style == PlayerStyle.Vinyl) {
-                    VinylRecord(song, layer)
+                    if (isCurrent) ScrubbableRecord(song, layer) else VinylRecord(song, layer)
                 } else {
                     Artwork(
                         song?.artKey,
@@ -313,6 +311,62 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ScrubbableRecord(song: Song?, modifier: Modifier) {
+    val app = LocalApp.current
+    val state = rememberPlayerState()
+    val still = LocalThemeSettings.current.reduceMotion
+    val spin = remember(song?.id) { Animatable(0f) }
+    var dragging by remember(song?.id) { mutableStateOf(false) }
+    var dragAngle by remember(song?.id) { mutableStateOf(0f) }
+    LaunchedEffect(state.isPlaying, dragging, still) {
+        if (state.isPlaying && !dragging && !still) while (true) spin.animateTo(spin.value + 360f, tween(9_000, easing = LinearEasing))
+    }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    Box(modifier.pointerInput(song?.id, state.durationMs) {
+        var previous = 0.0
+        var total = 0.0
+        var start = 0L
+        var baseAngle = 0f
+        var lastSeek = 0L
+        fun angle(p: androidx.compose.ui.geometry.Offset) = kotlin.math.atan2((p.y - size.height / 2f).toDouble(), (p.x - size.width / 2f).toDouble())
+        fun finish() {
+            if (dragging) {
+                app.player.seekTo(com.localfy.app.playback.VinylScrub.position(start, total, state.durationMs))
+                val endAngle = dragAngle
+                scope.launch { spin.snapTo(endAngle); dragging = false }
+            }
+        }
+        detectDragGestures(onDragStart = { point ->
+            if (state.durationMs > 0) {
+                dragging = true; previous = angle(point); total = 0.0
+                start = app.player.positionMs.value; baseAngle = spin.value; dragAngle = baseAngle; lastSeek = 0
+            }
+        }, onDragEnd = { finish() }, onDragCancel = { finish() }) { change, _ ->
+            change.consume()
+            if (dragging) {
+                val dx = change.position.x - size.width / 2f; val dy = change.position.y - size.height / 2f
+                val current = angle(change.position)
+                if (dx * dx + dy * dy > size.width * size.width * 0.01f) {
+                    total += com.localfy.app.playback.VinylScrub.delta(previous, current)
+                    dragAngle = baseAngle + (total * 180 / kotlin.math.PI).toFloat()
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastSeek >= 60) { app.player.seekTo(com.localfy.app.playback.VinylScrub.position(start, total, state.durationMs)); lastSeek = now }
+                }
+                previous = current
+            }
+        }
+    }.semantics {
+        contentDescription = "Record. Turn clockwise to move forward, or counterclockwise to rewind."
+        customActions = listOf(
+            androidx.compose.ui.semantics.CustomAccessibilityAction("Forward 10 seconds") { app.player.skipBy(10_000); true },
+            androidx.compose.ui.semantics.CustomAccessibilityAction("Back 10 seconds") { app.player.skipBy(-10_000); true },
+        )
+    }) {
+        VinylRecord(song, Modifier.fillMaxSize().graphicsLayer { rotationZ = (if (dragging) dragAngle else spin.value) % 360f })
     }
 }
 
@@ -489,7 +543,7 @@ fun TitleBlock(song: Song, modifier: Modifier = Modifier, large: Boolean = false
                 )
             }
         }
-        if (!song.isPodcast) LikeButton(liked, { app.repo.toggleLike(song.id) })
+        if (!song.isPodcast) IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
     }
 }
 

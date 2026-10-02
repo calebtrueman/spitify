@@ -78,7 +78,8 @@ struct RootView: View {
             NavigationStack(path: router.path(t)) {
                 content()
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
-            }
+                    .safeAreaPadding(.top, 8)
+                    }
             .tint(p.accent)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()

@@ -92,7 +92,6 @@ final class TasteModel {
                 daypartSong[part, default: [:]][s.id, default: 0] += w * decay
             }
         }
-        for id in input.liked where byId[id] != nil { songScore[id, default: 0] += 2.5 }
         if !input.seedArtists.isEmpty { for s in input.songs where input.seedArtists.contains(s.artist) { songScore[s.id, default: 0] += 0.8 } }
 
         for (id, sc) in songScore {

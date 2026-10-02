@@ -28,6 +28,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
         appScope.launch {
+            try { lockScreenArt.restore() } finally { lockScreenArtReady.complete(Unit) }
             com.localfy.app.data.meta.FileTags.recover(this@LocalfyApp)
             musicDownloads.start()
         }
@@ -43,6 +44,8 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
             }
         }
     }
+    val lockScreenArtReady = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val lockScreenArt by lazy { com.localfy.app.playback.LockScreenArt(this) }
     val player by lazy { PlayerConnection(this, library, appScope, ::resolve, podcasts) { taste.record(it) } }
     val lyrics by lazy { LyricsRepository(this, database, appScope) }
     val theme by lazy { ThemeRepository(this) }

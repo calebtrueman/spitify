@@ -43,6 +43,7 @@ import com.localfy.app.ui.components.formatLongDuration
 import com.localfy.app.ui.player.PlaybackSettings
 import com.localfy.app.ui.player.SwitchRow
 import com.localfy.app.ui.theme.LocalfyColors
+import kotlinx.coroutines.launch
 
 @Composable
 private fun BackHeader(title: String) {
@@ -118,6 +119,13 @@ private fun RankRow(rank: Int, title: String, subtitle: String, art: ArtKey, cir
 fun SettingsScreen() {
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val nativeApp = context.applicationContext as com.localfy.app.LocalfyApp
+    val wallpaper = nativeApp.lockScreenArt
+    val lockScreenArt by wallpaper.enabled.collectAsStateWithLifecycle()
+    val wallpaperAllowed by wallpaper.allowed.collectAsStateWithLifecycle()
+    val wallpaperMessage by wallpaper.message.collectAsStateWithLifecycle()
+    val showRecommendations by app.repo.showRecommendations.collectAsStateWithLifecycle()
     val hideShort by app.repo.hideShortTracks.collectAsStateWithLifecycle()
     val scanning by app.repo.scanning.collectAsStateWithLifecycle()
     val online by app.lyrics.onlineEnabled.collectAsStateWithLifecycle()
@@ -128,7 +136,24 @@ fun SettingsScreen() {
         item { BackHeader("Settings") }
         item { SettingRow("Appearance", "Theme, accent colour, typeface, text size, artwork and player style") { app.navigate(Routes.APPEARANCE) } }
         item { SettingRow("Equaliser & sound", "10 presets, custom curve, bass boost, surround, loudness") { app.navigate(Routes.EQUALIZER) } }
+        item { SectionHeader("Home") }
+        item {
+            SwitchRow("Show recommendations", "Show suggested mixes, artist radio, throwbacks and top artists. Turn this off for a simpler Home screen. You can turn it back on anytime.", showRecommendations, app.repo::setShowRecommendations, Modifier.padding(horizontal = 16.dp))
+        }
         item { SectionHeader("Playback") }
+        item { SwitchRow("Full-screen lock-screen art", "Keep album art while playing or paused. Restore your still wallpaper when playback stops, Spitify closes, or you pause for 10 minutes. Live wallpapers stay unchanged.", lockScreenArt, wallpaper::setEnabled, Modifier.padding(horizontal = 16.dp)) }
+        if (lockScreenArt && !wallpaperAllowed) item {
+            SettingRow("Allow wallpaper backup", "Android needs All files access to save and restore your wallpaper. Your music still works without it.") {
+                runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))) }
+            }
+        }
+        wallpaperMessage?.let { message ->
+            item { Text(message, Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall) }
+            item { SettingRow("Restore saved wallpaper", "Stop album art and put back the wallpaper Spitify saved.") {
+                wallpaper.setEnabled(false)
+                nativeApp.appScope.launch { wallpaper.restore(force = true) }
+            } }
+        }
         item { PlaybackSettings(Modifier.padding(horizontal = 16.dp)) }
         item { SettingRow("Gapless playback", "Always on — albums flow track-to-track with no gap") {} }
 

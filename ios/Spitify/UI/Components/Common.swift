@@ -31,7 +31,6 @@ struct SongRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(1)
                     HStack(spacing: 4) {
-                        if app.library.isLiked(song.id) { Image(systemName: "heart.fill").font(.system(size: 10)).foregroundStyle(p.accent) }
                         Text(song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))").text(.bodyS).foregroundStyle(p.secondary).lineLimit(1)
                     }
                 }
@@ -92,7 +91,6 @@ struct SongMenuItems: View {
     @Environment(Router.self) private var router
     var body: some View {
         if !song.isSpoken {
-            Button(app.library.isLiked(song.id) ? "Remove from Liked Songs" : "Add to Liked Songs", systemImage: app.library.isLiked(song.id) ? "heart.slash" : "heart") { app.library.toggleLike(song.id); Haptics.success() }
         }
         Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { app.player.playNext([song]) }
         Button("Add to queue", systemImage: "text.line.last.and.arrowtriangle.forward") { app.player.addToQueue([song]) }
@@ -231,18 +229,13 @@ struct PlayButton: View {
     }
 }
 
-struct LikeButton: View {
+struct PlaylistButton: View {
     var song: Song
-    @Environment(AppModel.self) private var app
-    @Environment(\.palette) private var p
+    @Environment(Router.self) private var router
     var body: some View {
-        let liked = app.library.isLiked(song.id)
-        Button { app.library.toggleLike(song.id); Haptics.success() } label: {
-            Image(systemName: liked ? "heart.fill" : "heart").font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(liked ? p.accent : .white.opacity(0.9))
-                .symbolEffect(.bounce, value: liked)
-                .frame(width: 44, height: 44)
-        }
+        Button { router.addingToPlaylist = [song] } label: {
+            Image(systemName: "text.badge.plus").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44)
+        }.accessibilityLabel("Add to playlist")
     }
 }
 

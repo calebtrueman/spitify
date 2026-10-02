@@ -21,7 +21,7 @@ Track and release IDs stay as strings. Durations from this server are millisecon
 
 The queue allows two transfers at once. Wi-Fi-only is on by default and is saved per new job. Users can cancel a queued or active transfer, and retry failed or cancelled items. Repeated taps and repeated album requests do not create another job for the same source track. Different releases may contain different track IDs; those remain separate deliberately.
 
-The app checks transfer completion, FLAC metadata boundaries and the song's duration before publishing a file. Original tags and embedded covers remain in the file. Since the service sometimes reuses a recording tagged with another album, the selected song/album details are also saved through the app's existing metadata overrides. User edits take precedence. These overrides do not rewrite downloaded tags.
+The app checks transfer completion, FLAC metadata boundaries and the song's duration before publishing a file. The selected title, song artist, album artist, album and cover are written into the downloaded file before it is published. App overrides keep the same chosen release details. Existing user edits take precedence.
 
 - **iOS:** background URLSession transfers; an atomic queue file under Application Support; staging files outside the scanned music folder; completed files under `Documents/Music/Monochrome/{releaseId}/{trackId}.flac`. The app reconnects to background tasks on launch. Interrupted jobs with no task are queued again. Force-quitting an app can cancel background work under iOS; reopening allows recovery.
 - **Android:** system DownloadManager transfers; Room stores the queue; completion broadcasts schedule a WorkManager import. Files stay private until checked, then move through a pending MediaStore entry into `Music/Spitify/Monochrome/{releaseId}/{trackId}.flac`. The local database migration from version 5 to 6 only adds `music_downloads`; there is no production server database.
@@ -56,3 +56,9 @@ For Android:
 `monochromeTestApp` uses a separate app ID so the installed app is not replaced. Tests cover the database migration and preservation of existing likes/playlists, duplicate requests, library import, the selected album and native playback of the local file.
 
 The small FLAC header fixtures test parsing and rejection; they are not playable recordings. The live tests provide playback evidence. Background recovery and cancellation tests do not replace testing OS-driven suspension on physical phones.
+
+## On-device alternate audio
+
+If the primary transfer fails, the app can make one public YouTube search and player request on the phone. It accepts only a direct HTTPS audio URL, matching artist/title words and a duration within three seconds. It rejects added live/cover/remix labels. Login challenges, blocked access and signature-protected formats end the attempt; no bypass, cookie extraction or external helper is used. This path cannot make every track available. A live test found the expected public search result, but playback was blocked, so successful fallback downloading has not been verified against the live service.
+
+Alternate audio is stored as M4A and marked AAC, never presented as lossless FLAC. It goes through native audio validation and the same tag/art writing before library import. Search omits tracks explicitly marked unavailable by the primary source; album downloads can still try an alternate match.

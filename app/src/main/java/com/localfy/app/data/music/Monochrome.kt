@@ -12,16 +12,17 @@ import java.net.URLEncoder
 data class OnlineTrack(
     val id: String, val title: String, val artist: String, val album: String,
     val releaseId: String, val durationMs: Long, val track: Int, val disc: Int,
-    val artwork: String?, val playable: Boolean,
+    val artwork: String?, val playable: Boolean, val albumArtist: String? = null,
+    val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false,
 ) {
     fun json(): String = JSONObject().apply {
         put("trackId", id); put("title", title); put("artistNames", org.json.JSONArray(listOf(artist)))
         put("albumTitle", album); put("releaseId", releaseId); put("duration", durationMs)
-        put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
+        put("audioURL", audioURL); put("audioExtension", audioExtension); put("fallbackTried", fallbackTried); put("albumArtist", albumArtist); put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
     }.toString()
 }
 
-data class OnlineAlbum(val id: String, val title: String, val artist: String)
+data class OnlineAlbum(val id: String, val title: String, val artist: String, val artwork: String? = null)
 
 object Monochrome {
     const val BASE = "https://tracks.monochrome.st"
@@ -39,10 +40,10 @@ object Monochrome {
             val code = connection.responseCode
             check(code == 200) {
                 when (code) {
-                    401, 403, 428 -> "Monochrome is asking for access approval. Try its website."
-                    429 -> "Monochrome is busy. Wait a little before retrying."
+                    401, 403, 428 -> "Online search is temporarily unavailable. Please try again later."
+                    429 -> "Online search is busy. Wait a little before retrying."
                     404 -> "This item is no longer available."
-                    else -> "Monochrome could not complete the request ($code)."
+                    else -> "Online search could not complete the request ($code)."
                 }
             }
             JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
@@ -59,7 +60,7 @@ object Monochrome {
         return (0 until items.length()).mapNotNull {
             val item = items.getJSONObject(it)
             val id = item.optString("releaseId", item.optString("id"))
-            if (!validId(id)) null else OnlineAlbum(id, item.optString("title", "Unknown album"), artist(item))
+            if (!validId(id)) null else OnlineAlbum(id, item.optString("title", "Unknown album"), artist(item), item.optString("artwork").takeIf { it.startsWith("https://") })
         }
     }
 
@@ -79,7 +80,11 @@ object Monochrome {
             item.optString("releaseId", album?.optString("releaseId") ?: ""), item.optLong("duration"),
             item.optInt("trackNumber", 0), item.optInt("discNumber", 1),
             item.optString("artwork", album?.optString("artwork") ?: "").takeIf { it.startsWith("https://") },
-            item.optBoolean("playable", true))
+            item.optBoolean("playable", true),
+            item.optString("albumArtist").takeIf { it.isNotBlank() && it != "null" }
+                ?: album?.let { artist(it) }?.takeIf { it != "Unknown artist" },
+            item.optString("audioURL").takeIf { AudioFallback.validAudioURL(it) },
+            item.optString("audioExtension").takeIf { it == "m4a" } ?: "flac", item.optBoolean("fallbackTried", false))
     }
 
     private fun artist(item: JSONObject): String {

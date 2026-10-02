@@ -105,7 +105,7 @@ class OnlineArtRepository(context: Context) {
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
     private fun download(url: String, albumId: Long): File? {
-        val bytes = getBytes(url) ?: return null
+        val bytes = CoverDownload.load(url)
         if (bytes.size < 1024) return null
         val tmp = File(dir, "$albumId.tmp")
         tmp.writeBytes(bytes)

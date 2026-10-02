@@ -36,7 +36,7 @@ struct SpitifyMediaQuery: EntityStringQuery {
     static func items() -> [SpitifyMedia] {
         let app = AppModel.shared
         var out: [SpitifyMedia] = []
-        if !app.library.liked.isEmpty { out.append(SpitifyMedia(id: "liked", title: "Liked songs", subtitle: "Playlist")) }
+        out.append(SpitifyMedia(id: "allSongs", title: "All songs", subtitle: "Library"))
         out += app.library.playlists.map { SpitifyMedia(id: "playlist:" + $0.id, title: $0.name, subtitle: "Playlist") }
         out += app.library.library.albums.map { SpitifyMedia(id: "album:" + $0.id, title: $0.title, subtitle: "Album by " + $0.artist) }
         out += app.library.library.artists.map { SpitifyMedia(id: "artist:" + $0.name, title: $0.name, subtitle: "Artist") }
@@ -75,7 +75,7 @@ struct SpitifyMediaQuery: EntityStringQuery {
         var songs: [Song] = []
         var title = "Spitify"
         switch parts.first {
-        case "liked": songs = app.library.likedSongs; title = "Liked songs"
+        case "allSongs", "liked": songs = app.library.library.songs; title = "All songs"
         case "song", "episode": if let song = app.lookup(key) { songs = [song]; title = song.album }
         case "album": if let album = app.library.library.albumById[key] { songs = album.songs; title = album.title }
         case "artist": songs = app.library.library.artistByName[key]?.songs ?? []; title = key

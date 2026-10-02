@@ -1,0 +1,18 @@
+package com.localfy.app.data
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class AlbumGroupingTest {
+    private fun song(id: Long, artist: String, album: String = "Nectar") = Song(id, "Track $id", artist, album, id, artist, 180000, id.toInt(), 1, 2020, null, "Music/Nectar", 0, 100, "audio/flac")
+    @Test fun guestCreditsDoNotSplitAnAlbumOrChangeTrackCredits() {
+        val tracks = listOf(song(1, "Joji"), song(2, "Joji; Omar Apollo"), song(3, "Joji feat. Diplo"), song(4, "Joji, Lil Yachty"), song(5, "Other Artist"))
+        val merged = AlbumGrouping.merge(tracks)
+        assertEquals(listOf(1L, 1L, 1L, 1L, 5L), merged.map { it.albumId })
+        assertEquals(tracks.map { it.artist }, merged.map { it.artist })
+        assertEquals(listOf("Joji", "Joji", "Joji", "Joji", "Other Artist"), merged.map { it.albumArtist })
+    }
+    @Test fun commasInsideArtistNamesStayIntact() {
+        assertEquals("Tyler, The Creator", AlbumGrouping.merge(listOf(song(1, "Tyler, The Creator"))).single().albumArtist)
+    }
+}

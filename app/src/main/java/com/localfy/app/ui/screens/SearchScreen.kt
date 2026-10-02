@@ -81,7 +81,6 @@ fun SearchScreen() {
     var query by rememberSaveable { mutableStateOf("") }
     var online by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
-    val index = remember(library) { SearchIndex(library) }
     val words = query.fold().split(' ').filter { it.isNotBlank() }
 
     LazyVerticalGrid(
@@ -120,16 +119,7 @@ fun SearchScreen() {
             }
         }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 16.dp)) {
-                androidx.compose.material3.FilterChip(selected = !online, onClick = { online = false }, label = { Text("On device") })
-                Spacer(Modifier.width(8.dp))
-                androidx.compose.material3.FilterChip(selected = online, onClick = { online = true }, label = { Text("Online") })
-            }
-        }
-        if (online) {
-            item(span = { GridItemSpan(maxLineSpan) }) { OnlineMusicPanel(query) }
-        } else if (words.isEmpty()) {
+        if (words.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "browse") {
                 Text("Browse your genres", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
@@ -151,61 +141,9 @@ fun SearchScreen() {
             return@LazyVerticalGrid
         }
 
-        val songs = index.songs.filter { matches(it.second, words) }.map { it.first }.take(50)
-        val artists = index.artists.filter { matches(it.second, words) }.map { it.first }.take(20)
-        val albums = index.albums.filter { matches(it.second, words) }.map { it.first }.take(20)
-        val matchedPlaylists = playlists.filter { matches(it.name.fold(), words) }
-
-        if (songs.isEmpty() && artists.isEmpty() && albums.isEmpty() && matchedPlaylists.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "none") { EmptyState("No results for “$query”", "Check the spelling, or try fewer words.") }
-            return@LazyVerticalGrid
-        }
-
-        if (artists.isNotEmpty() || albums.isNotEmpty() || matchedPlaylists.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "shelves") {
-                Column {
-                    if (artists.isNotEmpty()) {
-                        SectionHeader("Artists")
-                        FittedTileRow(artists, key = { it.name }, tileWidth = 120.dp) { a ->
-                                TileData(a.name, a.name, "Artist", a.cover.artKey, circle = true) { focus.clearFocus(); app.navigate(Routes.artist(a.name)) }
-}
-                    }
-                    if (albums.isNotEmpty()) {
-                        SectionHeader("Albums")
-                        FittedTileRow(albums, key = { it.id }, tileWidth = 140.dp) { a ->
-                                TileData("a${a.id}", a.title, a.artist, a.cover.artKey) { focus.clearFocus(); app.navigate(Routes.album(a.id)) }
-}
-                    }
-                    if (matchedPlaylists.isNotEmpty()) {
-                        SectionHeader("Playlists")
-                        FittedTileRow(matchedPlaylists, key = { it.id }, tileWidth = 140.dp) { p ->
-                                TileData("p${p.id}", p.name, "Playlist", p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }
-}
-                    }
-                }
-            }
-        }
-        if (songs.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "songs-h") { SectionHeader("Songs") }
-            items(songs.size, span = { GridItemSpan(maxLineSpan) }, key = { "s-${songs[it].id}" }) { i ->
-                val s = songs[i]
-                SongRow(
-                    song = s,
-                    onClick = { focus.clearFocus(); app.player.playSongs(songs, i, shuffle = false, source = "Search: $query") },
-                    isCurrent = player.currentId == s.id,
-                    isPlaying = player.isPlaying,
-                    liked = s.id in liked,
-                    onMore = { app.openSongMenu(s, SongMenuExtras()) },
-                )
-            }
-        }
+        item(span = { GridItemSpan(maxLineSpan) }, key = "results") { OnlineMusicPanel(query) }
     }
-}
 
-private class SearchIndex(library: Library) {
-    val songs = library.songs.map { it to "${it.title} ${it.artist} ${it.album} ${it.albumArtist}".fold() }
-    val artists = library.artists.map { it to it.name.fold() }
-    val albums = library.albums.map { it to "${it.title} ${it.artist}".fold() }
 }
 
 @Composable

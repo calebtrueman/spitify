@@ -84,9 +84,6 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
                 }
             }
             HorizontalDivider(color = LocalfyColors.SurfaceHighest)
-            if (!song.isPodcast) MenuItem(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (liked) "Remove from Liked Songs" else "Add to Liked Songs") {
-                app.repo.toggleLike(song.id); onDismiss()
-            }
             MenuItem(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { app.player.playNext(listOf(song)); onDismiss() }
             MenuItem(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { app.player.addToQueue(listOf(song)); onDismiss() }
             if (!song.isPodcast) MenuItem(Icons.Rounded.Radio, "Go to song radio") {

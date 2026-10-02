@@ -8,7 +8,7 @@ enum Route: Hashable {
 }
 
 enum SmartKind: String, Hashable, CaseIterable {
-    case liked = "Liked Songs", recentlyAdded = "Recently added", recentlyPlayed = "Recently played", mostPlayed = "On repeat"
+    case allSongs = "All Songs", recentlyAdded = "Recently added", recentlyPlayed = "Recently played", mostPlayed = "On repeat"
 }
 
 enum Tab: Hashable { case home, search, podcasts, books, library }

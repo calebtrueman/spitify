@@ -24,6 +24,14 @@ final class Player {
     private(set) var message: String?
     private(set) var audioOutput = "Audio output unavailable"
     var speed: Float { current?.isSpoken == true ? speedSpoken : speedMusic }
+    var lockScreenArt = UserDefaults.standard.object(forKey: "lockScreenArt") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(lockScreenArt, forKey: "lockScreenArt"); updateNowPlaying() }
+    }
+    private var artworkSessionActive = false
+    private var artworkIdleDeadline: Date?
+    private var artworkIdleTask: Task<Void, Never>?
+    private var portraitArtKey: String?
+    private var portraitArt: Any?
     var crossfade: Double = UserDefaults.standard.double(forKey: "crossfade") { didSet { UserDefaults.standard.set(crossfade, forKey: "crossfade") } }
     var keepAlbumsGapless: Bool = UserDefaults.standard.object(forKey: "gaplessAlbums") as? Bool ?? true { didSet { UserDefaults.standard.set(keepAlbumsGapless, forKey: "gaplessAlbums") } }
     var eq: EQSettings = { (UserDefaults.standard.data(forKey: "eq")).flatMap { try? JSONDecoder().decode(EQSettings.self, from: $0) } ?? EQSettings() }() {
@@ -96,6 +104,7 @@ final class Player {
         activateSession()
         if usingStream { stream.play() } else { engine.play() }
         isPlaying = true
+        artworkSessionActive = true; artworkIdleDeadline = nil; artworkIdleTask?.cancel()
         startTicker()
         updateNowPlaying()
     }
@@ -103,9 +112,25 @@ final class Player {
     func pause() {
         if usingStream { stream.pause() } else { engine.pause() }
         isPlaying = false
+        if artworkIdleDeadline == nil {
+            artworkIdleDeadline = Date().addingTimeInterval(600)
+            artworkIdleTask?.cancel()
+            artworkIdleTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(600))
+                guard !Task.isCancelled, let self, !self.isPlaying else { return }
+                self.artworkSessionActive = false; self.updateNowPlaying()
+            }
+        }
         saveProgress()
         saveQueue()
         updateNowPlaying()
+    }
+
+    func stop() {
+        pause()
+        artworkSessionActive = false; artworkIdleTask?.cancel()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func next() {
@@ -273,6 +298,7 @@ final class Player {
         engine.setRate(speed); stream.setRate(speed)
         position = seconds
         isPlaying = play
+        if play { artworkSessionActive = true; artworkIdleDeadline = nil; artworkIdleTask?.cancel() }
         startTicker()
         updateNowPlaying()
         saveQueue()
@@ -286,7 +312,7 @@ final class Player {
         if repeatMode == .one { startCurrent(at: 0, play: true); return }
         if index + 1 < queue.count { index += 1; startCurrent(at: 0, play: true) }
         else if repeatMode == .all && !queue.isEmpty { index = 0; startCurrent(at: 0, play: true) }
-        else { isPlaying = false; position = 0; if !usingStream { engine.seek(0) } else { stream.seek(0) }; updateNowPlaying() }
+        else { artworkSessionActive = false; artworkIdleTask?.cancel(); isPlaying = false; position = 0; if !usingStream { engine.seek(0) } else { stream.seek(0) }; updateNowPlaying() }
     }
 
     private func startTicker() {
@@ -295,6 +321,9 @@ final class Player {
     }
 
     private func tick() {
+        if !isPlaying, artworkSessionActive, let deadline = artworkIdleDeadline, Date() >= deadline {
+            artworkSessionActive = false; updateNowPlaying()
+        }
         let playing = usingStream ? stream.isPlaying : engine.isPlaying
         position = usingStream ? stream.currentTime : engine.currentTime
         if usingStream, stream.duration > 0 { duration = stream.duration }
@@ -431,14 +460,12 @@ final class Player {
             if let e = e as? MPChangePlaybackPositionCommandEvent { self?.seek(e.positionTime) }
             return .success
         }
+        c.stopCommand.addTarget { [weak self] _ in self?.stop(); return .success }
         c.skipForwardCommand.preferredIntervals = [30]
         c.skipBackwardCommand.preferredIntervals = [10]
         c.skipForwardCommand.addTarget { [weak self] _ in self?.skip(by: 30); return .success }
         c.skipBackwardCommand.addTarget { [weak self] _ in self?.skip(by: -10); return .success }
-        c.likeCommand.addTarget { [weak self] _ in
-            if let id = self?.current?.id { self?.library?.toggleLike(id) }
-            return .success
-        }
+        c.likeCommand.isEnabled = false
     }
 
     private func updateNowPlaying() {
@@ -454,9 +481,18 @@ final class Player {
             MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? Double(speed) : 0, MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(speed),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
         ]
-        if let img = ArtCache.shared.image(for: s.albumKey, remote: s.artURL) {
+        if artworkSessionActive, let img = ArtCache.shared.image(for: s.albumKey, remote: s.artURL) {
             info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
-        } else if let remote = s.artURL {
+            if #available(iOS 26.0, *), lockScreenArt,
+               MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys.contains(MPNowPlayingInfoProperty3x4AnimatedArtwork) {
+                let key = s.albumKey + String(ObjectIdentifier(img).hashValue)
+                if portraitArtKey != key {
+                    portraitArtKey = key
+                    portraitArt = LockScreenArtwork.artwork(image: img)
+                }
+                if let artwork = portraitArt as? MPMediaItemAnimatedArtwork { info[MPNowPlayingInfoProperty3x4AnimatedArtwork] = artwork }
+            }
+        } else if artworkSessionActive, let remote = s.artURL {
             Task { if await ArtCache.shared.load(key: s.albumKey, remote: remote) != nil, self.current == s { self.updateNowPlaying() } }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info

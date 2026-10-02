@@ -10,33 +10,13 @@ struct SearchView: View {
     var body: some View {
         let lib = app.library.library
         let words = foldForSearch(query).split(separator: " ").map(String.init)
-        let match: (String) -> Bool = { hay in let h = foldForSearch(hay); return words.allSatisfy { h.contains($0) } }
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                Picker("Search location", selection: $online) {
-                    Text("On device").tag(false)
-                    Text("Online").tag(true)
-                }.pickerStyle(.segmented).padding(16)
-                if online {
-                    OnlineMusicView(query: query)
-                } else if words.isEmpty {
+                if words.isEmpty {
                     if !lib.genres.isEmpty { SectionHeader(title: "Browse your genres") ; browse(lib.genres.map { ($0.name, $0.songs, Route.genre($0.name)) }) }
                     if lib.folders.count > 1 { SectionHeader(title: "Browse folders"); browse(lib.folders.map { ($0.name, $0.songs, Route.folder($0.path)) }) }
                 } else {
-                    let artists = lib.artists.filter { match($0.name) }.prefix(20)
-                    let albums = lib.albums.filter { match("\($0.title) \($0.artist)") }.prefix(20)
-                    let playlists = app.library.playlists.filter { match($0.name) }
-                    let songs = Array(lib.songs.filter { match("\($0.title) \($0.artist) \($0.album)") }.prefix(60))
-                    if artists.isEmpty && albums.isEmpty && songs.isEmpty && playlists.isEmpty {
-                        EmptyState(title: "No results for “\(query)”", message: "Check the spelling, or try fewer words.", icon: "magnifyingglass")
-                    }
-                    TileShelf(title: "Artists", tiles: artists.map { a in Tile(id: a.name, title: a.name, subtitle: "Artist", song: a.cover, circle: true) { router.go(.artist(a.name)) } }, width: 116)
-                    TileShelf(title: "Albums", tiles: albums.map { a in Tile(id: a.id, title: a.title, subtitle: a.artist, song: a.cover) { router.go(.album(a.id)) } }, width: 136)
-                    TileShelf(title: "Playlists", tiles: playlists.map { pl in Tile(id: pl.id, title: pl.name, subtitle: "Playlist", song: app.library.songs(of: pl).first) { router.go(.playlist(pl.id)) } }, width: 136)
-                    if !songs.isEmpty {
-                        SectionHeader(title: "Songs")
-                        ForEach(Array(songs.enumerated()), id: \.element.id) { i, s in SongRow(song: s) { app.player.play(songs, from: i, shuffle: false, source: "Search: \(query)") } }
-                    }
+                    OnlineMusicView(query: query)
                 }
             }.padding(.bottom, 24)
         }

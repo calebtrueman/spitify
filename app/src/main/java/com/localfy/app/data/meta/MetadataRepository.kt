@@ -138,12 +138,25 @@ class MetadataRepository(
         }
     }
 
+    suspend fun prepareArtwork(source: String): String = withContext(Dispatchers.IO) {
+        val image = if (source.startsWith("http")) {
+            android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(com.localfy.app.data.art.CoverDownload.load(source)))
+        } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(source))
+        val dir = File(context.cacheDir, "selected-covers").apply { mkdirs() }
+        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000 }?.forEach { it.delete() }
+        val file = File.createTempFile("cover-", ".jpg", dir)
+        try {
+            check(com.localfy.app.data.saveSquareImage(image, file, 1200)) { "The cover image could not be read." }
+            Uri.fromFile(file).toString()
+        } catch (error: Exception) { file.delete(); throw error }
+    }
+
     suspend fun saveFiles(songs: List<Song>, edit: MetadataEdit, artSource: String?) = withContext(Dispatchers.IO) {
         // Ask for permission before changing any file in a batch.
         for (song in songs) checkNotNull(context.contentResolver.openFileDescriptor(song.uri, "rw")).close()
         val image = if (artSource != null) {
             val source = if (artSource.startsWith("http")) {
-                val bytes = checkNotNull(getBytes(artSource)) { "The cover could not be downloaded. Please try again." }
+                val bytes = com.localfy.app.data.art.CoverDownload.load(artSource)
                 check(bytes.size <= 20_000_000) { "The cover image is too large." }
                 android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))
             } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(artSource))
@@ -185,7 +198,7 @@ class MetadataRepository(
     /** Sets album art from a picked image (content Uri) or a downloaded candidate (http URL). */
     fun setArt(albumId: Long, source: String) = scope.launch(Dispatchers.IO) {
         val image = if (source.startsWith("http")) {
-            val bytes = runCatching { getBytes(source) }.getOrNull() ?: return@launch
+            val bytes = runCatching { com.localfy.app.data.art.CoverDownload.load(source) }.getOrNull() ?: return@launch
             android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes))
         } else android.graphics.ImageDecoder.createSource(context.contentResolver, Uri.parse(source))
         if (!com.localfy.app.data.saveSquareImage(image, File(artDir, "$albumId.jpg"), 1200)) return@launch

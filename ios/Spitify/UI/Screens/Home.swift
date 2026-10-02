@@ -5,8 +5,11 @@ struct HomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
+    @State private var sidebarOpen = false
     @State private var filter: Filter = .all
     @State private var glow = Color(hex: 0x2A2A2E)
+
+    private var visibleMixes: [Mix] { app.showRecommendations ? app.mixes : [] }
 
     private var greeting: String {
         let h = Calendar.current.component(.hour, from: Date())
@@ -40,15 +43,41 @@ struct HomeView: View {
         .artColor(app.player.current, into: $glow)
         .toolbar(.hidden, for: .navigationBar)
         .refreshable { await app.library.scan() }
+        .overlay(alignment: .leading) {
+            if sidebarOpen {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Color.black.opacity(0.45).ignoresSafeArea().onTapGesture { withAnimation { sidebarOpen = false } }
+                            .accessibilityLabel("Close menu").accessibilityAddTraits(.isButton)
+                        VStack(alignment: .leading, spacing: 24) {
+                            HStack {
+                                Text("Spitify").text(.title)
+                                Spacer()
+                                Button { withAnimation { sidebarOpen = false } } label: { Image(systemName: "xmark") }.accessibilityLabel("Close menu")
+                            }
+                            menuItem("Profile", icon: "person.crop.circle", route: .profile)
+                            menuItem("Settings", icon: "gearshape", route: .settings)
+                            Spacer()
+                        }.padding(24).frame(width: min(320, geometry.size.width * 0.85), height: geometry.size.height)
+                            .background(p.background).foregroundStyle(p.text).transition(.move(edge: .leading))
+                    }
+                }
+            }
+        }
+    }
+
+    private func menuItem(_ title: String, icon: String, route: Route) -> some View {
+        Button { sidebarOpen = false; router.go(route) } label: {
+            Label(title, systemImage: icon).text(.body).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8).contentShape(Rectangle())
+        }.buttonStyle(.plain)
     }
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button { router.go(.profile) } label: { Avatar(size: 34) }
+            Button { withAnimation { sidebarOpen = true } } label: { Avatar(size: 34) }.accessibilityLabel("Open menu")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) { ForEach(Filter.allCases, id: \.self) { f in Pill(title: f.rawValue, selected: filter == f) { filter = f } } }
             }
-            Button { router.go(.stats) } label: { Image(systemName: "chart.bar.xaxis").font(.system(size: 18, weight: .semibold)).foregroundStyle(p.text).frame(width: 36, height: 36) }
         }
         .padding(.horizontal, 16).padding(.top, 8)
     }
@@ -61,9 +90,9 @@ struct HomeView: View {
     }
 
     private var playlistTiles: [Tile] {
-        var t = [Tile(id: "liked", title: "Liked Songs", subtitle: songCount(app.library.liked.count), song: app.library.likedSongs.first) { router.go(.smart(.liked)) }]
+        var t = [Tile(id: "liked", title: "All Songs", subtitle: songCount(app.library.library.songs.count), song: app.library.library.songs.first) { router.go(.smart(.allSongs)) }]
         t += app.library.playlists.map { pl in Tile(id: pl.id, title: pl.name, subtitle: songCount(pl.songIds.count), song: app.library.songs(of: pl).first) { router.go(.playlist(pl.id)) } }
-        t += app.mixes.map { m in Tile(id: m.id, title: m.title, subtitle: m.description, song: m.cover, mix: m) { router.go(.mix(m.id)) } }
+        t += visibleMixes.map { m in Tile(id: m.id, title: m.title, subtitle: m.description, song: m.cover, mix: m) { router.go(.mix(m.id)) } }
         return t
     }
 
@@ -78,25 +107,27 @@ struct HomeView: View {
         hero
         // Quick picks
         let recentAlbums = uniqueAlbums(app.library.recentlyPlayed)
-        var quick: [Tile] = [Tile(id: "liked", title: "Liked Songs", subtitle: "", song: app.library.likedSongs.first) { router.go(.smart(.liked)) }]
+        var quick: [Tile] = [Tile(id: "liked", title: "All Songs", subtitle: "", song: app.library.library.songs.first) { router.go(.smart(.allSongs)) }]
         let _ = app.library.playlists.prefix(2).forEach { pl in quick.append(Tile(id: pl.id, title: pl.name, subtitle: "", song: app.library.songs(of: pl).first) { router.go(.playlist(pl.id)) }) }
         let _ = recentAlbums.prefix(3).forEach { a in quick.append(Tile(id: "q" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
-        let _ = app.mixes.prefix(4).forEach { m in quick.append(Tile(id: "q" + m.id, title: m.title, subtitle: "", song: m.cover, mix: m) { router.go(.mix(m.id)) }) }
+        let _ = visibleMixes.prefix(4).forEach { m in quick.append(Tile(id: "q" + m.id, title: m.title, subtitle: "", song: m.cover, mix: m) { router.go(.mix(m.id)) }) }
         let _ = lib.albums.prefix(8).forEach { a in quick.append(Tile(id: "qa" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
         let picks = Array(quick.reduce(into: [Tile]()) { acc, t in if !acc.contains(where: { $0.title == t.title }) { acc.append(t) } }.prefix(6))
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) { ForEach(picks) { QuickTile(tile: $0) } }
             .padding(.horizontal, 16).padding(.top, 10)
 
         ForEach(Mix.Section.allCases, id: \.self) { section in
-            let inSection = app.mixes.filter { $0.section == section }
+            let inSection = visibleMixes.filter { $0.section == section }
             TileShelf(title: section == .madeForYou && !app.profile.name.isEmpty ? "Made for \(app.profile.name)" : section.rawValue,
                       tiles: inSection.map { m in Tile(id: m.id, title: m.title, subtitle: m.description, song: m.cover, mix: m) { router.go(.mix(m.id)) } })
         }
         TileShelf(title: "Jump back in", tiles: recentAlbums.prefix(12).map { a in Tile(id: "j" + a.id, title: a.title, subtitle: a.artist, song: a.cover) { router.go(.album(a.id)) } })
         TileShelf(title: "Recently added", tiles: uniqueAlbums(app.library.recentlyAdded).prefix(12).map { a in Tile(id: "n" + a.id, title: a.title, subtitle: a.artist, song: a.cover) { router.go(.album(a.id)) } },
                   action: "Show all") { router.go(.smart(.recentlyAdded)) }
+        if app.showRecommendations {
         let topArtists = (app.model?.topArtists ?? lib.artists.map(\.name)).prefix(12).compactMap { lib.artistByName[$0] }
         TileShelf(title: "Your top artists", tiles: topArtists.map { a in Tile(id: "ar" + a.name, title: a.name, subtitle: "Artist", song: a.cover, circle: true) { router.go(.artist(a.name)) } })
+        }
     }
 
     @ViewBuilder private var hero: some View {

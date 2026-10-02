@@ -251,7 +251,7 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
                 contentPadding = PaddingValues(bottom = 32.dp),
             ) {
                 item(key = "player") {
-                    Column(Modifier.height(pageHeight).statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)) {
+                    Column(Modifier.height(pageHeight).statusBarsPadding().padding(top = 8.dp).navigationBarsPadding().padding(horizontal = 20.dp)) {
                         PlayerTopBar(state.source, onCollapse, { app.openSongMenu(song, SongMenuExtras()) })
                         ArtPager(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp))
                         TitleBlock(song, onArtist = { onCollapse(); app.navigate(Routes.artist(song.artist)) })
@@ -275,10 +275,10 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
             }
         }
 
-        StatusBarScrim(color = lerp(tint, Color.Black, 0.5f))
+
         AnimatedVisibility(overlay != null, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
             Box(Modifier.fillMaxSize().background(lerp(tint, Color.Black, 0.2f))) {
-                Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
                     Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { overlay = null }) { Icon(Icons.Rounded.KeyboardArrowDown, "Close", modifier = Modifier.size(30.dp)) }
                         Column(Modifier.weight(1f)) {
@@ -447,8 +447,8 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
     Box(modifier.fillMaxHeight()) {
         ArtBackdrop(song, strength = 0.9f)
         // Light theme uses dark status icons; give them a light strip to sit on over the dark pane.
-        if (lightStatusStrip) StatusBarScrim(color = Color(0xFFF7F7F9))
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
             Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 PaneTabs(tab, { tab = it }, tabs = listOf("Playing", if (song?.isPodcast == true) "Notes" else "Lyrics", "Queue"))
                 Spacer(Modifier.weight(1f))
@@ -502,7 +502,7 @@ fun TheaterPlayer(hingeLeft: Dp, hingeWidth: Dp, onExit: () -> Unit) {
     BackHandler(onBack = onExit)
     Box(Modifier.fillMaxSize()) {
         ArtBackdrop(song)
-        Row(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Row(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
             Column(Modifier.width(hingeLeft).fillMaxHeight().padding(horizontal = 28.dp, vertical = 12.dp)) {
                 PlayerTopBar(app.player.state.collectAsStateWithLifecycle().value.source, onExit, { song?.let { app.openSongMenu(it, SongMenuExtras()) } }, Icons.Rounded.CloseFullscreen)
                 if (song == null) return@Column

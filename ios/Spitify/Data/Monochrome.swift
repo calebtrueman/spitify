@@ -12,6 +12,10 @@ struct OnlineTrack: Codable, Identifiable, Equatable {
     var discNumber: Int
     var artwork: String?
     var playable: Bool
+    var albumArtist: String? = nil
+    var audioURL: String? = nil
+    var audioExtension: String? = nil
+    var fallbackTried: Bool? = nil
 }
 
 struct OnlineAlbum: Identifiable {
@@ -45,7 +49,7 @@ struct MonochromeClient {
         let (data, response) = try await session.data(for: request)
         try Self.check(response)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw MusicSourceError.message("Monochrome returned an unexpected response.")
+            throw MusicSourceError.message("Online search returned an unexpected response.")
         }
         return object
     }
@@ -55,10 +59,10 @@ struct MonochromeClient {
         guard code == 200 else {
             let text: String
             switch code {
-            case 401, 403, 428: text = "Monochrome is asking for access approval. Try its website."
+            case 401, 403, 428: text = "Online search is temporarily unavailable. Please try again later."
             case 404: text = "This song is no longer available."
-            case 429: text = "Monochrome is busy. Wait a little before retrying."
-            default: text = "Monochrome could not complete the request (\(code))."
+            case 429: text = "Online search is busy. Wait a little before retrying."
+            default: text = "Online search could not complete the request (\(code))."
             }
             throw MusicSourceError.message(text)
         }
@@ -66,13 +70,13 @@ struct MonochromeClient {
 
     func search(_ query: String) async throws -> [OnlineTrack] {
         let data = try await json("search/tracks", query: query)
-        guard let tracks = data["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("Monochrome's search response has changed.") }
+        guard let tracks = data["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("The search response has changed.") }
         return tracks.compactMap { Self.track($0) }
     }
 
     func searchAlbums(_ query: String) async throws -> [OnlineAlbum] {
         let data = try await json("search/releases", query: query)
-        guard let albums = data["releases"] as? [[String: Any]] else { throw MusicSourceError.message("Monochrome's album response has changed.") }
+        guard let albums = data["releases"] as? [[String: Any]] else { throw MusicSourceError.message("The album response has changed.") }
         return albums.compactMap { item in
             guard let id = Self.id(item["releaseId"] ?? item["id"]) else { return nil }
             return OnlineAlbum(id: id, title: item["title"] as? String ?? "Unknown album", artist: Self.artist(item), artwork: item["artwork"] as? String)
@@ -82,7 +86,7 @@ struct MonochromeClient {
     func albumTracks(_ id: String) async throws -> [OnlineTrack] {
         _ = try Self.audioURL(id) // IDs are digits, never paths or arbitrary URLs.
         let album = try await json("releases/\(id)")
-        guard let tracks = album["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("Monochrome did not return this album's songs.") }
+        guard let tracks = album["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("Online search did not return this album's songs.") }
         return tracks.compactMap { Self.track($0, album: album) }.sorted { ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber) }
     }
 
@@ -105,7 +109,8 @@ struct MonochromeClient {
             releaseID: Self.id(item["releaseId"] ?? album?["releaseId"]) ?? "",
             durationMs: (item["duration"] as? NSNumber)?.int64Value ?? 0,
             trackNumber: item["trackNumber"] as? Int ?? 0, discNumber: item["discNumber"] as? Int ?? 1,
-            artwork: (item["artwork"] ?? album?["artwork"]) as? String, playable: item["playable"] as? Bool ?? true)
+            artwork: (item["artwork"] ?? album?["artwork"]) as? String, playable: item["playable"] as? Bool ?? true,
+            albumArtist: item["albumArtist"] as? String ?? album.map { Self.artist($0) })
     }
 }
 

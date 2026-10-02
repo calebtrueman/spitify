@@ -9,13 +9,20 @@ struct SettingsView: View {
         @Bindable var app = app
         @Bindable var lib = app.library
         @Bindable var lyrics = app.lyrics
+        @Bindable var player = app.player
         Form {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
                 NavigationLink(value: Route.profile) { Label("Profile", systemImage: "person.crop.circle") }
             }
+            Section {
+                Toggle("Show recommendations", isOn: $app.showRecommendations)
+            } header: { Text("Home") } footer: { Text("Show suggested mixes, artist radio, throwbacks and top artists. Turn this off for a simpler Home screen. You can turn it back on anytime.") }
             Section("Playback") { PlaybackSettings().padding(.vertical, 6) }
+            Section {
+                Toggle("Full-screen lock-screen art", isOn: $player.lockScreenArt)
+            } header: { Text("Lock screen") } footer: { Text("Show portrait album art on iOS 26 and later, including while paused. Tap the lock-screen artwork to expand it. Stopping or 10 minutes paused removes the artwork while Spitify is running; your wallpaper is never replaced.") }
             Section {
                 Toggle("Find lyrics online automatically", isOn: $lyrics.onlineEnabled)
             } header: { Text("Lyrics") } footer: { Text("Embedded lyrics and matching .lrc files (next to the song or in a “Lyrics” folder) are always used. Online lookup sends only artist, title, album and length.") }
@@ -264,8 +271,18 @@ struct ProfileView: View {
                         }.padding(.horizontal, 16).padding(.vertical, 5)
                     }
                 } else {
-                    Text("Play some music and this fills in — Spitify learns from what you finish, skip, like and play together.").text(.bodyS).foregroundStyle(p.secondary).padding(16)
+                    Text("Play some music and this fills in — Spitify learns from what you finish, skip and play together.").text(.bodyS).foregroundStyle(p.secondary).padding(16)
                 }
+                Button { router.go(.stats) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Your stats").text(.title).foregroundStyle(p.text)
+                            Text("Top songs, artists and albums").text(.bodyS).foregroundStyle(p.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").foregroundStyle(p.secondary)
+                    }.padding(16).contentShape(Rectangle())
+                }.buttonStyle(.plain)
                 if !app.library.hiddenSongs.isEmpty || !app.library.hiddenArtists.isEmpty {
                     Button("Show hidden recommendations again (\(app.library.hiddenSongs.count + app.library.hiddenArtists.count))") { app.library.hiddenSongs = []; app.library.hiddenArtists = [] }.padding(16)
                 }

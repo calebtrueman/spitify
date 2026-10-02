@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UIKit
+import AVFoundation
 
 enum MusicDownloadState: String, Codable {
     case queued, downloading, checking, complete, failed, cancelled
@@ -73,10 +74,10 @@ final class MusicDownloads {
                         let temp = self.incoming.appendingPathComponent(job.attempt + ".flac")
                         if FileManager.default.fileExists(atPath: temp.path) {
                             await self.received(attempt: job.attempt, file: temp)
-                        } else if let info = try? FLACInfo.read(self.root.appendingPathComponent(job.relativePath), expectedDurationMs: job.track.durationMs) {
+                        } else if let quality = try? await self.validateAudio(self.root.appendingPathComponent(job.relativePath), track: job.track) {
                             // Recover a crash between moving the file and saving "complete".
                             self.jobs[i].state = .complete
-                            self.jobs[i].quality = info.label
+                            self.jobs[i].quality = quality
                             await self.onImported?()
                         } else {
                             self.jobs[i].state = .queued
@@ -102,17 +103,40 @@ final class MusicDownloads {
         persist()
     }
 
-    func enqueue(_ tracks: [OnlineTrack]) {
-        for track in tracks where track.playable {
-            if let old = jobs.first(where: { $0.id == track.id }), old.state.active || (old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path)) { continue }
+    @discardableResult func enqueue(_ tracks: [OnlineTrack]) async -> String {
+        var resolved: [OnlineTrack] = []
+        for requested in tracks {
+            if let old = jobs.first(where: { $0.id == requested.id }), old.state.active ||
+                (old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path)) {
+                resolved.append(requested); continue
+            }
+            var track = requested
+            if !track.playable {
+                guard let replacement = try? await AudioFallback.resolve(track) else { continue }
+                track = replacement
+            } else { track.audioURL = nil; track.audioExtension = nil; track.fallbackTried = nil }
+            resolved.append(track)
+        }
+        let previous = jobs
+        var added = 0, saved = 0, active = 0
+        for track in resolved {
+            if let old = jobs.first(where: { $0.id == track.id }) {
+                if old.state.active { active += 1; continue }
+                if old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path) { saved += 1; continue }
+            }
             guard (try? MonochromeClient.audioURL(track.id)) != nil else { continue }
             jobs.removeAll { $0.id == track.id }
             let folder = MonochromeClient.id(track.releaseID) ?? "Singles"
             let job = MusicDownload(track: track, attempt: UUID().uuidString, state: .queued,
-                                    relativePath: "Music/Monochrome/\(folder)/\(track.id).flac", wifiOnly: wifiOnly)
-            jobs.append(job)
+                                    relativePath: "Music/Monochrome/\(folder)/\(track.id).\(track.audioExtension ?? "flac")", wifiOnly: wifiOnly)
+            jobs.append(job); added += 1
         }
-        if persist() { pump() }
+        guard persist() else { jobs = previous; return message ?? "Could not save the download queue." }
+        pump()
+        if added > 0 { return "\(added) \(added == 1 ? "song" : "songs") queued." + (wifiOnly ? " Downloads use Wi-Fi." : "") }
+        if active > 0 { return "Already in your download queue." }
+        if saved > 0 { return "Already saved in your library." }
+        return "No available songs to download."
     }
 
     func cancel(_ id: String) {
@@ -129,7 +153,7 @@ final class MusicDownloads {
         guard !restoring else { return }
         var available = 2 - jobs.filter { $0.state == .downloading || $0.state == .checking }.count
         for i in jobs.indices where jobs[i].state == .queued && available > 0 {
-            guard let url = try? MonochromeClient.audioURL(jobs[i].id) else { continue }
+            guard let url = jobs[i].track.audioURL.flatMap({ AudioFallback.validAudioURL($0) ? URL(string: $0) : nil }) ?? (try? MonochromeClient.audioURL(jobs[i].id)) else { continue }
             jobs[i].state = .downloading
             guard persist() else { jobs[i].state = .queued; return }
             var request = URLRequest(url: url)
@@ -147,29 +171,34 @@ final class MusicDownloads {
     }
 
     func received(attempt: String, file: URL) async {
-        defer { try? FileManager.default.removeItem(at: file) }
+        var audioFile = file
+        defer { try? FileManager.default.removeItem(at: audioFile); try? FileManager.default.removeItem(at: file) }
         guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active }) else { return }
         jobs[index].state = .checking
         persist()
         do {
-            let info = try FLACInfo.read(file, expectedDurationMs: jobs[index].track.durationMs)
             let track = jobs[index].track
+            if track.audioExtension == "m4a" {
+                audioFile = file.deletingPathExtension().appendingPathExtension("m4a")
+                try FileManager.default.moveItem(at: file, to: audioFile)
+            }
+            let quality = try await validateAudio(audioFile, track: track)
             var artwork: Data?
             if let art = track.artwork {
                 guard let data = await HTTP.get(art) else { throw MusicSourceError.message("Could not download the cover. Please retry.") }
                 artwork = data
             }
-            try await FileTags.shared.write(file, edit: MetadataOverride(title: track.title, artist: track.artist,
-                album: track.album.isEmpty ? nil : track.album, albumArtist: track.artist,
+            try await FileTags.shared.write(audioFile, edit: MetadataOverride(title: track.title, artist: track.artist,
+                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? Song.albumArtist(track.artist),
                 track: track.trackNumber > 0 ? track.trackNumber : nil, disc: track.discNumber, source: "online"), artwork: artwork)
             guard let currentIndex = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .checking }) else { throw CancellationError() }
             let destination = root.appendingPathComponent(jobs[currentIndex].relativePath)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
                 // A crash may have happened after the final move. Never overwrite an existing file.
-                _ = try FLACInfo.read(destination, expectedDurationMs: jobs[currentIndex].track.durationMs)
-            } else { try FileManager.default.moveItem(at: file, to: destination) }
-            jobs[currentIndex].quality = info.label
+                _ = try await validateAudio(destination, track: track)
+            } else { try FileManager.default.moveItem(at: audioFile, to: destination) }
+            jobs[currentIndex].quality = quality
             jobs[currentIndex].error = nil
             jobs[currentIndex].state = .complete
             progress[jobs[currentIndex].id] = nil
@@ -180,14 +209,44 @@ final class MusicDownloads {
         finishBackgroundEventsIfReady()
     }
 
+    private func validateAudio(_ file: URL, track: OnlineTrack) async throws -> String {
+        if track.audioExtension != "m4a" { return try FLACInfo.read(file, expectedDurationMs: track.durationMs).label }
+        let asset = AVURLAsset(url: file)
+        let duration = try await asset.load(.duration).seconds
+        let audio = try await asset.loadTracks(withMediaType: .audio)
+        guard !audio.isEmpty, duration.isFinite, duration > 0, abs(duration * 1000 - Double(track.durationMs)) <= 5000 else {
+            throw MusicSourceError.message("The downloaded audio does not match this song.")
+        }
+        return "AAC"
+    }
+
     func failed(attempt: String, error: Error) {
         guard let i = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active }) else { return }
+        let mayRetry = jobs[i].track.fallbackTried != true && jobs[i].state == .downloading && (error as NSError).code != NSURLErrorCancelled
+        if mayRetry {
+            jobs[i].track.fallbackTried = true
+            jobs[i].state = .checking; jobs[i].error = "Trying another recording…"
+            let track = jobs[i].track
+            persist()
+            Task {
+                let replacement = try? await AudioFallback.resolve(track)
+                guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .checking }) else { return }
+                if let replacement {
+                    jobs[index].track = replacement
+                    jobs[index].relativePath = (jobs[index].relativePath as NSString).deletingPathExtension + ".m4a"
+                    jobs[index].attempt = UUID().uuidString
+                    jobs[index].state = .queued; jobs[index].error = nil
+                } else {
+                    jobs[index].state = .failed; jobs[index].error = "Could not download this song. Please try again later."
+                }
+                persist(); pump(); finishBackgroundEventsIfReady()
+            }
+            return
+        }
         jobs[i].state = .failed
         jobs[i].error = error.localizedDescription
         progress[jobs[i].id] = nil
-        persist()
-        pump()
-        finishBackgroundEventsIfReady()
+        persist(); pump(); finishBackgroundEventsIfReady()
     }
 
     func eventsFinished() {

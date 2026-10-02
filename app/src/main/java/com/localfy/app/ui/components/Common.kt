@@ -171,10 +171,6 @@ fun SongRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (liked) {
-                    Icon(Icons.Rounded.Favorite, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(4.dp))
-                }
                 Text(
                     if (song.playable) subtitle else "Unsupported format (.${song.fileName.substringAfterLast('.')})",
                     style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -330,24 +326,6 @@ fun BigPlayButton(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Mo
                 modifier = Modifier.size(size * 0.55f),
             )
         }
-    }
-}
-
-@Composable
-fun LikeButton(liked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
-    val haptics = rememberHaptics()
-    val scale by animateFloatAsState(
-        if (liked) 1f else 0.92f,
-        spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium),
-        label = "like",
-    )
-    IconButton(onClick = { haptics(HapticFeedbackType.Confirm); onToggle() }, modifier = modifier) {
-        Icon(
-            if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-            contentDescription = if (liked) "Remove from Liked Songs" else "Add to Liked Songs",
-            tint = if (liked) MaterialTheme.colorScheme.primary else tint,
-            modifier = Modifier.graphicsLayer { scaleX = scale * if (liked) 1.12f else 1f; scaleY = scaleX },
-        )
     }
 }
 

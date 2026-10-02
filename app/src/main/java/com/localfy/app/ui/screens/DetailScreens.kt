@@ -165,11 +165,8 @@ fun SmartScreen(kindName: String) {
         subtitle = kind.subtitle,
         art = songs.firstOrNull()?.artKey,
         songs = songs,
-        extrasFor = { _, s ->
-            if (kind == SmartCollection.Kind.Liked) SongMenuExtras("Remove from Liked Songs") { app.repo.toggleLike(s.id) } else SongMenuExtras()
-        },
         emptyText = when (kind) {
-            SmartCollection.Kind.Liked -> "Tap ♡ on any song to save it here."
+            SmartCollection.Kind.AllSongs -> "Download or import music to add it to your library."
             SmartCollection.Kind.MostPlayed, SmartCollection.Kind.RecentlyPlayed -> "Listen to a few songs and this fills itself in."
             else -> "Nothing matches yet."
         },

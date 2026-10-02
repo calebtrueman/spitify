@@ -28,7 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -163,10 +163,10 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
         }
 
         if (filter == null || filter == Filter.Playlists) {
-            val likedCount = smart[SmartCollection.Kind.Liked]?.songs?.size ?: 0
+            val likedCount = smart[SmartCollection.Kind.AllSongs]?.songs?.size ?: 0
             item(span = { GridItemSpan(if (grid) 1 else maxLineSpan) }, key = "liked") {
-                PinnedEntry("Liked Songs", "Pinned • ${songCount(likedCount)}", Icons.Rounded.Favorite, Color(0xFF4B2BD6), Color(0xFF9AB8F0), grid) {
-                    app.navigate(Routes.smart(SmartCollection.Kind.Liked))
+                PinnedEntry("All Songs", "Pinned • ${songCount(likedCount)}", Icons.AutoMirrored.Rounded.QueueMusic, Color(0xFF4B2BD6), Color(0xFF9AB8F0), grid) {
+                    app.navigate(Routes.smart(SmartCollection.Kind.AllSongs))
                 }
             }
             listOf(SmartCollection.Kind.MostPlayed, SmartCollection.Kind.RecentlyAdded, SmartCollection.Kind.Forgotten).forEach { k ->

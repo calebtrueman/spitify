@@ -26,7 +26,7 @@ import kotlin.random.Random
 /** Computed shelves: things a streaming service would compute server-side, done locally. */
 data class SmartCollection(val kind: Kind, val songs: List<Song>) {
     enum class Kind(val title: String, val subtitle: String) {
-        Liked("Liked Songs", "Everything you've hearted"),
+        AllSongs("All Songs", "Every song in your library"),
         RecentlyAdded("Recently added", "Fresh on this device"),
         MostPlayed("On repeat", "Your most played tracks"),
         RecentlyPlayed("Recently played", "Pick up where you left off"),
@@ -78,11 +78,7 @@ class LibraryRepository(
     }.stateIn(scope, SharingStarted.Eagerly, Library())
 
     /** A corrected song whose album already exists on the device joins that album instead of duplicating it. */
-    private fun mergeAlbums(songs: List<Song>): List<Song> {
-        fun key(s: Song) = (s.album + "\u0000" + s.albumArtist).lowercase()
-        val existing = songs.filter { it.albumId >= 0 }.associate { key(it) to it.albumId }
-        return songs.map { s -> if (s.albumId < 0) existing[key(s)]?.let { s.copy(albumId = it) } ?: s else s }
-    }
+    private fun mergeAlbums(songs: List<Song>): List<Song> = AlbumGrouping.merge(songs)
 
     /** Audiobook files on the device (Audiobooks folders, .m4b, IS_AUDIOBOOK), with corrections applied. */
     val localBooks: StateFlow<List<Song>> = combine(_rawBooks, metadata.overrides, metadata.artVersions) { raw, o, _ ->
@@ -95,6 +91,14 @@ class LibraryRepository(
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
+
+    private val _showRecommendations = MutableStateFlow(prefs.getBoolean("showRecommendations", true))
+    val showRecommendations: StateFlow<Boolean> = _showRecommendations.asStateFlow()
+
+    fun setShowRecommendations(show: Boolean) {
+        prefs.edit { putBoolean("showRecommendations", show) }
+        _showRecommendations.value = show
+    }
 
     private val _hideShortTracks = MutableStateFlow(prefs.getBoolean(KEY_HIDE_SHORT, true))
     val hideShortTracks: StateFlow<Boolean> = _hideShortTracks.asStateFlow()
@@ -227,7 +231,7 @@ class LibraryRepository(
         val month = 30L * 24 * 60 * 60 * 1000
         val played = lib.songs.filter { (stats[it.id]?.playCount ?: 0) > 0 }
         val kinds = mapOf(
-            SmartCollection.Kind.Liked to liked.mapNotNull { lib.songById[it] },
+            SmartCollection.Kind.AllSongs to lib.songs,
             SmartCollection.Kind.RecentlyAdded to lib.songs.sortedByDescending { it.dateAddedSec }.take(100),
             SmartCollection.Kind.MostPlayed to played.sortedByDescending { stats[it.id]!!.playCount }.take(50),
             SmartCollection.Kind.RecentlyPlayed to played.sortedByDescending { stats[it.id]!!.lastPlayed }.take(50),

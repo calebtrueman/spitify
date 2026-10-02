@@ -56,6 +56,24 @@ class MainActivity : ComponentActivity() {
 
     private val app get() = application as LocalfyApp
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        val screen = window.decorView.display ?: return
+        val mode = screen.mode
+        val power = getSystemService(android.os.PowerManager::class.java)
+        val requested = if (hasFocus && !power.isPowerSaveMode) {
+            screen.supportedModes.filter { it.physicalWidth == mode.physicalWidth && it.physicalHeight == mode.physicalHeight }
+                .maxOfOrNull { it.refreshRate } ?: 0f
+        } else 0f
+        // This is a preference. Android still controls battery and thermal limits.
+        window.attributes = window.attributes.apply { preferredRefreshRate = requested }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        app.lockScreenArt.refreshPermission()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(

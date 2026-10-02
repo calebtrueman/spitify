@@ -52,7 +52,7 @@ class AutoLibrary(private val context: Context) {
                 smart[SmartCollection.Kind.RecentlyPlayed]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.RecentlyPlayed.name}", "Recently played", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first(), grid = true)) }
                 smart[SmartCollection.Kind.MostPlayed]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.MostPlayed.name}", "On repeat", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first(), grid = true)) }
                 app.library.mixes.value.forEach { m -> add(folder("mix:${m.key}", m.title, MediaMetadata.MEDIA_TYPE_PLAYLIST, m.cover, m.description, grid = true)) }
-                smart[SmartCollection.Kind.Liked]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.Liked.name}", "Liked Songs", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first(), grid = true)) }
+                smart[SmartCollection.Kind.AllSongs]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.AllSongs.name}", "All Songs", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first(), grid = true)) }
                 smart[SmartCollection.Kind.RecentlyAdded]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.RecentlyAdded.name}", "Recently added", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first(), grid = true)) }
                 }
             }
@@ -64,7 +64,7 @@ class AutoLibrary(private val context: Context) {
                 folder(LIB_GENRES, "Genres", MediaMetadata.MEDIA_TYPE_FOLDER_GENRES),
             )
             parentId == LIB_PLAYLISTS -> buildList {
-                smart[SmartCollection.Kind.Liked]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.Liked.name}", "Liked Songs", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first())) }
+                smart[SmartCollection.Kind.AllSongs]?.songs?.takeIf { it.isNotEmpty() }?.let { add(folder("smart:${SmartCollection.Kind.AllSongs.name}", "All Songs", MediaMetadata.MEDIA_TYPE_PLAYLIST, it.first())) }
                 app.library.playlists.value.forEach { p -> add(folder("playlist:${p.id}", p.name, MediaMetadata.MEDIA_TYPE_PLAYLIST, p.songs.firstOrNull(), "${p.songs.size} songs")) }
             }
             parentId == LIB_ALBUMS -> lib.albums.map { a -> folder("album:${a.id}", a.title, MediaMetadata.MEDIA_TYPE_ALBUM, a.cover, a.artist) }
@@ -184,7 +184,7 @@ class AutoLibrary(private val context: Context) {
         awaitLibrary()
         app.podcasts.start()
         val playlists = app.library.playlists.value.map { it.name to it.songs } +
-            listOf("Liked songs" to app.library.library.value.songs.filter { it.id in app.library.likedIds.value })
+            listOf("All songs" to app.library.library.value.songs)
         val shows = app.podcasts.shows.value.filter { it.podcast.subscribedAt > 0 || it.podcast.kind == KIND_AUDIOBOOK }.map { show ->
             show.podcast.title to show.episodes.sortedWith(compareBy({ if (show.podcast.kind == KIND_AUDIOBOOK) it.position else 0 }, { -it.pubDate })).map { it.toSong(show.podcast) }
         } + (app.library.localBooks.value + app.library.localPodcasts.value).groupBy { it.album }.map { (name, songs) ->

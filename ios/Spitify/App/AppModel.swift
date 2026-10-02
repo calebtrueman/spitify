@@ -44,6 +44,7 @@ final class AppModel {
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes() } }
+    var showRecommendations = UserDefaults.standard.object(forKey: "showRecommendations") as? Bool ?? true { didSet { UserDefaults.standard.set(showRecommendations, forKey: "showRecommendations") } }
     var autoFix = UserDefaults.standard.object(forKey: "autoFix") as? Bool ?? true { didSet { UserDefaults.standard.set(autoFix, forKey: "autoFix"); if autoFix { Task { await backgroundFixes() } } } }
     var onlineArt = UserDefaults.standard.object(forKey: "onlineArt") as? Bool ?? true { didSet { UserDefaults.standard.set(onlineArt, forKey: "onlineArt"); if onlineArt { Task { await backgroundFixes() } } } }
 
@@ -87,7 +88,7 @@ final class AppModel {
             // The source may reuse a recording tagged with a different release. Keep the chosen album.
             let track = job.track
             library.saveOverride(MetadataOverride(title: track.title, artist: track.artist,
-                album: track.album.isEmpty ? nil : track.album, track: track.trackNumber > 0 ? track.trackNumber : nil,
+                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? Song.albumArtist(track.artist), track: track.trackNumber > 0 ? track.trackNumber : nil,
                 disc: track.discNumber, source: "online"), for: [song])
         }
     }

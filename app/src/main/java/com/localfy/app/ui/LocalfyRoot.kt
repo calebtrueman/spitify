@@ -23,6 +23,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -234,6 +241,7 @@ fun LocalfyRoot(activity: Activity) {
             val collapsedPx = with(density) { collapsedY.toPx() }.coerceAtLeast(1f)
             val scope = rememberCoroutineScope()
             var settleJob by remember { mutableStateOf<Job?>(null) }
+            var miniDragging by remember { mutableStateOf(false) }
             fun settle(target: Float, velocity: Float = 0f) {
                 settleJob?.cancel()
                 settleJob = scope.launch {
@@ -244,11 +252,11 @@ fun LocalfyRoot(activity: Activity) {
             val sheetScroll = remember(collapsedPx) {
                 object : NestedScrollConnection {
                     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                        if (available.y < 0 && sheet < 1f) { sheet = (sheet - available.y / collapsedPx).coerceIn(0f, 1f); return Offset(0f, available.y) }
+                        if (available.y < 0 && sheet < 1f && source == NestedScrollSource.UserInput) { settleJob?.cancel(); sheet = (sheet - available.y / collapsedPx).coerceIn(0f, 1f); return Offset(0f, available.y) }
                         return Offset.Zero
                     }
                     override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                        if (available.y > 0 && source == NestedScrollSource.UserInput) { sheet = (sheet - available.y / collapsedPx).coerceIn(0f, 1f); return Offset(0f, available.y) }
+                        if (available.y > 0 && source == NestedScrollSource.UserInput) { settleJob?.cancel(); sheet = (sheet - available.y / collapsedPx).coerceIn(0f, 1f); return Offset(0f, available.y) }
                         return Offset.Zero
                     }
                     override suspend fun onPreFling(available: Velocity): Velocity {
@@ -292,7 +300,7 @@ fun LocalfyRoot(activity: Activity) {
                     }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+                    Box(Modifier.weight(1f).fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).clipToBounds()) {
                         NavHost(
                             nav,
                             startDestination = Routes.HOME,
@@ -328,7 +336,7 @@ fun LocalfyRoot(activity: Activity) {
                             composable(Routes.FOLDER) { FolderScreen(it.arguments?.getString("path").orEmpty()) }
                         }
                         // Collection pages draw their own pinned bar; everything else gets a status-bar scrim.
-                        if (route in scrimRoutes) StatusBarScrim()
+
                     }
                     when {
                         !wide -> Spacer(Modifier.height(navTotal + if (player.hasMedia) miniHeight else 0.dp))
@@ -352,17 +360,21 @@ fun LocalfyRoot(activity: Activity) {
                     ) {
                         if (sheet > 0.001f) {
                             Box(Modifier.fillMaxSize().graphicsLayer { alpha = ((sheet - 0.05f) / 0.45f).coerceIn(0f, 1f) }) {
-                                DarkSurface { NowPlayingFull(onCollapse = { playerExpanded = false }, nestedScroll = sheetScroll) }
+                                DarkSurface { NowPlayingFull(onCollapse = { playerExpanded = false; settle(0f) }, nestedScroll = sheetScroll) }
                             }
                         }
-                        if (sheet < 0.3f) {
+                        // Keep the drag target alive until release. Removing it at 30% cancelled
+                        // the gesture before onDragStopped could finish opening the player.
+                        if (sheet < 0.3f || miniDragging) {
                             Box(
                                 Modifier
                                     .graphicsLayer { alpha = (1f - sheet * 4f).coerceIn(0f, 1f) }
                                     .draggable(
                                         orientation = Orientation.Vertical,
                                         state = rememberDraggableState { d -> settleJob?.cancel(); sheet = (sheet - d / collapsedPx).coerceIn(0f, 1f) },
+                                        onDragStarted = { miniDragging = true; settleJob?.cancel() },
                                         onDragStopped = { v ->
+                                            miniDragging = false
                                             val expand = v < -800f || (v <= 800f && sheet > 0.25f)
                                             playerExpanded = expand
                                             settle(if (expand) 1f else 0f, -v / collapsedPx)

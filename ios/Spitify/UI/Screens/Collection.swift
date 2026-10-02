@@ -176,12 +176,11 @@ struct SmartView: View {
     var body: some View {
         let lib = app.library
         let songs: [Song] = switch kind {
-        case .liked: lib.likedSongs
+        case .allSongs: lib.library.songs
         case .recentlyAdded: lib.recentlyAdded
         case .recentlyPlayed: lib.recentlyPlayed
         case .mostPlayed: { let c = lib.playCounts; return lib.library.songs.filter { (c[$0.id] ?? 0) > 0 }.sorted { (c[$0.id] ?? 0) > (c[$1.id] ?? 0) }.prefix(50).map { $0 } }()
         }
-        CollectionView(title: kind.rawValue, kind: "Smart playlist", subtitle: kind == .liked ? "Everything you've hearted" : "Updated as you listen", art: songs.first, songs: songs,
-                       removeLabel: kind == .liked ? "Remove from Liked Songs" : nil, onRemove: kind == .liked ? { lib.toggleLike(songs[$0].id) } : nil)
+        CollectionView(title: kind.rawValue, kind: kind == .allSongs ? "Library" : "Smart playlist", subtitle: kind == .allSongs ? "Every song in your library" : "Updated as you listen", art: songs.first, songs: songs)
     }
 }
