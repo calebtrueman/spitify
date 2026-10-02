@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct SpitifyApp: App {
+    @UIApplicationDelegateAdaptor(MusicBackgroundAppDelegate.self) private var downloadDelegate
     @State private var app = AppModel()
     @State private var router = Router()
     @Environment(\.colorScheme) private var scheme

@@ -25,6 +25,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
+        musicDownloads.start()
     }
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -45,6 +46,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val profiles by lazy { com.localfy.app.data.taste.ProfileRepository(this, appScope) }
     val taste by lazy { com.localfy.app.data.taste.TasteRepository(this, database, appScope, library, profiles).also { it.start() } }
     val podcasts by lazy { PodcastRepository(this, database, appScope) }
+    val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 
     /** Resolves any queue id: MediaStore songs, local podcast files, or podcast episodes (negative ids). */
     fun resolve(id: Long): com.localfy.app.data.Song? =

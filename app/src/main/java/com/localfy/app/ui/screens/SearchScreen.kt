@@ -79,6 +79,7 @@ fun SearchScreen() {
     val playlists by app.repo.playlists.collectAsStateWithLifecycle()
     val player = rememberPlayerState()
     var query by rememberSaveable { mutableStateOf("") }
+    var online by rememberSaveable { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val index = remember(library) { SearchIndex(library) }
     val words = query.fold().split(' ').filter { it.isNotBlank() }
@@ -119,7 +120,16 @@ fun SearchScreen() {
             }
         }
 
-        if (words.isEmpty()) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 16.dp)) {
+                androidx.compose.material3.FilterChip(selected = !online, onClick = { online = false }, label = { Text("On device") })
+                Spacer(Modifier.width(8.dp))
+                androidx.compose.material3.FilterChip(selected = online, onClick = { online = true }, label = { Text("Online") })
+            }
+        }
+        if (online) {
+            item(span = { GridItemSpan(maxLineSpan) }) { OnlineMusicPanel(query) }
+        } else if (words.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "browse") {
                 Text("Browse your genres", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
