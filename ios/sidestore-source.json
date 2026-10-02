@@ -32,10 +32,10 @@
         {
           "version": "1.0.9",
           "buildVersion": "10",
-          "date": "2026-10-02T08:20:24Z",
-          "localizedDescription": "Combined music search, All Songs, player gesture fixes, and lock-screen artwork controls. See the release notes for setup and limits.",
+          "date": "2026-10-02T08:28:31Z",
+          "localizedDescription": "Spitify 1.0.9 brings the combined music search and the latest player fixes to Android and iPhone.\n\n- Search local and online songs together, ranked by the same match rules. Switch between Songs and Albums. Explicitly unavailable songs stay out of search results.\n- All Songs replaces Liked Songs. Use the library and playlists to keep music.\n- Hide or restore recommendations in Settings. Open Settings from the Home menu; find listening stats in Profile.\n- Keep guest tracks together in their album without losing the individual artist credits.\n- Turn the vinyl record to move within the current song. Fix the Android swipe that could leave the player half open.\n- Keep the player's background continuous through the status bar, give top controls room, and request higher refresh rates on supported screens.\n- Make album downloads an icon with clear feedback. Improve cover-image retries and save the checked cover from the preview.\n- Add on-device alternate-audio attempts when a primary download fails. Matching AAC audio stays labelled AAC; blocked or unavailable recordings still fail honestly.\n- Add lock-screen artwork controls. A short pause keeps the art. Stop, close, or 10 minutes idle ends it where the OS lets the app run.\n\n**Lock-screen setup and limits:** Android needs Settings \u2192 Allow wallpaper backup \u2192 All files access to save and restore a still wallpaper. Live wallpapers stay unchanged. A forced process kill may defer restoration until the next launch. iOS 26+ gets a local",
           "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.9/Spitify-1.0.9-unsigned.ipa",
-          "size": 2426138,
+          "size": 2426126,
           "minOSVersion": "17.0"
         },
         {
