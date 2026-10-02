@@ -4,6 +4,7 @@ struct SongRow: View {
     var song: Song
     var trackNumber: Int? = nil
     var subtitle: String? = nil
+    var downloaded = false
     var onTap: () -> Void
     var removeLabel: String? = nil
     var onRemove: (() -> Void)? = nil
@@ -31,6 +32,7 @@ struct SongRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(1)
                     HStack(spacing: 4) {
+                        if downloaded { Image(systemName: "arrow.down.circle.fill").font(.system(size: 12)).foregroundStyle(.green).accessibilityLabel("Downloaded") }
                         Text(song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))").text(.bodyS).foregroundStyle(p.secondary).lineLimit(1)
                     }
                 }

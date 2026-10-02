@@ -20,6 +20,8 @@ object Routes {
     const val APPEARANCE = "appearance"
     const val EQUALIZER = "equalizer"
     const val ALBUM = "album/{id}"
+    const val CATALOG_ALBUM = "catalogalbum/{album}"
+    const val CATALOG_SONG = "catalogsong/{track}"
     const val ARTIST = "artist/{name}"
     const val PLAYLIST = "playlist/{id}"
     const val SMART = "smart/{kind}"
@@ -35,6 +37,10 @@ object Routes {
     const val LOCAL_BOOK = "localbook/{album}"
 
     fun album(id: Long) = "album/$id"
+    fun catalogAlbum(album: com.localfy.app.data.music.OnlineAlbum) = "catalogalbum/" + Uri.encode(org.json.JSONObject().apply {
+        put("id", album.id); put("title", album.title); put("artist", album.artist); put("artwork", album.artwork)
+    }.toString())
+    fun catalogSong(track: com.localfy.app.data.music.OnlineTrack) = "catalogsong/" + Uri.encode(track.json())
     fun artist(name: String) = "artist/${Uri.encode(name)}"
     fun playlist(id: Long) = "playlist/$id"
     fun smart(kind: SmartCollection.Kind) = "smart/${kind.name}"

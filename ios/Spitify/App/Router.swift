@@ -5,6 +5,7 @@ enum Route: Hashable {
     case album(String), artist(String), playlist(String), mix(String), smart(SmartKind), genre(String), folder(String)
     case show(String), book(String), localBook(String)
     case settings, appearance, equalizer, profile, stats
+    case catalogAlbum(OnlineAlbum), catalogSong(OnlineTrack)
 }
 
 enum SmartKind: String, Hashable, CaseIterable {

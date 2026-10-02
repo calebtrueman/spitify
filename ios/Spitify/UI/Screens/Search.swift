@@ -13,8 +13,8 @@ struct SearchView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if words.isEmpty {
+                    if !lib.albums.isEmpty { SectionHeader(title: "Your albums"); browse(lib.albums.map { ($0.title, $0.songs, Route.album($0.id)) }) }
                     if !lib.genres.isEmpty { SectionHeader(title: "Browse your genres") ; browse(lib.genres.map { ($0.name, $0.songs, Route.genre($0.name)) }) }
-                    if lib.folders.count > 1 { SectionHeader(title: "Browse folders"); browse(lib.folders.map { ($0.name, $0.songs, Route.folder($0.path)) }) }
                 } else {
                     OnlineMusicView(query: query)
                 }
@@ -27,7 +27,7 @@ struct SearchView: View {
 
     private func browse(_ items: [(String, [Song], Route)]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-            ForEach(items, id: \.0) { name, songs, route in
+            ForEach(items, id: \.2) { name, songs, route in
                 Button { router.go(route) } label: {
                     ZStack(alignment: .topLeading) {
                         fallbackColor(name)

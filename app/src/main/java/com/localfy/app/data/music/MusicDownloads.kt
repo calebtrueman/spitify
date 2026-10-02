@@ -18,11 +18,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
+private class InvalidDownloadedAudio(cause: Exception) : Exception(cause.message, cause)
+
 /** DownloadManager owns transfers; Room owns the queue; a worker publishes checked music files. */
-class MusicDownloads(private val context: Context, private val db: LocalfyDatabase, private val scope: CoroutineScope) {
+class MusicDownloads(private val context: Context, private val db: LocalfyDatabase, private val scope: CoroutineScope,
+    private val alternate: suspend (OnlineTrack) -> OnlineTrack? = AudioFallback::resolve,
+    private val downloadURL: (OnlineTrack) -> String = { track -> track.audioURL?.takeIf(AudioFallback::validAudioURL) ?: Monochrome.audioUrl(track.id) }) {
     private val dao = db.musicDownloads()
     private val manager = context.getSystemService(DownloadManager::class.java)
     private val mutex = Mutex()
+    private val lookups = mutableMapOf<String, String>()
     private var started = false
     private val prefs = context.getSharedPreferences("music_downloads", Context.MODE_PRIVATE)
     val jobs = dao.observe().stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -39,6 +44,19 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
         if (started) return
         started = true
         scope.launch(Dispatchers.IO) {
+            mutex.withLock {
+                for (job in dao.all().filter { it.state == "finding" }) {
+                    dao.put(job.copy(state = "queued", downloadId = null, error = null))
+                }
+                if (!prefs.getBoolean("recoveredDownloads110", false)) {
+                    for (job in dao.all().filter { it.state == "failed" && it.error == "Could not download this song. Please try again later." }) {
+                        removePending(job.localUri)
+                        dao.put(job.copy(state = "queued", downloadId = null, localUri = null, error = null,
+                            trackJson = job.track().copy(fallbackTried = false, retryCount = 0, retryAtMillis = 0).json()))
+                    }
+                    prefs.edit().putBoolean("recoveredDownloads110", true).apply()
+                }
+            }
             while (isActive) {
                 try { reconcile() } catch (e: Exception) { if (e is CancellationException) throw e; _message.value = e.message ?: "Could not update downloads." }
                 if (dao.all().any { it.active }) delay(1_000)
@@ -51,10 +69,11 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
         var added = 0; var saved = 0; var active = 0
         mutex.withLock {
             for (requested in tracks.filter { Monochrome.validId(it.id) }) {
-                val track = if (requested.playable) requested.copy(audioURL = null, audioExtension = "flac", fallbackTried = false) else runCatching { AudioFallback.resolve(requested) }.getOrNull() ?: continue
+                val track = requested.copy(audioURL = null, audioExtension = "flac", fallbackTried = false, attemptedSources = emptyList(), retryCount = 0, retryAtMillis = 0)
                 val old = dao.get(track.id)
                 if (old?.active == true) { active++; continue }
                 if (old?.state == "complete" && exists(old.localUri)) { saved++; continue }
+                lookups.remove(track.id)
                 dao.put(MusicDownloadEntity(track.id, track.json(), wifiOnly = _wifiOnly.value)); added++
             }
         }
@@ -63,14 +82,16 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
             added > 0 -> "$added ${if (added == 1) "song" else "songs"} queued." + if (_wifiOnly.value) " Downloads use Wi-Fi." else ""
             active > 0 -> "Already in your download queue."
             saved > 0 -> "Already saved in your library."
-            else -> "No available songs to download."
+            else -> "This album did not return any songs. Please reload it and try again."
         }
     }
 
     fun cancel(id: String) = scope.launch(Dispatchers.IO) {
         mutex.withLock {
             val job = dao.get(id)?.takeIf { it.active } ?: return@withLock
+            lookups.remove(id)
             job.downloadId?.let { manager.remove(it) }
+            WorkManager.getInstance(context).cancelUniqueWork("music-retry-$id")
             removePending(job.localUri)
             dao.put(job.copy(state = "cancelled", downloadId = null, localUri = null, error = null))
         }
@@ -99,6 +120,10 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                     dao.put(job.copy(state = "failed", localUri = null, error = "The downloaded file was moved or deleted."))
                     continue
                 }
+                if (job.state == "waiting") {
+                    if (job.track().retryAtMillis <= System.currentTimeMillis()) dao.put(job.copy(state = "queued", error = null))
+                    continue
+                }
                 if (!job.active || job.downloadId == null) continue
                 // If the process died after publishing, finish the saved job without another copy.
                 if (job.localUri != null && exists(job.localUri) && !pending(Uri.parse(job.localUri))) {
@@ -121,18 +146,23 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                             catch (e: Exception) {
                                 if (e is CancellationException) throw e
                                 removePending(dao.get(job.id)?.localUri)
-                                dao.put(job.copy(state = "failed", localUri = null, error = e.message ?: "The audio could not be added."))
+                                if (e is InvalidDownloadedAudio) failedTransfer(job.copy(localUri = null), DownloadManager.ERROR_HTTP_DATA_ERROR)
+                                else dao.put(job.copy(state = "failed", localUri = null, error = e.message ?: "The audio could not be added."))
                             }
                             manager.remove(job.downloadId)
                         }
                         DownloadManager.STATUS_FAILED -> {
                             val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                            val fallback = if (reason !in listOf(DownloadManager.ERROR_FILE_ERROR, DownloadManager.ERROR_INSUFFICIENT_SPACE, DownloadManager.ERROR_DEVICE_NOT_FOUND) && !job.track().fallbackTried) {
-                                runCatching { AudioFallback.resolve(job.track()) }.getOrNull()
-                            } else null
-                            if (fallback != null) dao.put(job.copy(trackJson = fallback.json(), state = "queued", downloadId = null, error = null))
-                            else dao.put(job.copy(state = "failed", error = "Could not download this song. Please try again later."))
+                            failedTransfer(job, reason)
                             manager.remove(job.downloadId)
+                        }
+                        DownloadManager.STATUS_PAUSED -> {
+                            val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            if (reason == DownloadManager.PAUSED_WAITING_TO_RETRY) {
+                                // Use the same short retries and source handoff as a finished failure.
+                                failedTransfer(job, DownloadManager.ERROR_HTTP_DATA_ERROR)
+                                manager.remove(job.downloadId)
+                            } else progress[job.id] = if (total > 0) done.toFloat() / total else 0f
                         }
                         else -> progress[job.id] = if (total > 0) done.toFloat() / total else 0f
                     }
@@ -155,7 +185,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                     val track = job.track()
                     val id = existing ?: run {
                         temp(job.id).delete()
-                        manager.enqueue(DownloadManager.Request(Uri.parse(track.audioURL?.takeIf(AudioFallback::validAudioURL) ?: Monochrome.audioUrl(job.id)))
+                        manager.enqueue(DownloadManager.Request(Uri.parse(downloadURL(track)))
                             .setTitle(track.title).setDescription("Spitify music:${job.id}")
                             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
                             .setAllowedOverMetered(!job.wifiOnly).setAllowedOverRoaming(false)
@@ -172,18 +202,61 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
         }
     }
 
+    private suspend fun failedTransfer(job: MusicDownloadEntity, reason: Int) {
+        val temporary = DownloadRetry.isTemporary(reason)
+        val track = job.track()
+        if (temporary && (track.retryCount < 3 || track.fallbackTried)) {
+            waitToRetry(job, "Download response $reason")
+        } else {
+            if (reason !in listOf(DownloadManager.ERROR_FILE_ERROR, DownloadManager.ERROR_INSUFFICIENT_SPACE, DownloadManager.ERROR_DEVICE_NOT_FOUND) && !track.fallbackTried) {
+                val token = java.util.UUID.randomUUID().toString()
+                lookups[job.id] = token
+                dao.put(job.copy(state = "finding", downloadId = null, error = null))
+                // A catalogue request must not hold up Cancel or other songs in the queue.
+                scope.launch(Dispatchers.IO) {
+                    val fallback = try { alternate(track) }
+                        catch (e: Exception) { if (e is CancellationException) throw e; null }
+                    mutex.withLock {
+                        if (lookups[job.id] != token || dao.get(job.id)?.state != "finding") return@withLock
+                        lookups.remove(job.id)
+                        if (fallback != null) dao.put(job.copy(trackJson = fallback.copy(retryCount = 0, retryAtMillis = 0).json(), state = "queued", downloadId = null, error = null))
+                        else if (temporary) waitToRetry(job.copy(trackJson = track.copy(fallbackTried = true).json()), "Download response $reason")
+                        else dao.put(job.copy(state = "failed", downloadId = null, error = "This song is not available to download right now."))
+                    }
+                    schedule(context)
+                }
+            } else if (temporary) waitToRetry(job, "Download response $reason")
+            else dao.put(job.copy(state = "failed", downloadId = null, error = if (reason == DownloadManager.ERROR_INSUFFICIENT_SPACE) "Free some storage, then retry this song." else "This song is not available to download right now."))
+        }
+    }
+
+    private suspend fun waitToRetry(job: MusicDownloadEntity, reason: String) {
+        android.util.Log.w("MusicDownloads", "Retrying ${job.id}: $reason")
+        val track = job.track()
+        val count = track.retryCount + 1
+        val delay = DownloadRetry.delayMillis(count)
+        dao.put(job.copy(state = "waiting", downloadId = null, error = "Waiting to retry automatically.",
+            trackJson = track.copy(retryCount = count, retryAtMillis = System.currentTimeMillis() + delay).json()))
+        scheduleRetry(context, job.id, delay)
+    }
+
     private suspend fun publish(job: MusicDownloadEntity, expectedSize: Long) {
         val track = job.track()
         val file = temp(job.id)
+        val quality = try {
         check(expectedSize <= 0 || file.length() == expectedSize) { "The audio download is incomplete." }
-        val quality = if (track.audioExtension == "flac") FlacInfo.read(file, track.durationMs).label else {
+        if (track.audioExtension == "flac") FlacInfo.read(file, track.durationMs).label else {
             val reader = android.media.MediaMetadataRetriever()
             try {
                 reader.setDataSource(file.path)
                 val length = reader.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0
                 check(length > 0 && reader.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes" && kotlin.math.abs(length - track.durationMs) <= 5_000) { "The downloaded audio does not match this song." }
-                "AAC"
+                if (track.audioExtension == "mp3") "MP3" else "M4A"
             } finally { reader.release() }
+        }
+        } catch (e: Exception) {
+            android.util.Log.w("MusicDownloads", "Audio check failed for ${job.id}", e)
+            throw InvalidDownloadedAudio(e)
         }
         val tagged = File.createTempFile("tagged-", ".${track.audioExtension}", context.cacheDir)
         try {
@@ -202,7 +275,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
             val resolver = context.contentResolver
             val values = ContentValues().apply {
                 put(MediaStore.Audio.Media.DISPLAY_NAME, "${job.id}.${track.audioExtension}")
-                put(MediaStore.Audio.Media.MIME_TYPE, if (track.audioExtension == "m4a") "audio/mp4" else "audio/flac")
+                put(MediaStore.Audio.Media.MIME_TYPE, when (track.audioExtension) { "m4a" -> "audio/mp4"; "mp3" -> "audio/mpeg"; else -> "audio/flac" })
                 put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Spitify/Monochrome/${track.releaseId.takeIf(Monochrome::validId) ?: "Singles"}/")
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
                 put(MediaStore.Audio.Media.IS_MUSIC, 1)
@@ -227,6 +300,10 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     }
 
     companion object {
+        private fun scheduleRetry(context: Context, id: String, delayMillis: Long) {
+            WorkManager.getInstance(context).enqueueUniqueWork("music-retry-$id", ExistingWorkPolicy.APPEND_OR_REPLACE,
+                OneTimeWorkRequestBuilder<MusicImportWorker>().setInitialDelay(delayMillis, java.util.concurrent.TimeUnit.MILLISECONDS).build())
+        }
         fun schedule(context: Context) {
             WorkManager.getInstance(context).enqueueUniqueWork("music-imports", ExistingWorkPolicy.APPEND_OR_REPLACE,
                 OneTimeWorkRequestBuilder<MusicImportWorker>().build())

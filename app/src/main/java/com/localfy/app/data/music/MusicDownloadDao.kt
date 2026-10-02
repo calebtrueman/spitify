@@ -17,7 +17,7 @@ data class MusicDownloadEntity(
 )
 
 fun MusicDownloadEntity.track(): OnlineTrack = requireNotNull(Monochrome.parseTrack(org.json.JSONObject(trackJson)))
-val MusicDownloadEntity.active: Boolean get() = state in listOf("queued", "downloading", "checking")
+val MusicDownloadEntity.active: Boolean get() = state in listOf("queued", "waiting", "finding", "downloading", "checking")
 
 @Dao
 interface MusicDownloadDao {

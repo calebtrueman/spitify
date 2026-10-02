@@ -120,22 +120,22 @@ fun SearchScreen() {
         }
 
         if (words.isEmpty()) {
+            if (library.albums.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "albums") {
+                    Text("Your albums", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+                items(library.albums, key = { "album-${it.id}" }) { album ->
+                    BrowseTile(album.title, album.songs.size, album.cover.artKey, fallbackColor(album.id)) {
+                        app.navigate(Routes.album(album.id))
+                    }
+                }
+            }
             item(span = { GridItemSpan(maxLineSpan) }, key = "browse") {
                 Text("Browse your genres", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
             items(library.genres, key = { "g-${it.name}" }) { g ->
                 BrowseTile(g.name, g.songs.size, g.songs.first().artKey, fallbackColor(g.name.hashCode().toLong())) {
                     app.navigate(Routes.genre(g.name))
-                }
-            }
-            if (library.folders.size > 1) {
-                item(span = { GridItemSpan(maxLineSpan) }, key = "folders") {
-                    Text("Browse folders", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                }
-                items(library.folders, key = { "f-${it.path}" }) { f ->
-                    BrowseTile(f.name, f.songs.size, f.songs.first().artKey, fallbackColor(f.path.hashCode().toLong() + 3)) {
-                        app.navigate(Routes.folder(f.path))
-                    }
                 }
             }
             return@LazyVerticalGrid

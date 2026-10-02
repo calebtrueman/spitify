@@ -11,16 +11,59 @@ enum AudioFallback {
         let wanted = clean(track.title), found = clean(title)
         let artist = clean(track.artist.components(separatedBy: CharacterSet(charactersIn: ";,")).first ?? track.artist)
         let words = Set(found.split(separator: " ").map(String.init)), wantedWords = Set(wanted.split(separator: " ").map(String.init))
-        let changed: Set<String> = ["live", "cover", "remix", "slowed", "sped", "nightcore", "instrumental", "karaoke", "432hz", "528hz", "clean"]
+        let changed: Set<String> = ["live", "cover", "remix", "mix", "slowed", "sped", "nightcore", "instrumental", "karaoke", "432hz", "528hz", "clean"]
         guard changed.intersection(words).subtracting(wantedWords).isEmpty else { return false }
         return !artist.isEmpty && (clean(author).contains(artist) || found.contains(artist)) && wantedWords.isSubset(of: words)
     }
     static func validAudioURL(_ value: String) -> Bool {
         guard let url = URL(string: value) else { return false }
-        return url.scheme == "https" && url.host?.hasSuffix(".googlevideo.com") == true && url.user == nil
+        guard url.scheme == "https", url.user == nil, url.password == nil else { return false }
+        if url.host == MonochromeClient.baseURL.host {
+            let parts = url.path.split(separator: "/")
+            return parts.count == 2 && parts[0] == "track" && MonochromeClient.id(String(parts[1])) != nil && url.query == nil
+        }
+        if ArchiveAudio.validURL(value) { return true }
+        return url.host?.hasSuffix(".googlevideo.com") == true
     }
     static func resolve(_ track: OnlineTrack) async throws -> OnlineTrack? {
-        let search = try await request("search", ["query": "\(track.artist) \(track.title) official audio"])
+        if let copy = try? await monochromeCopy(track) { return copy }
+        try Task.checkCancellation()
+        if let copy = try? await ArchiveAudio.shared.resolve(track) { return copy }
+        try Task.checkCancellation()
+        return try await youtubeCopy(track)
+    }
+
+    static func sameRelease(_ a: String, _ b: String) -> Bool {
+        func name(_ text: String) -> String {
+            SearchMatch.fold(text.replacingOccurrences(of: "(?i)\\s*\\((bonus track version|deluxe( edition)?|special version)\\)", with: "", options: .regularExpression))
+        }
+        return !name(a).isEmpty && name(a) == name(b)
+    }
+
+    static func monochromeCopy(_ track: OnlineTrack,
+        search: (String) async throws -> [OnlineTrack] = { try await MonochromeClient().search($0) },
+        album: (String) async throws -> [OnlineTrack] = { try await MonochromeClient().albumTracks($0) }) async throws -> OnlineTrack? {
+        let tried = Set(((track.attemptedSources ?? []) + [track.id]).filter { MonochromeClient.id($0) != nil })
+        guard tried.count < 4 else { return nil }
+        let choices = try await search("\(track.artist) \(track.title)")
+        for choice in choices.filter({ !tried.contains($0.id) && $0.playable &&
+            SearchMatch.fold($0.title) == SearchMatch.fold(track.title) &&
+            SearchMatch.fold($0.artist) == SearchMatch.fold(track.artist) &&
+            track.durationMs > 0 && abs($0.durationMs - track.durationMs) <= 3000 }).prefix(5) {
+            try Task.checkCancellation()
+            guard let release = try? await album(choice.releaseID),
+                let match = release.first(where: { $0.id == choice.id }), sameRelease(track.album, match.album) else { continue }
+            var result = track
+            result.audioURL = try MonochromeClient.audioURL(match.id).absoluteString
+            result.audioExtension = "flac"; result.fallbackTried = false
+            result.attemptedSources = Array(Set((track.attemptedSources ?? []) + [track.id, match.id])).sorted()
+            return result
+        }
+        return nil
+    }
+
+    private static func youtubeCopy(_ track: OnlineTrack) async throws -> OnlineTrack? {
+        let search = try await request("search", ["query": "\(track.artist) \(track.title) \(track.album) official audio"])
         var candidates: [[String: Any]] = []
         func visit(_ value: Any) {
             if let object = value as? [String: Any] {

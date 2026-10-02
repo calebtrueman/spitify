@@ -10,6 +10,7 @@ struct SettingsView: View {
         @Bindable var lib = app.library
         @Bindable var lyrics = app.lyrics
         @Bindable var player = app.player
+        @Bindable var downloads = app.musicDownloads
         Form {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
@@ -20,6 +21,7 @@ struct SettingsView: View {
                 Toggle("Show recommendations", isOn: $app.showRecommendations)
             } header: { Text("Home") } footer: { Text("Show suggested mixes, artist radio, throwbacks and top artists. Turn this off for a simpler Home screen. You can turn it back on anytime.") }
             Section("Playback") { PlaybackSettings().padding(.vertical, 6) }
+            Section("Downloads") { Toggle("Download over Wi-Fi only", isOn: $downloads.wifiOnly) }
             Section {
                 Toggle("Full-screen lock-screen art", isOn: $player.lockScreenArt)
             } header: { Text("Lock screen") } footer: { Text("Show portrait album art on iOS 26 and later, including while paused. Tap the lock-screen artwork to expand it. Stopping or 10 minutes paused removes the artwork while Spitify is running; your wallpaper is never replaced.") }
@@ -289,6 +291,8 @@ struct ProfileView: View {
             }.padding(.bottom, 30)
         }
         .background(LinearGradient(colors: [p.accent.mix(.black, 0.4), p.background], startPoint: .top, endPoint: .center).ignoresSafeArea())
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: photo) { _, item in Task { if let d = try? await item?.loadTransferable(type: Data.self) { saveProfilePhoto(d, app) } } }
         .alert("Your name", isPresented: $renaming) { TextField("Name", text: $name); Button("Save") { app.profile.name = name.trimmingCharacters(in: .whitespaces) }; Button("Cancel", role: .cancel) {} }
     }

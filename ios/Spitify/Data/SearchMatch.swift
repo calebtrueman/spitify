@@ -11,6 +11,8 @@ enum SearchMatch {
         let words = q.split(separator: " ").map(String.init)
         guard words.allSatisfy({ "\(t) \(a) \(b)".contains($0) }) else { return nil }
         if t == q { return 1000 }
+        let named = (t + " " + a).split(separator: " ").filter { $0 != "the" }.sorted()
+        if named == q.split(separator: " ").filter({ $0 != "the" }).sorted() { return 950 }
         if "\(t) \(a)" == q || "\(a) \(t)" == q { return 950 }
         if t.hasPrefix(q) { return 850 }
         if t.contains(q) { return 750 }

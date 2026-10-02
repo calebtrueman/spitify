@@ -1,7 +1,7 @@
 import Foundation
 
 /// Monochrome's public Tracks API. Keep its wire format out of the library/player.
-struct OnlineTrack: Codable, Identifiable, Equatable {
+struct OnlineTrack: Codable, Identifiable, Hashable {
     let id: String
     var title: String
     var artist: String
@@ -16,9 +16,10 @@ struct OnlineTrack: Codable, Identifiable, Equatable {
     var audioURL: String? = nil
     var audioExtension: String? = nil
     var fallbackTried: Bool? = nil
+    var attemptedSources: [String]? = nil
 }
 
-struct OnlineAlbum: Identifiable {
+struct OnlineAlbum: Identifiable, Hashable {
     let id: String
     let title: String
     let artist: String
@@ -27,7 +28,13 @@ struct OnlineAlbum: Identifiable {
 
 enum MusicSourceError: LocalizedError {
     case message(String)
-    var errorDescription: String? { if case .message(let text) = self { return text }; return nil }
+    case http(Int)
+    var errorDescription: String? {
+        switch self {
+        case .message(let text): return text
+        case .http(let code): return "The music server returned an error (\(code))."
+        }
+    }
 }
 
 struct MonochromeClient {
@@ -46,25 +53,26 @@ struct MonochromeClient {
         if let query { parts.queryItems = [URLQueryItem(name: "q", value: query), URLQueryItem(name: "limit", value: "30")] }
         var request = URLRequest(url: parts.url!, timeoutInterval: 25)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: request)
-        try Self.check(response)
-        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw MusicSourceError.message("Online search returned an unexpected response.")
+        for attempt in 0...2 {
+            do {
+                let (data, response) = try await session.data(for: request)
+                try Self.check(response)
+                guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw MusicSourceError.message("Online search returned an unexpected response.")
+                }
+                return object
+            } catch {
+                guard attempt < 2, DownloadRetry.isTemporary(error) else { throw error }
+                try await Task.sleep(for: .seconds(attempt + 1))
+            }
         }
-        return object
+        throw MusicSourceError.message("Search is unavailable right now.")
     }
 
     static func check(_ response: URLResponse) throws {
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard code == 200 else {
-            let text: String
-            switch code {
-            case 401, 403, 428: text = "Online search is temporarily unavailable. Please try again later."
-            case 404: text = "This song is no longer available."
-            case 429: text = "Online search is busy. Wait a little before retrying."
-            default: text = "Online search could not complete the request (\(code))."
-            }
-            throw MusicSourceError.message(text)
+            throw MusicSourceError.http(code)
         }
     }
 

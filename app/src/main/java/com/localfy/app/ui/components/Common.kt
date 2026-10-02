@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
@@ -104,6 +105,7 @@ fun SongRow(
     trackNumber: Int? = null,
     subtitle: String = "${song.artist} • ${song.album}",
     onMore: (() -> Unit)? = null,
+    downloaded: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     val app = LocalApp.current
@@ -171,6 +173,10 @@ fun SongRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (downloaded) {
+                    Icon(Icons.Rounded.DownloadForOffline, "Downloaded", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(4.dp))
+                }
                 Text(
                     if (song.playable) subtitle else "Unsupported format (.${song.fileName.substringAfterLast('.')})",
                     style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,

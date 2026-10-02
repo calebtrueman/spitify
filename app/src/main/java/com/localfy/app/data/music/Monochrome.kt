@@ -13,12 +13,12 @@ data class OnlineTrack(
     val id: String, val title: String, val artist: String, val album: String,
     val releaseId: String, val durationMs: Long, val track: Int, val disc: Int,
     val artwork: String?, val playable: Boolean, val albumArtist: String? = null,
-    val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false,
+    val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false, val attemptedSources: List<String> = emptyList(), val retryCount: Int = 0, val retryAtMillis: Long = 0,
 ) {
     fun json(): String = JSONObject().apply {
         put("trackId", id); put("title", title); put("artistNames", org.json.JSONArray(listOf(artist)))
         put("albumTitle", album); put("releaseId", releaseId); put("duration", durationMs)
-        put("audioURL", audioURL); put("audioExtension", audioExtension); put("fallbackTried", fallbackTried); put("albumArtist", albumArtist); put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
+        put("retryCount", retryCount); put("retryAtMillis", retryAtMillis); put("attemptedSources", org.json.JSONArray(attemptedSources)); put("audioURL", audioURL); put("audioExtension", audioExtension); put("fallbackTried", fallbackTried); put("albumArtist", albumArtist); put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
     }.toString()
 }
 
@@ -84,7 +84,8 @@ object Monochrome {
             item.optString("albumArtist").takeIf { it.isNotBlank() && it != "null" }
                 ?: album?.let { artist(it) }?.takeIf { it != "Unknown artist" },
             item.optString("audioURL").takeIf { AudioFallback.validAudioURL(it) },
-            item.optString("audioExtension").takeIf { it == "m4a" } ?: "flac", item.optBoolean("fallbackTried", false))
+            item.optString("audioExtension").takeIf { it in listOf("m4a", "mp3") } ?: "flac", item.optBoolean("fallbackTried", false),
+            item.optJSONArray("attemptedSources")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), item.optInt("retryCount", 0), item.optLong("retryAtMillis", 0))
     }
 
     private fun artist(item: JSONObject): String {

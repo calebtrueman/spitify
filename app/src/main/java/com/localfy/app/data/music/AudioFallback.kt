@@ -15,17 +15,50 @@ object AudioFallback {
         fun clean(value: String) = SearchMatch.fold(value).replace(Regex("\\b(feat|ft|featuring)\\b"), " ").replace(Regex("\\s+"), " ").trim()
         val wanted = clean(track.title); val found = clean(title)
         val artist = clean(track.artist.split(';', ',').first())
-        val changed = listOf("live", "cover", "remix", "slowed", "sped", "nightcore", "instrumental", "karaoke", "432hz", "528hz", "clean")
+        val changed = listOf("live", "cover", "remix", "mix", "slowed", "sped", "nightcore", "instrumental", "karaoke", "432hz", "528hz", "clean")
         if (changed.any { found.split(' ').contains(it) && !wanted.split(' ').contains(it) }) return false
         return artist.isNotBlank() && (clean(author).contains(artist) || found.contains(artist)) && wanted.split(' ').all { found.split(' ').contains(it) }
     }
     fun validAudioURL(value: String): Boolean = runCatching {
         val u = URI(value)
-        u.scheme == "https" && u.host?.endsWith(".googlevideo.com") == true && u.userInfo == null
+        u.scheme == "https" && u.userInfo == null && (u.host?.endsWith(".googlevideo.com") == true ||
+            (u.host == "tracks.monochrome.st" && Regex("/track/[0-9]+").matches(u.path) && u.query == null) || ArchiveAudio.validURL(value))
     }.getOrDefault(false)
 
     suspend fun resolve(track: OnlineTrack): OnlineTrack? = withContext(Dispatchers.IO) {
-        val search = request("search", JSONObject().put("query", "${track.artist} ${track.title} official audio"))
+        try { monochromeCopy(track)?.let { return@withContext it } }
+        catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e }
+        try { ArchiveAudio.resolve(track)?.let { return@withContext it } }
+        catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e }
+        youtubeCopy(track)
+    }
+
+    fun sameRelease(a: String, b: String): Boolean {
+        fun name(text: String) = SearchMatch.fold(text.replace(Regex("\\s*\\((bonus track version|deluxe( edition)?|special version)\\)", RegexOption.IGNORE_CASE), ""))
+        return name(a).isNotEmpty() && name(a) == name(b)
+    }
+
+    suspend fun monochromeCopy(track: OnlineTrack,
+        search: suspend (String) -> List<OnlineTrack> = Monochrome::search,
+        album: suspend (String) -> List<OnlineTrack> = Monochrome::album): OnlineTrack? {
+        val tried = (track.attemptedSources + track.id).filter(Monochrome::validId).toSet()
+        if (tried.size >= 4) return null
+        val choices = search("${track.artist} ${track.title}").filter {
+            it.id !in tried && it.playable && SearchMatch.fold(it.title) == SearchMatch.fold(track.title) &&
+                SearchMatch.fold(it.artist) == SearchMatch.fold(track.artist) && track.durationMs > 0 && kotlin.math.abs(it.durationMs - track.durationMs) <= 3000
+        }.take(5)
+        for (choice in choices) {
+            val match = try { album(choice.releaseId).firstOrNull { it.id == choice.id } }
+                catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; null }
+            if (match == null || !sameRelease(track.album, match.album)) continue
+            return track.copy(audioURL = Monochrome.audioUrl(match.id), audioExtension = "flac", fallbackTried = false,
+                attemptedSources = (track.attemptedSources + track.id + match.id).distinct(), retryCount = 0, retryAtMillis = 0)
+        }
+        return null
+    }
+
+    private suspend fun youtubeCopy(track: OnlineTrack): OnlineTrack? = withContext(Dispatchers.IO) {
+        val search = request("search", JSONObject().put("query", "${track.artist} ${track.title} ${track.album} official audio"))
         val candidates = mutableListOf<JSONObject>()
         fun visit(value: Any?) {
             when (value) {

@@ -1,6 +1,6 @@
 # Monochrome music downloads
 
-Search → Online finds songs and albums on Monochrome. Downloaded music joins the normal library, so likes, playlists, recommendations and offline playback work as before. The app does not need a new hosted server.
+Search finds saved music and songs and albums from Monochrome in one list. Album and song results open the normal full-page layout. Missing songs stay grey until saved; compact circles show download progress. The download button sits beside the play controls. Saved songs keep their usual menus and queue gestures. Downloaded music joins the normal library, so likes, playlists, recommendations and offline playback work as before. The app does not need a new hosted server.
 
 ## Connection
 
@@ -23,8 +23,8 @@ The queue allows two transfers at once. Wi-Fi-only is on by default and is saved
 
 The app checks transfer completion, FLAC metadata boundaries and the song's duration before publishing a file. The selected title, song artist, album artist, album and cover are written into the downloaded file before it is published. App overrides keep the same chosen release details. Existing user edits take precedence.
 
-- **iOS:** background URLSession transfers; an atomic queue file under Application Support; staging files outside the scanned music folder; completed files under `Documents/Music/Monochrome/{releaseId}/{trackId}.flac`. The app reconnects to background tasks on launch. Interrupted jobs with no task are queued again. Force-quitting an app can cancel background work under iOS; reopening allows recovery.
-- **Android:** system DownloadManager transfers; Room stores the queue; completion broadcasts schedule a WorkManager import. Files stay private until checked, then move through a pending MediaStore entry into `Music/Spitify/Monochrome/{releaseId}/{trackId}.flac`. The local database migration from version 5 to 6 only adds `music_downloads`; there is no production server database.
+- **iOS:** background URLSession transfers; an atomic queue file under Application Support; staging files outside the scanned music folder; completed files under `Documents/Music/Monochrome/{releaseId}/{trackId}.{flac,m4a,mp3}`. The app reconnects to background tasks on launch. Interrupted jobs with no task are queued again. Force-quitting an app can cancel background work under iOS; reopening allows recovery.
+- **Android:** system DownloadManager transfers; Room stores the queue; completion broadcasts schedule a WorkManager import. Files stay private until checked, then move through a pending MediaStore entry into `Music/Spitify/Monochrome/{releaseId}/{trackId}.{flac,m4a,mp3}`. The local database migration from version 5 to 6 only adds `music_downloads`; there is no production server database.
 
 No source URLs are treated as permanent local music locations. Deleting a download outside the app allows it to be fetched again after queue reconciliation. Completed downloads are never removed by Cancel.
 
@@ -57,8 +57,16 @@ For Android:
 
 The small FLAC header fixtures test parsing and rejection; they are not playable recordings. The live tests provide playback evidence. Background recovery and cancellation tests do not replace testing OS-driven suspension on physical phones.
 
-## On-device alternate audio
+## Automatic retries and backup audio
 
-If the primary transfer fails, the app can make one public YouTube search and player request on the phone. It accepts only a direct HTTPS audio URL, matching artist/title words and a duration within three seconds. It rejects added live/cover/remix labels. Login challenges, blocked access and signature-protected formats end the attempt; no bypass, cookie extraction or external helper is used. This path cannot make every track available. A live test found the expected public search result, but playback was blocked, so successful fallback downloading has not been verified against the live service.
+Short network and server failures retry automatically. After the first retries, the app looks for a matching copy of the same release, then checks public Internet Archive files, then the existing direct public YouTube path. It keeps the selected song ID, album details and artwork. Permanent failures stay retryable without showing server codes or file paths on album pages.
 
-Alternate audio is stored as M4A and marked AAC, never presented as lossless FLAC. It goes through native audio validation and the same tag/art writing before library import. Search omits tracks explicitly marked unavailable by the primary source; album downloads can still try an alternate match.
+The Archive lookup uses `https://archive.org/advancedsearch.php` and `/metadata/{identifier}`. Artist and album must match. Song titles must match after removing filename numbering and the artist prefix; known durations must be within three seconds. Private or restricted items are skipped. Individual public ZIP entries can be downloaded through the Archive's own file links; the app never downloads or unpacks a whole ZIP. Album file lists are cached briefly so an album does not cause one search per song.
+
+Only HTTPS Archive download paths for FLAC, M4A or MP3 are accepted. Each file must pass the phone's audio checks and match the requested length before tags and artwork are saved. Failed candidate URLs are remembered so the same bad copy is not selected again. Missing catalogue coverage is still possible; a working backup does not guarantee every recording will be available forever.
+
+The older YouTube path accepts only direct, public audio URLs. Login or access challenges end that attempt. No account, private token, cookie extraction, external helper or new hosted server is used.
+
+On October 2, 2026, iOS native tests forced the first source to fail and downloaded Carmen, Million Dollar Man and the Love version of Because twice each. Android tests verified the same source handoff, saved tags and local playback for those three songs. A separate iOS test downloaded all 28 Love tracks from the backup, wrote tags and artwork, and opened every saved file with native audio. These checks use temporary files and test devices.
+
+The live Archive tests are opt-in: `SPITIFY_ARCHIVE_LIVE_TEST=1` plus the local 404 fixture address in `SPITIFY_RETRY_TEST_BASE` for iOS, or `-e archiveLive true` with `com.localfy.app.ArchiveAudioTest` in the separate Android test app. Regular unit tests leave these network checks off.

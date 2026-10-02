@@ -14,6 +14,7 @@ object SearchMatch {
         if (!words.all { "$t $a $b".contains(it) }) return null
         return when {
             t == q -> 1000
+            "$t $a".split(' ').filter { it != "the" }.sorted() == q.split(' ').filter { it != "the" }.sorted() -> 950
             "$t $a" == q || "$a $t" == q -> 950
             t.startsWith(q) -> 850
             t.contains(q) -> 750

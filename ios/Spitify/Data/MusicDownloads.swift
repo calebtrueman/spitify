@@ -4,8 +4,8 @@ import UIKit
 import AVFoundation
 
 enum MusicDownloadState: String, Codable {
-    case queued, downloading, checking, complete, failed, cancelled
-    var active: Bool { self == .queued || self == .downloading || self == .checking }
+    case queued, waiting, downloading, checking, finding, complete, failed, cancelled
+    var active: Bool { self == .queued || self == .waiting || self == .downloading || self == .checking || self == .finding }
 }
 
 struct MusicDownload: Codable, Identifiable {
@@ -17,6 +17,9 @@ struct MusicDownload: Codable, Identifiable {
     var error: String?
     var quality: String?
     var wifiOnly: Bool? = true
+    var retryCount: Int? = nil
+    var retryAt: Date? = nil
+    var lastFailure: String? = nil
 }
 
 @MainActor @Observable
@@ -36,11 +39,23 @@ final class MusicDownloads {
     private let incoming: URL
     private var delegate: MusicDownloadDelegate!
     private var session: URLSession!
+    private var retryWakeup: Task<Void, Never>?
+    private var scheduledAttempts: Set<String> = []
+    private let backgroundTransfers: Bool
+    private let downloadURL: (OnlineTrack) throws -> URL
+    private let alternate: (OnlineTrack) async throws -> OnlineTrack?
     var wifiOnly: Bool {
         didSet { UserDefaults.standard.set(wifiOnly, forKey: "musicDownloadWiFiOnly") }
     }
 
-    init(root: URL = Store.documents, stateDirectory: URL = Store.directory, configuration: URLSessionConfiguration? = nil) {
+    init(root: URL = Store.documents, stateDirectory: URL = Store.directory, configuration: URLSessionConfiguration? = nil, alternate: @escaping (OnlineTrack) async throws -> OnlineTrack? = AudioFallback.resolve,
+         downloadURL: @escaping (OnlineTrack) throws -> URL = { track in
+             if let value = track.audioURL, AudioFallback.validAudioURL(value), let url = URL(string: value) { return url }
+             return try MonochromeClient.audioURL(track.id)
+         }) {
+        self.downloadURL = downloadURL
+        backgroundTransfers = configuration == nil || configuration?.identifier != nil
+        self.alternate = alternate
         self.root = root
         stateFile = stateDirectory.appendingPathComponent("music-downloads.json")
         incoming = stateDirectory.appendingPathComponent("MusicIncoming", isDirectory: true)
@@ -64,12 +79,20 @@ final class MusicDownloads {
         session.getAllTasks { tasks in
             Task { @MainActor in
                 let attempts = Set(tasks.compactMap(\.taskDescription))
+                self.scheduledAttempts = attempts
                 for id in self.jobs.map(\.id) {
                     guard let i = self.jobs.firstIndex(where: { $0.id == id }) else { continue }
                     let job = self.jobs[i]
                     if job.state == .complete && !FileManager.default.fileExists(atPath: self.root.appendingPathComponent(job.relativePath).path) {
                         self.jobs[i].state = .failed
                         self.jobs[i].error = "The downloaded file was moved or deleted."
+                    } else if job.state == .waiting {
+                        continue // Keep the saved retry time after a restart.
+                    } else if job.state == .failed, job.retryCount == nil, DownloadRetry.legacyTemporaryFailure(job.error) {
+                        self.jobs[i].state = .queued
+                        self.jobs[i].track.fallbackTried = nil
+                        self.jobs[i].retryCount = 0
+                        self.jobs[i].error = nil
                     } else if job.state.active, !attempts.contains(job.attempt) {
                         let temp = self.incoming.appendingPathComponent(job.attempt + ".flac")
                         if FileManager.default.fileExists(atPath: temp.path) {
@@ -104,22 +127,11 @@ final class MusicDownloads {
     }
 
     @discardableResult func enqueue(_ tracks: [OnlineTrack]) async -> String {
-        var resolved: [OnlineTrack] = []
-        for requested in tracks {
-            if let old = jobs.first(where: { $0.id == requested.id }), old.state.active ||
-                (old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path)) {
-                resolved.append(requested); continue
-            }
-            var track = requested
-            if !track.playable {
-                guard let replacement = try? await AudioFallback.resolve(track) else { continue }
-                track = replacement
-            } else { track.audioURL = nil; track.audioExtension = nil; track.fallbackTried = nil }
-            resolved.append(track)
-        }
         let previous = jobs
         var added = 0, saved = 0, active = 0
-        for track in resolved {
+        for requested in tracks {
+            var track = requested
+            track.audioURL = nil; track.audioExtension = nil; track.fallbackTried = nil; track.attemptedSources = nil
             if let old = jobs.first(where: { $0.id == track.id }) {
                 if old.state.active { active += 1; continue }
                 if old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path) { saved += 1; continue }
@@ -136,12 +148,13 @@ final class MusicDownloads {
         if added > 0 { return "\(added) \(added == 1 ? "song" : "songs") queued." + (wifiOnly ? " Downloads use Wi-Fi." : "") }
         if active > 0 { return "Already in your download queue." }
         if saved > 0 { return "Already saved in your library." }
-        return "No available songs to download."
+        return "This album did not return any songs. Please reload it and try again."
     }
 
     func cancel(_ id: String) {
         guard let i = jobs.firstIndex(where: { $0.id == id && $0.state.active }) else { return }
         let attempt = jobs[i].attempt
+        scheduledAttempts.remove(attempt)
         jobs[i].state = .cancelled
         progress[id] = nil
         persist()
@@ -149,40 +162,72 @@ final class MusicDownloads {
         pump()
     }
 
+    func resumePending() { pump() }
+
     private func pump() {
         guard !restoring else { return }
-        var available = 2 - jobs.filter { $0.state == .downloading || $0.state == .checking }.count
+        retryWakeup?.cancel()
+        for i in jobs.indices where jobs[i].state == .waiting && !scheduledAttempts.contains(jobs[i].attempt) && (jobs[i].retryAt ?? .distantPast) <= Date() {
+            jobs[i].state = .queued; jobs[i].retryAt = nil; jobs[i].error = nil
+        }
+        if let next = jobs.filter({ $0.state == .waiting && !scheduledAttempts.contains($0.attempt) }).compactMap(\.retryAt).min() {
+            retryWakeup = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(max(0.05, next.timeIntervalSinceNow))) }
+                catch { return }
+                self?.pump()
+            }
+        }
+        // Let URLSession own delayed retries so the phone can continue them while the app is suspended.
+        if backgroundTransfers {
+            for i in jobs.indices where jobs[i].state == .waiting && !scheduledAttempts.contains(jobs[i].attempt) {
+                startTransfer(i, earliest: jobs[i].retryAt)
+            }
+        }
+        var available = 2 - jobs.filter { $0.state == .downloading || $0.state == .checking || $0.state == .finding }.count
         for i in jobs.indices where jobs[i].state == .queued && available > 0 {
-            guard let url = jobs[i].track.audioURL.flatMap({ AudioFallback.validAudioURL($0) ? URL(string: $0) : nil }) ?? (try? MonochromeClient.audioURL(jobs[i].id)) else { continue }
             jobs[i].state = .downloading
             guard persist() else { jobs[i].state = .queued; return }
-            var request = URLRequest(url: url)
-            request.allowsCellularAccess = !(jobs[i].wifiOnly ?? true)
-            let task = session.downloadTask(with: request)
-            task.taskDescription = jobs[i].attempt
-            task.resume()
+            startTransfer(i)
             available -= 1
         }
     }
 
+    private func startTransfer(_ i: Int, earliest: Date? = nil) {
+        do {
+            var request = URLRequest(url: try downloadURL(jobs[i].track))
+            request.allowsCellularAccess = !(jobs[i].wifiOnly ?? true)
+            let task = session.downloadTask(with: request)
+            task.taskDescription = jobs[i].attempt
+            task.earliestBeginDate = earliest
+            scheduledAttempts.insert(jobs[i].attempt)
+            task.resume()
+        } catch {
+            jobs[i].state = .failed; jobs[i].error = error.localizedDescription; persist()
+        }
+    }
+
     func updated(attempt: String, received: Int64, total: Int64) {
-        guard let job = jobs.first(where: { $0.attempt == attempt && $0.state == .downloading }) else { return }
-        progress[job.id] = total > 0 ? min(1, Double(received) / Double(total)) : 0
+        guard let i = jobs.firstIndex(where: { $0.attempt == attempt && ($0.state == .downloading || $0.state == .waiting) }) else { return }
+        if jobs[i].state == .waiting { jobs[i].state = .downloading; jobs[i].retryAt = nil; jobs[i].error = nil; persist() }
+        progress[jobs[i].id] = total > 0 ? min(1, Double(received) / Double(total)) : 0
     }
 
     func received(attempt: String, file: URL) async {
         var audioFile = file
         defer { try? FileManager.default.removeItem(at: audioFile); try? FileManager.default.removeItem(at: file) }
         guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active }) else { return }
+        scheduledAttempts.remove(attempt)
         jobs[index].state = .checking
         persist()
+        var audioChecked = false
         do {
             let track = jobs[index].track
-            if track.audioExtension == "m4a" {
-                audioFile = file.deletingPathExtension().appendingPathExtension("m4a")
+            if let ext = track.audioExtension, ["m4a", "mp3"].contains(ext) {
+                audioFile = file.deletingPathExtension().appendingPathExtension(ext)
                 try FileManager.default.moveItem(at: file, to: audioFile)
             }
             let quality = try await validateAudio(audioFile, track: track)
+            audioChecked = true
             var artwork: Data?
             if let art = track.artwork {
                 guard let data = await HTTP.get(art) else { throw MusicSourceError.message("Could not download the cover. Please retry.") }
@@ -204,40 +249,54 @@ final class MusicDownloads {
             progress[jobs[currentIndex].id] = nil
             persist()
             await onImported?()
-        } catch { failed(attempt: attempt, error: error) }
+        } catch { failed(attempt: attempt, error: error, audioFailure: !audioChecked) }
         pump()
         finishBackgroundEventsIfReady()
     }
 
     private func validateAudio(_ file: URL, track: OnlineTrack) async throws -> String {
-        if track.audioExtension != "m4a" { return try FLACInfo.read(file, expectedDurationMs: track.durationMs).label }
+        if !["m4a", "mp3"].contains(track.audioExtension ?? "flac") { return try FLACInfo.read(file, expectedDurationMs: track.durationMs).label }
         let asset = AVURLAsset(url: file)
         let duration = try await asset.load(.duration).seconds
         let audio = try await asset.loadTracks(withMediaType: .audio)
         guard !audio.isEmpty, duration.isFinite, duration > 0, abs(duration * 1000 - Double(track.durationMs)) <= 5000 else {
             throw MusicSourceError.message("The downloaded audio does not match this song.")
         }
-        return "AAC"
+        return track.audioExtension == "mp3" ? "MP3" : "M4A"
     }
 
-    func failed(attempt: String, error: Error) {
-        guard let i = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active }) else { return }
-        let mayRetry = jobs[i].track.fallbackTried != true && jobs[i].state == .downloading && (error as NSError).code != NSURLErrorCancelled
-        if mayRetry {
-            jobs[i].track.fallbackTried = true
-            jobs[i].state = .checking; jobs[i].error = "Trying another recording…"
+    func failed(attempt: String, error: Error, audioFailure: Bool = false) {
+        guard let i = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active && $0.state != .finding && ($0.state != .waiting || scheduledAttempts.contains(attempt)) }) else { return }
+        scheduledAttempts.remove(attempt)
+        // Once the audio is checked, an artwork/tag/storage problem must not replace the recording.
+        let transferFailed = jobs[i].state == .downloading || jobs[i].state == .waiting || audioFailure
+        let temporary = transferFailed && (DownloadRetry.isTemporary(error) || audioFailure)
+        jobs[i].lastFailure = error.localizedDescription
+        let tries = jobs[i].retryCount ?? 0
+        if temporary && (tries < 3 || jobs[i].track.fallbackTried == true) {
+            waitToRetry(i)
+            return
+        }
+        if transferFailed && jobs[i].track.fallbackTried != true && (error as NSError).code != NSURLErrorCancelled {
+            jobs[i].state = .finding; jobs[i].error = "Looking for another matching copy…"
             let track = jobs[i].track
             persist()
             Task {
-                let replacement = try? await AudioFallback.resolve(track)
-                guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .checking }) else { return }
+                let replacement = try? await alternate(track)
+                guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .finding }) else { return }
                 if let replacement {
                     jobs[index].track = replacement
-                    jobs[index].relativePath = (jobs[index].relativePath as NSString).deletingPathExtension + ".m4a"
+                    jobs[index].relativePath = (jobs[index].relativePath as NSString).deletingPathExtension + "." + (replacement.audioExtension ?? "flac")
                     jobs[index].attempt = UUID().uuidString
+                    jobs[index].retryCount = 0
                     jobs[index].state = .queued; jobs[index].error = nil
+                } else if temporary {
+                    jobs[index].track.fallbackTried = true
+                    waitToRetry(index)
+                    return
                 } else {
-                    jobs[index].state = .failed; jobs[index].error = "Could not download this song. Please try again later."
+                    jobs[index].state = .failed
+                    jobs[index].error = "No matching copy is available from the checked sources. You can retry this song."
                 }
                 persist(); pump(); finishBackgroundEventsIfReady()
             }
@@ -249,13 +308,24 @@ final class MusicDownloads {
         persist(); pump(); finishBackgroundEventsIfReady()
     }
 
+    private func waitToRetry(_ i: Int) {
+        let count = (jobs[i].retryCount ?? 0) + 1
+        jobs[i].retryCount = count
+        jobs[i].retryAt = Date().addingTimeInterval(DownloadRetry.delay(count))
+        jobs[i].attempt = UUID().uuidString
+        jobs[i].state = .waiting
+        jobs[i].error = "Waiting to retry automatically."
+        progress[jobs[i].id] = nil
+        persist(); pump(); finishBackgroundEventsIfReady()
+    }
+
     func eventsFinished() {
         backgroundEventsFinished = true
         finishBackgroundEventsIfReady()
     }
 
     private func finishBackgroundEventsIfReady() {
-        guard backgroundEventsFinished, !jobs.contains(where: { $0.state == .checking }) else { return }
+        guard backgroundEventsFinished, !jobs.contains(where: { $0.state == .checking || $0.state == .finding }) else { return }
         backgroundEventsFinished = false
         let completion = backgroundCompletion
         backgroundCompletion = nil

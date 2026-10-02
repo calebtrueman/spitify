@@ -69,23 +69,19 @@ struct RootView: View {
         }
         .animation(.spring(duration: 0.35), value: app.player.message)
         .task { await app.start() }
-        .onChange(of: phase) { _, new in if new == .active { Task { await app.library.scan() } } }
+        .onChange(of: phase) { _, new in if new == .active { app.musicDownloads.resumePending(); Task { await app.library.scan() } } }
         .onOpenURL { url in Task { await openExternal(url) } }
     }
 
     private func tab<V: View>(_ t: Tab, _ title: String, _ icon: String, @ViewBuilder content: () -> V) -> some View {
-        VStack(spacing: 0) {
-            NavigationStack(path: router.path(t)) {
-                content()
-                    .navigationDestination(for: Route.self) { RouteView(route: $0) }
-                    .safeAreaPadding(.top, 8)
-                    }
-            .tint(p.accent)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
-            MiniPlayer()
-                .background(p.background)
+        NavigationStack(path: router.path(t)) {
+            content()
+                .navigationDestination(for: Route.self) { RouteView(route: $0).toolbar(.visible, for: .navigationBar) }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            MiniPlayer().background(p.background)
+        }
+        .tint(p.accent)
         .background(p.background)
         .tabItem { Label(title, systemImage: icon) }
         .tag(t)
@@ -106,6 +102,8 @@ struct RouteView: View {
     var body: some View {
         switch route {
         case .album(let id): AlbumView(id: id)
+        case .catalogAlbum(let album): OnlineAlbumView(album: album)
+        case .catalogSong(let track): OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork), single: track)
         case .artist(let name): ArtistView(name: name)
         case .playlist(let id): PlaylistView(id: id)
         case .mix(let id): MixView(id: id)

@@ -198,3 +198,90 @@ final class Release109Tests: XCTestCase {
         let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); image.name = "109 vinyl player"; image.lifetime = .keepAlways; add(image)
     }
 }
+
+final class Release110LayoutTests: XCTestCase {
+    func testProfileBackButtonAndSearchDoNotExposeFolders() {
+        let app = XCUIApplication(); app.launch()
+        let menu = app.buttons["Open menu"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap(); app.buttons["Profile"].tap()
+        let bar = app.navigationBars["Profile"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 5))
+        let back = bar.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.isHittable)
+        XCTAssertGreaterThanOrEqual(back.frame.minY, 47)
+        XCTAssertGreaterThan(back.frame.height, 20)
+        XCTAssertTrue(app.staticTexts["PROFILE"].isHittable)
+        let profileShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        profileShot.name = "Profile controls below notch"; profileShot.lifetime = .keepAlways; add(profileShot)
+        back.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        let allSongs = app.buttons.matching(NSPredicate(format: "label CONTAINS 'All Songs'")).firstMatch
+        allSongs.tap()
+        let song = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Swipe Test'")).firstMatch
+        XCTAssertTrue(song.waitForExistence(timeout: 5)); song.tap()
+        let mini = app.buttons["miniPlayer"]
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        menu.tap(); app.buttons["Profile"].tap()
+        XCTAssertTrue(mini.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Profile"].buttons.element(boundBy: 0).isHittable)
+        mini.tap()
+        let close = app.buttons["Close player"].firstMatch
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(close.frame.minY, 47)
+        XCTAssertTrue(close.isHittable)
+        close.tap()
+        app.tabBars.buttons["Search"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Browse folders"].exists)
+        XCTAssertFalse(app.staticTexts["123456789"].exists)
+        let searchShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        searchShot.name = "Search without storage folders"; searchShot.lifetime = .keepAlways; add(searchShot)
+    }
+}
+
+final class IntegratedAlbumTests: XCTestCase {
+    func testSearchOpensAlbumPageWithQuietDownloadControls() {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["Search"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Beatles Love")
+        app.buttons["Albums"].tap()
+        let album = app.buttons["catalog-album:166082371098722304"]
+        XCTAssertTrue(album.waitForExistence(timeout: 25)); album.tap()
+        let download = app.buttons["Download album"]
+        XCTAssertTrue(download.waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["Done"].exists)
+        XCTAssertFalse(app.staticTexts["Downloads"].exists)
+        XCTAssertFalse(app.staticTexts["Checking audio…"].exists)
+        let back = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(back.isHittable); XCTAssertGreaterThanOrEqual(back.frame.minY, 47)
+        let first = app.buttons["Download Get Back"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap()
+        let cancel = app.buttons["Cancel download"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Queued"].exists)
+        XCTAssertFalse(app.staticTexts["Retrying automatically"].exists)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = "Integrated album with download circle"; shot.lifetime = .keepAlways; add(shot)
+        cancel.tap()
+    }
+}
+
+final class PartialAlbumTests: XCTestCase {
+    func testSavedSongAndMissingSongsShareTheAlbumPage() {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["Search"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Beatles Love")
+        app.buttons["Albums"].tap()
+        let album = app.buttons["catalog-album:166082371098722304"]
+        XCTAssertTrue(album.waitForExistence(timeout: 30)); album.tap()
+        let saved = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Because' AND label CONTAINS 'Downloaded'")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 20)); XCTAssertTrue(saved.isEnabled)
+        XCTAssertTrue(app.buttons["Download Get Back"].exists)
+        XCTAssertFalse(app.buttons["Download Because"].exists)
+        XCTAssertTrue(app.buttons["Play"].firstMatch.isEnabled)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = "Saved and missing songs together"; shot.lifetime = .keepAlways; add(shot)
+    }
+}

@@ -15,6 +15,8 @@ struct CollectionView<Extra: View>: View {
     var removeLabel: String? = nil
     var onRemove: ((Int) -> Void)? = nil
     var toolbarExtra: AnyView? = nil
+    var catalogTracks: [OnlineTrack]? = nil
+    var remoteArt: String? = nil
     @ViewBuilder var extra: () -> Extra
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
@@ -27,26 +29,32 @@ struct CollectionView<Extra: View>: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 HStack(spacing: 6) {
-                    Button { app.player.addToQueue(songs) } label: { Image(systemName: "text.badge.plus").font(.system(size: 20)).frame(width: 40, height: 40) }
                     if let toolbarExtra { toolbarExtra }
+                    Button { app.player.addToQueue(songs) } label: { Image(systemName: "text.badge.plus").font(.system(size: 20)).frame(width: 40, height: 40) }.disabled(songs.isEmpty)
                     Spacer()
-                    Button { app.player.play(songs, shuffle: true, source: title) } label: { Image(systemName: "shuffle").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }
+                    Button { app.player.play(songs, shuffle: true, source: title) } label: { Image(systemName: "shuffle").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }.disabled(songs.isEmpty)
                     PlayButton(playing: isThis && app.player.isPlaying) {
                         if isThis && app.player.hasMedia { app.player.toggle() } else { app.player.play(songs, shuffle: false, source: title) }
-                    }
+                    }.disabled(songs.isEmpty).opacity(songs.isEmpty ? 0.4 : 1)
                 }
                 .foregroundStyle(p.secondary).padding(.horizontal, 12).padding(.vertical, 4)
                 if let mix, mix.why != nil || mix.refresh != nil {
                     Text([mix.why, mix.refresh].compactMap { $0 }.joined(separator: " · ")).text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16).padding(.bottom, 6)
                 }
                 extra()
-                if songs.isEmpty { EmptyState(title: "Nothing here yet", message: "Add songs from any song's ••• menu.") }
+                if songs.isEmpty && catalogTracks == nil { EmptyState(title: "Nothing here yet", message: "Add songs from any song's ••• menu.") }
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(songs.enumerated()), id: \.offset) { i, s in
+                    if let catalogTracks {
+                        ForEach(Array(catalogTracks.enumerated()), id: \.element.id) { i, track in
+                            OnlineTrackRow(track: track, trackNumber: trackNumbers ? (track.trackNumber > 0 ? track.trackNumber : i + 1) : nil, onPlay: { song in
+                                app.player.play(songs, from: songs.firstIndex(where: { $0.id == song.id }) ?? 0, shuffle: false, source: title)
+                            })
+                        }
+                    } else { ForEach(Array(songs.enumerated()), id: \.offset) { i, s in
                         SongRow(song: s, trackNumber: trackNumbers ? (s.track > 0 ? s.track : i + 1) : nil, subtitle: songSubtitle?(s),
                                 onTap: { app.player.play(songs, from: i, shuffle: false, source: title) },
                                 removeLabel: removeLabel, onRemove: onRemove.map { f in { f(i) } })
-                    }
+                    } }
                 }
             }
             .padding(.bottom, 30)
@@ -73,7 +81,7 @@ struct CollectionView<Extra: View>: View {
                     .opacity(1 - collapse)
             } else {
                 Group {
-                    if let mix { MixCover(mix: mix) } else { ArtworkView(art, cornerRadius: 8) }
+                    if let mix { MixCover(mix: mix) } else if art == nil, let remoteArt { ArtworkView(key: remoteArt, remote: remoteArt, cornerRadius: 8) } else { ArtworkView(art, cornerRadius: 8) }
                 }
                 .frame(width: 236, height: 236)
                 .shadow(color: .black.opacity(0.45), radius: 24, y: 12)
@@ -82,7 +90,7 @@ struct CollectionView<Extra: View>: View {
                 Text(title).text(.headlineL).foregroundStyle(p.text).lineLimit(2).padding(.horizontal, 16).padding(.top, 14)
             }
             Text(subtitle).text(.bodyS).foregroundStyle(p.text.opacity(0.85)).padding(.horizontal, 16)
-            Text("\(kind) • \(songCount(songs.count)), \(songs.reduce(Int64(0)) { $0 + $1.durationMs }.formattedLong)").text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16)
+            Text("\(kind) • \(songCount(catalogTracks?.count ?? songs.count)), \((catalogTracks?.reduce(Int64(0)) { $0 + $1.durationMs } ?? songs.reduce(Int64(0)) { $0 + $1.durationMs }).formattedLong)").text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16)
         }
         .padding(.bottom, 8)
         .background(LinearGradient(colors: [headerColor, headerColor.mix(p.background, 0.75), p.background], startPoint: .top, endPoint: .bottom).padding(.top, -400))
@@ -91,9 +99,9 @@ struct CollectionView<Extra: View>: View {
 
 extension CollectionView where Extra == EmptyView {
     init(title: String, kind: String, subtitle: String, art: Song?, songs: [Song], trackNumbers: Bool = false, hero: Bool = false, mix: Mix? = nil,
-         songSubtitle: ((Song) -> String)? = nil, removeLabel: String? = nil, onRemove: ((Int) -> Void)? = nil, toolbarExtra: AnyView? = nil) {
+         songSubtitle: ((Song) -> String)? = nil, removeLabel: String? = nil, onRemove: ((Int) -> Void)? = nil, toolbarExtra: AnyView? = nil, catalogTracks: [OnlineTrack]? = nil, remoteArt: String? = nil) {
         self.init(title: title, kind: kind, subtitle: subtitle, art: art, songs: songs, trackNumbers: trackNumbers, hero: hero, mix: mix, songSubtitle: songSubtitle,
-                  removeLabel: removeLabel, onRemove: onRemove, toolbarExtra: toolbarExtra, extra: { EmptyView() })
+                  removeLabel: removeLabel, onRemove: onRemove, toolbarExtra: toolbarExtra, catalogTracks: catalogTracks, remoteArt: remoteArt, extra: { EmptyView() })
     }
 }
 
@@ -105,6 +113,11 @@ struct AlbumView: View {
     @Environment(Router.self) private var router
     var body: some View {
         if let a = app.library.library.albumById[id] {
+            if let track = app.musicDownloads.jobs.map(\.track).first(where: {
+                SearchMatch.fold($0.album) == SearchMatch.fold(a.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(a.artist) && !$0.releaseID.isEmpty
+            }) {
+                OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: a.title, artist: a.artist, artwork: track.artwork))
+            } else {
             let more = (app.library.library.artistByName[a.artist]?.albums ?? []).filter { $0.id != a.id }
             CollectionView(title: a.title, kind: "Album", subtitle: [a.artist, a.year > 0 ? String(a.year) : nil].compactMap { $0 }.joined(separator: " • "), art: a.cover, songs: a.songs,
                            trackNumbers: true, songSubtitle: { $0.artist },
@@ -112,6 +125,7 @@ struct AlbumView: View {
                 EmptyView()
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { if !more.isEmpty { Menu { ForEach(more) { m in Button(m.title) { router.go(.album(m.id)) } } } label: { Image(systemName: "square.stack") } } } }
+            }
         } else { EmptyState(title: "Album not found", message: "It may have been removed.") }
     }
 }

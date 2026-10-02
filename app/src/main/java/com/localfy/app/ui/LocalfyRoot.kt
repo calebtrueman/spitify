@@ -326,6 +326,8 @@ fun LocalfyRoot(activity: Activity) {
                             composable(Routes.ALBUM, listOf(navArgument("id") { type = NavType.LongType })) {
                                 AlbumScreen(it.arguments!!.getLong("id"))
                             }
+                            composable(Routes.CATALOG_ALBUM) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("album").orEmpty(), false) }
+                            composable(Routes.CATALOG_SONG) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("track").orEmpty(), true) }
                             composable(Routes.ARTIST) { ArtistScreen(it.arguments?.getString("name").orEmpty()) }
                             composable(Routes.PLAYLIST, listOf(navArgument("id") { type = NavType.LongType })) {
                                 PlaylistScreen(it.arguments!!.getLong("id"))

@@ -96,6 +96,7 @@ fun CollectionScreen(
     emptyText: String = "Nothing here yet.",
     /** Replaces the artwork in the header (generated playlist covers). */
     cover: (@Composable (Modifier) -> Unit)? = null,
+    catalogTracks: List<com.localfy.app.data.music.OnlineTrack>? = null,
 ) {
     val app = LocalApp.current
     val player = rememberPlayerState()
@@ -105,7 +106,8 @@ fun CollectionScreen(
     // Light theme: a pastel version of the artwork colour keeps dark text readable.
     val color = if (palette.isDark) artColor else lerp(artColor, Color.White, 0.55f)
     val isThisPlaying = player.source == title && player.isPlaying
-    val total = songs.sumOf { it.durationMs }
+    val total = catalogTracks?.sumOf { it.durationMs } ?: songs.sumOf { it.durationMs }
+    val count = catalogTracks?.size ?: songs.size
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val play = {
@@ -156,7 +158,7 @@ fun CollectionScreen(
                                 Text(title, style = MaterialTheme.typography.displaySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
                                 Spacer(Modifier.height(8.dp))
                                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextPrimary.copy(alpha = 0.85f))
-                                Text("${songCount(songs.size)} • ${formatLongDuration(total)}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
+                                Text("${songCount(count)} • ${formatLongDuration(total)}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
                             }
                         }
                     } else {
@@ -175,7 +177,7 @@ fun CollectionScreen(
                             Spacer(Modifier.height(4.dp))
                             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextPrimary.copy(alpha = 0.85f))
                             Text(
-                                "$kindLabel • ${songCount(songs.size)}, ${formatLongDuration(total)}",
+                                "$kindLabel • ${songCount(count)}, ${formatLongDuration(total)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = LocalfyColors.TextSecondary,
                             )
@@ -186,24 +188,29 @@ fun CollectionScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
+                        headerActions()
                         IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)
                         }
                         IconButton(onClick = { app.player.addToQueue(songs) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.Rounded.AddToQueue, "Add all to queue", tint = LocalfyColors.TextSecondary)
                         }
-                        headerActions()
                         Spacer(Modifier.weight(1f))
                         IconButton(onClick = { app.player.playSongs(songs, shuffle = true, source = title) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.Rounded.Shuffle, "Shuffle play", tint = if (player.shuffle) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary, modifier = Modifier.size(28.dp))
                         }
-                        BigPlayButton(playing = isThisPlaying, onClick = play, modifier = Modifier.padding(end = 8.dp))
+                        BigPlayButton(playing = isThisPlaying, onClick = play, modifier = Modifier.padding(end = 8.dp).graphicsLayer { alpha = if (songs.isEmpty()) 0.4f else 1f })
                     }
                 }
             }
             beforeSongs()
-            if (songs.isEmpty()) item(key = "empty") { EmptyState("Empty", emptyText) }
-            itemsIndexed(songs, key = { i, s -> "$i-${s.id}" }) { i, song ->
+            if (songs.isEmpty() && catalogTracks == null) item(key = "empty") { EmptyState("Empty", emptyText) }
+            if (catalogTracks != null) {
+                itemsIndexed(catalogTracks, key = { _, track -> track.id }) { i, track ->
+                    OnlineMusicRow(track, trackNumber = if (trackNumbers) track.track.takeIf { it > 0 } ?: (i + 1) else null,
+                        onPlay = { song -> app.player.playSongs(songs, songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0), shuffle = false, source = title) })
+                }
+            } else itemsIndexed(songs, key = { i, s -> "$i-${s.id}" }) { i, song ->
                 SongRow(
                     song = song,
                     onClick = { app.player.playSongs(songs, i, shuffle = false, source = title) },
