@@ -79,10 +79,17 @@ class MetadataRepository(
     private val _fixing = MutableStateFlow(false)
     val fixing: StateFlow<Boolean> = _fixing.asStateFlow()
     private var fixJob: Job? = null
+    private data class PendingWrite(val song: Song, val edit: MetadataEdit, val cover: File?)
+    private val pending = java.util.concurrent.ConcurrentHashMap<Long, PendingWrite>()
+    private val _pendingWrites = MutableStateFlow<List<android.net.Uri>>(emptyList())
+    val pendingWrites: StateFlow<List<android.net.Uri>> = _pendingWrites.asStateFlow()
+    private var latestSongs: List<Song> = emptyList()
+
 
     fun setAutoFix(on: Boolean) {
         _autoFix.value = on
         prefs.edit { putBoolean("autoFix", on) }
+        if (on) autoFixAll(latestSongs)
     }
 
     // ---------- Applying overrides ----------
@@ -117,7 +124,7 @@ class MetadataRepository(
         songs.forEach { song ->
             val existing = dao.get(song.id)?.takeIf { it.fileName == song.fileName }
             if (source == SOURCE_ONLINE && existing?.source == SOURCE_USER) return@forEach
-            if (source == SOURCE_ONLINE) runCatching { FileTags.write(context, song, edit) }
+            if (source == SOURCE_ONLINE) runCatching { FileTags.write(context, song, edit, onlyMissing = true) }
             dao.put(
                 MetadataOverrideEntity(
                     songId = song.id, fileName = song.fileName,
@@ -189,13 +196,11 @@ class MetadataRepository(
     suspend fun embedArt(albumId: Long, image: File) = withContext(Dispatchers.IO) {
         val app = context.applicationContext as com.localfy.app.LocalfyApp
         val songs = app.library.library.value.songs + app.library.localBooks.value
-        val jpeg = File.createTempFile("cover-", ".jpg", context.cacheDir)
-        try {
-            if (com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(image), jpeg, 1200)) {
-                val data = jpeg.readBytes()
-                songs.filter { it.albumId == albumId }.forEach { song -> runCatching { FileTags.write(context, song, MetadataEdit(), data) } }
+        songs.filter { it.albumId == albumId }.forEach { song ->
+            runCatching {
+                if (FileTags.read(context, song).artwork == null) writeAutomatic(song, MetadataEdit(), image)
             }
-        } finally { jpeg.delete() }
+        }
     }
 
     fun removeArt(albumId: Long) = scope.launch(Dispatchers.IO) {
@@ -269,62 +274,118 @@ class MetadataRepository(
     /** Picks a candidate only when length and title agree, so auto-fix never guesses. */
     fun confidentMatch(song: Song, candidates: List<MetadataCandidate>): MetadataCandidate? {
         val words = norm(queryFor(song)).split(' ').filter { it.length > 1 }.toSet()
-        return candidates.firstOrNull { c ->
+        val knownArtist = song.artist.takeUnless { it.isBlank() || it.startsWith("Unknown", true) }
+        val knownAlbum = song.album.takeUnless { it.isBlank() || it.startsWith("Unknown", true) || it == song.folder.trimEnd('/').substringAfterLast('/') }
+        return candidates.filter { c ->
             val lengthOk = song.durationMs > 0 && c.durationMs > 0 && abs(c.durationMs - song.durationMs) <= 3_000
             val titleWords = norm(c.title).split(' ').filter { it.length > 1 }
-            lengthOk && titleWords.isNotEmpty() && titleWords.count { it in words } >= (titleWords.size + 1) / 2
-        }
+            val artistOk = knownArtist?.let { norm(it) == norm(c.artist) }
+                ?: norm(c.artist).split(' ').filter { it.length > 1 }.let { it.isNotEmpty() && it.all(words::contains) }
+            lengthOk && artistOk && titleWords.isNotEmpty() && titleWords.all(words::contains) &&
+                (knownAlbum == null || norm(knownAlbum) == norm(c.album))
+        }.maxByOrNull { listOf(it.year, it.track, it.disc).count { n -> n != null && n > 0 } + if (it.genre.isNullOrBlank()) 0 else 1 }
     }
 
-    /** Background pass over untagged files (rate-limited). */
-    fun autoFixAll(songs: List<Song>, onArt: (Long, String) -> Unit) {
-        if (!_autoFix.value || fixJob?.isActive == true) return
-        val tried = prefs.getStringSet("tried", emptySet()).orEmpty()
-        val todo = songs.filter { !it.isPodcast && it.playable && needsFix(it) && "${it.id}:${it.fileName}" !in tried && overrides.value[it.id] == null }
-        if (todo.isEmpty()) return
+    /** Fill only absent fields. Run for every scan, including files added after launch. */
+    fun autoFixAll(songs: List<Song>) {
+        latestSongs = songs
+        if (fixJob?.isActive == true) return
+        val app = context.applicationContext as com.localfy.app.LocalfyApp
+        if (!_autoFix.value && !app.onlineArt.enabled.value) return
         fixJob = scope.launch(Dispatchers.IO) {
             _fixing.value = true
-            val done = tried.toMutableSet()
-            for (song in todo.take(200)) {
-                val match = runCatching { confidentMatch(song, search(queryFor(song), song.durationMs)) }.getOrNull()
-                if (match != null) {
-                    save(listOf(song), MetadataEdit(match.title, match.artist, match.album, match.artist, match.genre, match.year, match.track, match.disc), SOURCE_ONLINE).join()
-                    match.artUrl?.let { url -> onArt(syntheticAlbumId(match.album, match.artist), url) }
-                }
-                done += "${song.id}:${song.fileName}"
-                prefs.edit { putStringSet("tried", done) }
-                delay(1_100) // be polite to the free APIs
-            }
-            _fixing.value = false
+            try {
+                var pass = songs
+                do {
+                    for (raw in pass.filter { it.playable && (!it.isPodcast || it.isAudiobook) }) {
+                        runCatching { fillMissing(raw, app) }
+                    }
+                    val next = latestSongs
+                    if (next == pass) break
+                    pass = next
+                } while (true)
+            } finally { _fixing.value = false }
         }
     }
 
-    /** Your own audiobooks: if the "album" is just a folder name or the author is missing, ask Open Library. */
-    fun autoFixBooks(chapters: List<Song>) {
-        if (!_autoFix.value) return
-        val tried = prefs.getStringSet("triedBooks", emptySet()).orEmpty()
-        val books = chapters.groupBy { it.albumId }.filter { (id, ch) ->
-            val first = ch.first()
-            "$id" !in tried && ch.none { overrides.value[it.id]?.source == SOURCE_USER } &&
-                (first.artist.startsWith("Unknown", true) || first.album.equals(first.folder.trimEnd('/').substringAfterLast('/'), true))
-        }
-        if (books.isEmpty()) return
-        scope.launch(Dispatchers.IO) {
-            val done = tried.toMutableSet()
-            for ((albumId, ch) in books) {
-                val first = ch.first()
-                val guess = first.album.replace('_', ' ').replace(Regex("\\(.*?\\)|\\[.*?]"), "").trim()
-                val hit = runCatching { com.localfy.app.data.podcast.OpenLibrary.search(guess) }.getOrDefault(emptyList())
-                    .firstOrNull { norm(it.title).let { t -> t.isNotEmpty() && (norm(guess).contains(t) || t.contains(norm(guess))) } }
+    private fun com.localfy.app.data.db.MetadataOverrideEntity?.edit() = MetadataEdit(
+        title = this?.title, artist = this?.artist, album = this?.album, albumArtist = this?.albumArtist,
+        genre = this?.genre, year = this?.year, track = this?.track, disc = this?.disc,
+    )
+
+    private suspend fun fillMissing(raw: Song, app: com.localfy.app.LocalfyApp) {
+        val saved = dao.get(raw.id)?.takeIf { it.fileName == raw.fileName }
+        val song = apply(raw, saved)
+        val snapshot = FileTags.read(context, raw)
+        var suggested = MetadataEdit()
+        var coverURL: String? = null
+        val key = "missing-v2:${raw.id}:${raw.fileName}:${raw.sizeBytes}"
+        if (_autoFix.value && MissingMetadata.incomplete(snapshot.fields, saved.edit()) &&
+            System.currentTimeMillis() - prefs.getLong(key, 0) >= 7L * 24 * 60 * 60 * 1000) {
+            if (song.isAudiobook) {
+                val guess = song.album.replace('_', ' ')
+                val hit = searchBooks(guess).firstOrNull { norm(it.title) == norm(guess) }
                 if (hit != null) {
-                    save(ch, MetadataEdit(album = hit.title, artist = hit.author.ifBlank { null }, albumArtist = hit.author.ifBlank { null }, year = hit.year, genre = "Audiobook"), SOURCE_ONLINE).join()
-                    hit.coverUrl?.let { setArt(syntheticAlbumId(hit.title, hit.author.ifBlank { first.albumArtist }), it) }
+                    suggested = MetadataEdit(album = hit.title, artist = hit.author, albumArtist = hit.author, genre = "Audiobook", year = hit.year)
+                    coverURL = hit.coverUrl
                 }
-                done += "$albumId"
-                prefs.edit { putStringSet("triedBooks", done) }
-                delay(1_100)
+            } else {
+                val match = confidentMatch(song, search(queryFor(song), song.durationMs))
+                if (match != null) {
+                    suggested = MetadataEdit(match.title, match.artist, match.album, match.artist, match.genre, match.year, match.track, match.disc)
+                    coverURL = match.artUrl
+                }
             }
+            prefs.edit { putLong(key, System.currentTimeMillis()) }
+            delay(1_100)
         }
+        val edit = if (_autoFix.value) MissingMetadata.fill(snapshot.fields, saved.edit(), suggested) else MetadataEdit()
+        if (edit != MetadataEdit()) {
+            dao.put(MetadataOverrideEntity(
+                songId = raw.id, fileName = raw.fileName,
+                title = saved?.title ?: edit.title, artist = saved?.artist ?: edit.artist,
+                album = saved?.album ?: edit.album, albumArtist = saved?.albumArtist ?: edit.albumArtist,
+                genre = saved?.genre ?: edit.genre, year = saved?.year ?: edit.year,
+                track = saved?.track ?: edit.track, disc = saved?.disc ?: edit.disc,
+                source = saved?.source ?: SOURCE_ONLINE, updatedAt = System.currentTimeMillis(),
+            ))
+        }
+        val updated = apply(raw, dao.get(raw.id))
+        var cover: File? = null
+        if (snapshot.artwork == null && app.onlineArt.enabled.value) {
+            cover = customArt(updated.albumId) ?: customArt(raw.albumId) ?: app.onlineArt.cached(updated.albumId)
+            if (cover == null && coverURL != null) {
+                // Save only into an empty app cover slot. File writes also check for an existing cover.
+                setArt(updated.albumId, coverURL).join()
+                cover = customArt(updated.albumId)
+            }
+            if (cover == null) cover = app.onlineArt.fetch(updated.albumId, updated.albumArtist, updated.album)
+        }
+        if (edit != MetadataEdit() || cover != null) writeAutomatic(raw, edit, cover)
+    }
+
+    private suspend fun writeAutomatic(song: Song, edit: MetadataEdit, cover: File?) {
+        try {
+            val jpeg = cover?.let {
+                val temp = File.createTempFile("cover-", ".jpg", context.cacheDir)
+                try {
+                    check(com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(it), temp, 1200))
+                    temp.readBytes()
+                } finally { temp.delete() }
+            }
+            FileTags.write(context, song, edit, jpeg, onlyMissing = true)
+            pending.remove(song.id)
+        } catch (error: SecurityException) {
+            if (song.uri.authority == android.provider.MediaStore.AUTHORITY) pending[song.id] = PendingWrite(song, MissingMetadata.complete(edit, pending[song.id]?.edit ?: MetadataEdit()), cover ?: pending[song.id]?.cover)
+        }
+        _pendingWrites.value = pending.values.map { it.song.uri }.distinct()
+    }
+
+    fun finishAutomaticWrites(uris: List<android.net.Uri>, allowed: Boolean) = scope.launch(Dispatchers.IO) {
+        if (allowed) for (item in pending.values.toList().filter { it.song.uri in uris }) {
+            runCatching { writeAutomatic(item.song, item.edit, item.cover) }
+        }
+        if (allowed) withContext(Dispatchers.Main) { (context.applicationContext as com.localfy.app.LocalfyApp).library.refresh() }
     }
 
     suspend fun searchBooks(query: String) = withContext(Dispatchers.IO) {

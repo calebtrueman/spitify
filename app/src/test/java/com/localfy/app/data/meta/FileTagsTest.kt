@@ -25,4 +25,23 @@ class FileTagsTest {
             } finally { file.delete() }
         }
     }
+    @Test fun automaticFillKeepsExistingTagsAndCover() {
+        val image = Base64.getDecoder().decode("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdAB//2Q==")
+        for (extension in listOf("flac", "mp3", "m4a")) {
+            val file = File.createTempFile("missing-", ".$extension")
+            try {
+                javaClass.getResourceAsStream("/tags/sample.$extension")!!.use { input -> file.outputStream().use { input.copyTo(it) } }
+                FileTags.tag(file, MetadataEdit(title = "Keep my title", artist = "Keep my artist", track = 4), image)
+                assertTrue(AudioFileIO.read(file).tag.getFirst(FieldKey.GENRE).isBlank())
+                FileTags.tag(file, MetadataEdit(title = "Replace title", artist = "Replace artist", track = 9, genre = "Filled genre"), image + byteArrayOf(0), onlyMissing = true)
+                val tags = AudioFileIO.read(file).tag
+                assertEquals("Keep my title", tags.getFirst(FieldKey.TITLE))
+                assertEquals("Keep my artist", tags.getFirst(FieldKey.ARTIST))
+                assertEquals("4", tags.getFirst(FieldKey.TRACK))
+                assertEquals("Filled genre", tags.getFirst(FieldKey.GENRE))
+                assertArrayEquals(image, tags.artworkList.first().binaryData)
+            } finally { file.delete() }
+        }
+    }
+
 }

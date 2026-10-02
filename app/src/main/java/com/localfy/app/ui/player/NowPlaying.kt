@@ -110,7 +110,7 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
         }
         item(key = "next-header") {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                QueueHeader(state.source?.let { "Next from: $it" } ?: "Next up", Modifier.weight(1f))
+                QueueHeader("Next up", Modifier.weight(1f))
                 if (upNext.isNotEmpty()) TextButton(onClick = app.player::clearUpNext) { Text("Clear", color = LocalfyColors.TextSecondary) }
             }
         }
@@ -125,6 +125,9 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
             }
         }
         itemsIndexed(upNext, key = { _, (i, s) -> "q-$i-${s.id}" }) { pos, (queueIndex, song) ->
+            if (pos == 0 || (upNext[pos - 1].first in state.manualQueueIndices) != (queueIndex in state.manualQueueIndices)) {
+                QueueHeader(if (queueIndex in state.manualQueueIndices) "Added by you" else state.source?.let { "Next from: $it" } ?: "From your playback list")
+            }
             val dragging = dragIndex == pos
             QueueRow(
                 song = song,
@@ -142,7 +145,8 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
                         onDragStart = { dragIndex = pos; dragOffset = 0f },
                         onDragEnd = {
                             val steps = (dragOffset / rowPx).roundToInt()
-                            val target = (pos + steps).coerceIn(0, upNext.lastIndex)
+                            val group = upNext.indices.filter { (upNext[it].first in state.manualQueueIndices) == (queueIndex in state.manualQueueIndices) }
+                            val target = (pos + steps).coerceIn(group.first(), group.last())
                             if (target != pos) app.player.move(queueIndex, upNext[target].first)
                             dragIndex = -1; dragOffset = 0f
                         },

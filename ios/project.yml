@@ -17,6 +17,9 @@ settings:
     CURRENT_PROJECT_VERSION: "9"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+    # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
+    SPITIFY_CARPLAY_ENTITLEMENTS: ""
+    CODE_SIGN_ENTITLEMENTS: "$(SPITIFY_CARPLAY_ENTITLEMENTS)"
 targets:
   Spitify:
     type: application

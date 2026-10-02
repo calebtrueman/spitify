@@ -54,16 +54,11 @@ class TasteTest {
         val mixes = PlaylistGenerator.generate(TasteModel(input()))
         val titles = mixes.map { it.title }
         assertFalse("no generic Daily Mixes", titles.any { it.startsWith("Daily Mix") })
-        assertTrue(titles.contains("Discover Weekly"))
+        assertFalse(titles.contains("Discover Weekly"))
+        assertFalse(titles.contains("Release Radar"))
         assertTrue(titles.any { it.startsWith("daylist") })
         assertTrue(titles.contains("This Is Neon Harbor"))
-        val discover = mixes.first { it.key == "discover" }
-        val heard = input().listens.filter { it.completed }.map { it.songId }.toSet()
-        assertFalse("Discover Weekly only has unheard songs", discover.songs.any { it.id in heard })
-        // Discover leans towards the taste: unheard synthwave ranks above unheard metal.
-        val firstSynth = discover.songs.indexOfFirst { it.genre == "Synthwave" }
-        val firstMetal = discover.songs.indexOfFirst { it.genre == "Metal" }
-        assertTrue(firstSynth >= 0 && (firstMetal == -1 || firstSynth < firstMetal))
+
     }
 
     @Test

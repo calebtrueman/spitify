@@ -159,7 +159,7 @@ fun SettingsScreen() {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 SwitchRow(
                     "Fill in missing song & book info",
-                    (if (fixing) "Working… " else "") + "Untagged files (no artist, folder-name albums, file-name titles) are matched on Deezer, iTunes or Open Library — only when the length matches. Your edits always win; files are never modified.",
+                    (if (fixing) "Working… " else "") + "Missing details and covers are filled automatically from matching online results. Existing tags and covers stay in place. Android may ask once to allow saving changes to your files.",
                     autoFix, container.metadata::setAutoFix,
                 )
                 SwitchRow(

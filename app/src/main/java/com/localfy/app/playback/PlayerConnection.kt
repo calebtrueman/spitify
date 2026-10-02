@@ -36,6 +36,7 @@ data class PlayerUiState(
     /** Song ids in play order (shuffle is applied to the real queue, so this is always what plays next). */
     val queue: List<Long> = emptyList(),
     val currentIndex: Int = -1,
+    val manualQueueIndices: Set<Int> = emptySet(),
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val shuffle: Boolean = false,
@@ -234,6 +235,7 @@ class PlayerConnection(
         _state.value = _state.value.copy(
             connected = true,
             queue = ids,
+            manualQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.toSet(),
             currentIndex = if (ids.isEmpty()) -1 else c.currentMediaItemIndex,
             isPlaying = c.isPlaying,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
@@ -330,8 +332,9 @@ class PlayerConnection(
     fun playNext(songs: List<Song>) {
         val c = controller ?: return
         if (c.mediaItemCount == 0) return playSongs(songs)
-        c.addMediaItems(c.currentMediaItemIndex + 1, songs.map { it.toMediaItem() })
-        unshuffledOrder = unshuffledOrder?.let { it + songs.map(Song::id) }
+        val usable = songs.filter { it.playable }
+        c.addMediaItems(c.currentMediaItemIndex + 1, usable.map { it.toMediaItem().asManualQueueItem() })
+        saveQueue()
     }
 
     fun addToQueue(songs: List<Song>): Boolean {
@@ -341,8 +344,10 @@ class PlayerConnection(
         if (usable.isEmpty()) { _messages.tryEmit("These files aren't supported"); return false }
         if (c.mediaItemCount == 0) playSongs(usable)
         else {
-            c.addMediaItems(usable.map { it.toMediaItem() })
-            unshuffledOrder = unshuffledOrder?.let { it + usable.map(Song::id) }
+            val insertion = ((c.currentMediaItemIndex + 1 until c.mediaItemCount)
+                .lastOrNull { c.getMediaItemAt(it).isManualQueueItem() } ?: c.currentMediaItemIndex) + 1
+            c.addMediaItems(insertion, usable.map { it.toMediaItem().asManualQueueItem() })
+            saveQueue()
         }
         val count = usable.size
         val skipped = songs.size - count
@@ -379,14 +384,17 @@ class PlayerConnection(
         val c = controller ?: return
         if (index !in 0 until c.mediaItemCount) return
         val id = c.getMediaItemAt(index).mediaId.toLongOrNull()
+        val manual = c.getMediaItemAt(index).isManualQueueItem()
         c.removeMediaItem(index)
-        if (id != null) unshuffledOrder = unshuffledOrder?.let { it - id }
+        if (id != null && !manual) unshuffledOrder = unshuffledOrder?.let { it - id }
+        saveQueue()
     }
 
     fun move(from: Int, to: Int) {
         val c = controller ?: return
         if (from == to || from !in 0 until c.mediaItemCount || to !in 0 until c.mediaItemCount) return
         c.moveMediaItem(from, to)
+        saveQueue()
     }
 
     fun clearUpNext() {
@@ -394,6 +402,7 @@ class PlayerConnection(
         val cur = c.currentMediaItemIndex
         if (cur + 1 < c.mediaItemCount) c.removeMediaItems(cur + 1, c.mediaItemCount)
         unshuffledOrder = null
+        saveQueue()
     }
 
     fun cycleRepeat() {
@@ -416,26 +425,30 @@ class PlayerConnection(
         if (c.mediaItemCount < 2) return
         val cur = c.currentMediaItemIndex
         val currentItem = c.getMediaItemAt(cur)
-        val ids = (0 until c.mediaItemCount).map { c.getMediaItemAt(it).mediaId }
-        val items = (0 until c.mediaItemCount).associate { c.getMediaItemAt(it).mediaId to c.getMediaItemAt(it) }
-        val newOrder: List<String>
-        val newCurrent: Int
+        val all = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }
+        val manual = all.drop(cur + 1).filter { it.isManualQueueItem() }
+        val background = all.filterIndexed { i, item -> i != cur && !item.isManualQueueItem() }
+        val before: List<MediaItem>
+        val after: List<MediaItem>
         if (enable) {
-            unshuffledOrder = ids.mapNotNull { it.toLongOrNull() }
-            newOrder = listOf(currentItem.mediaId) + ids.filterIndexed { i, _ -> i != cur }.shuffled()
-            newCurrent = 0
+            unshuffledOrder = all.filter { !it.isManualQueueItem() }.mapNotNull { it.mediaId.toLongOrNull() }
+            before = emptyList()
+            after = manual + background.shuffled()
         } else {
-            val original = unshuffledOrder?.map { it.toString() }?.filter { it in items } ?: ids
-            val extras = ids.filter { it !in original }
-            newOrder = original + extras
-            newCurrent = newOrder.indexOf(currentItem.mediaId).coerceAtLeast(0)
+            // Remove one occurrence at a time: an album or playlist can repeat a song.
+            val remaining = (background + if (currentItem.isManualQueueItem()) emptyList() else listOf(currentItem)).toMutableList()
+            val restored = unshuffledOrder.orEmpty().mapNotNull { id ->
+                val i = remaining.indexOfFirst { it.mediaId == id.toString() }
+                if (i < 0) null else remaining.removeAt(i)
+            } + remaining
+            val current = if (currentItem.isManualQueueItem()) -1 else restored.indexOf(currentItem)
+            before = if (current < 0) emptyList() else restored.take(current)
+            after = manual + if (current < 0) restored else restored.drop(current + 1)
             unshuffledOrder = null
         }
-        // Replace everything around the playing item so audio never stutters.
+        // Keep the playing item in place while replacing the items around it.
         if (cur + 1 < c.mediaItemCount) c.removeMediaItems(cur + 1, c.mediaItemCount)
         if (cur > 0) c.removeMediaItems(0, cur)
-        val before = newOrder.subList(0, newCurrent).mapNotNull { items[it] }
-        val after = newOrder.subList(newCurrent + 1, newOrder.size).mapNotNull { items[it] }
         if (after.isNotEmpty()) c.addMediaItems(1, after)
         if (before.isNotEmpty()) c.addMediaItems(0, before)
         saveQueue()
@@ -519,6 +532,7 @@ class PlayerConnection(
         val ids = (0 until c.mediaItemCount).joinToString(",") { c.getMediaItemAt(it).mediaId }
         prefs.edit {
             putString(KEY_QUEUE, ids)
+            putString(KEY_MANUAL, (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.joinToString(","))
             putInt(KEY_INDEX, c.currentMediaItemIndex)
             putLong(KEY_POSITION, c.currentPosition)
             putInt(KEY_REPEAT, c.repeatMode)
@@ -531,10 +545,12 @@ class PlayerConnection(
         if (ids.isEmpty()) return
         withTimeoutOrNull(5_000) { repo.library.first { !it.isEmpty } } ?: return
         if (ids.any { it < 0 }) withTimeoutOrNull(3_000) { podcasts.episodeSongs.first { it.isNotEmpty() } }
-        val songs = ids.mapNotNull(resolve)
+        val manual = prefs.getString(KEY_MANUAL, null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
+        val restored = ids.mapIndexedNotNull { i, id -> resolve(id)?.let { i to it } }
+        val songs = restored.map { it.second }
         if (songs.isEmpty()) return
         val index = prefs.getInt(KEY_INDEX, 0).coerceIn(songs.indices)
-        c.setMediaItems(songs.map { it.toMediaItem() }, index, prefs.getLong(KEY_POSITION, 0))
+        c.setMediaItems(restored.map { (i, song) -> song.toMediaItem().let { if (i in manual) it.asManualQueueItem() else it } }, index, prefs.getLong(KEY_POSITION, 0))
         c.repeatMode = prefs.getInt(KEY_REPEAT, Player.REPEAT_MODE_OFF)
         c.prepare()
     }
@@ -545,6 +561,7 @@ class PlayerConnection(
         private const val KEY_SHUFFLE = "shuffle"
         private const val KEY_SKIP_SILENCE = "skip_silence"
         private const val KEY_QUEUE = "queue"
+        private const val KEY_MANUAL = "manual_queue_indices"
         private const val KEY_INDEX = "index"
         private const val KEY_POSITION = "position"
         private const val KEY_REPEAT = "repeat"
@@ -581,3 +598,9 @@ fun Int?.isSpoken(): Boolean = this == MediaMetadata.MEDIA_TYPE_PODCAST_EPISODE 
 
 /** Application context for building artwork URIs outside of a Context-bearing scope. */
 object ArtContext { lateinit var app: android.content.Context }
+
+private const val MANUAL_QUEUE_ITEM = "spitify.manual_queue"
+private fun MediaItem.isManualQueueItem() = mediaMetadata.extras?.getBoolean(MANUAL_QUEUE_ITEM) == true
+internal fun MediaItem.asManualQueueItem(): MediaItem = buildUpon().setMediaMetadata(
+    mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putBoolean(MANUAL_QUEUE_ITEM, true) }).build(),
+).build()

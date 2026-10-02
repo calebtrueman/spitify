@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct SpitifyApp: App {
     @UIApplicationDelegateAdaptor(MusicBackgroundAppDelegate.self) private var downloadDelegate
-    @State private var app = AppModel()
+    @State private var app = AppModel.shared
     @State private var router = Router()
     @Environment(\.colorScheme) private var scheme
 
@@ -74,13 +74,18 @@ struct RootView: View {
     }
 
     private func tab<V: View>(_ t: Tab, _ title: String, _ icon: String, @ViewBuilder content: () -> V) -> some View {
-        NavigationStack(path: router.path(t)) {
-            content()
-                .navigationDestination(for: Route.self) { RouteView(route: $0) }
+        VStack(spacing: 0) {
+            NavigationStack(path: router.path(t)) {
+                content()
+                    .navigationDestination(for: Route.self) { RouteView(route: $0) }
+            }
+            .tint(p.accent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            MiniPlayer()
+                .background(p.background)
         }
-        .tint(p.accent) // controls use the accent; only the tab bar uses white
-        // On the stack (not the root page) so pushed pages keep the mini player too.
-        .safeAreaInset(edge: .bottom, spacing: 0) { MiniPlayer() }
+        .background(p.background)
         .tabItem { Label(title, systemImage: icon) }
         .tag(t)
         .toolbarBackground(p.background.opacity(0.94), for: .tabBar)

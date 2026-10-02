@@ -190,30 +190,10 @@ object PlaylistGenerator {
         if (songs.isEmpty()) return emptyList()
         val cal = Calendar.getInstance().apply { timeInMillis = input.now }
         val daySeed = cal.get(Calendar.YEAR) * 1000 + cal.get(Calendar.DAY_OF_YEAR)
-        val weekSeed = cal.get(Calendar.YEAR) * 100 + cal.get(Calendar.WEEK_OF_YEAR)
         val part = Daypart.of(cal.get(Calendar.HOUR_OF_DAY))
         val out = ArrayList<Mix>()
-        val forName = input.userName?.takeIf { it.isNotBlank() }
 
         val palette = listOf(0xFF1ED760, 0xFFE8115B, 0xFF509BF5, 0xFFF59B23, 0xFFAF2896, 0xFF27856A)
-
-        // ---- Discover Weekly: songs you own but haven't really heard, that fit your taste. Mondays.
-        val rndW = Random(weekSeed)
-        val unheard = songs.filter { (model.completedPlays[it.id] ?: 0) == 0 && it.id !in input.liked }
-        val discover = diversify(unheard.rankedBy { model.predicted(it) + rndW.nextDouble() * 0.15 }, maxPerArtist = 2, maxPerAlbum = 2).take(30)
-        if (discover.size >= 5) out += Mix(
-            "discover", "Discover Weekly", "Your weekly mixtape of songs from your library you've never really listened to. Enjoy new music made for you${forName?.let { ", $it" } ?: ""}.",
-            discover, MixSection.MadeForYou, CoverStyle.Bold, 0xFF2D46B9,
-            why = "Picked because they sound like what you love — refreshed every Monday.", refresh = "New every Monday",
-        )
-
-        // ---- Release Radar: newest additions to your library, your favourite artists first. Fridays.
-        val newest = songs.filter { input.now / 1000 - it.dateAddedSec < 30L * 86_400 }.ifEmpty { songs.sortedByDescending { it.dateAddedSec }.take(40) }
-        val radar = newest.sortedByDescending { 0.6 * model.normArtist(it.artist) + 0.4 * (it.dateAddedSec / (input.now / 1000.0)) }.take(30)
-        if (radar.size >= 4) out += Mix(
-            "radar", "Release Radar", "Catch all the latest music added to your device, with the artists you play most up front.",
-            radar, MixSection.MadeForYou, CoverStyle.Bold, 0xFF8D67AB, refresh = "New every Friday",
-        )
 
         // ---- daylist: changes with the time of day, named after how you listen right now.
         val partGenres = (model.daypartGenre[part] ?: model.genreScore).entries.sortedByDescending { it.value }.map { it.key }.take(2)

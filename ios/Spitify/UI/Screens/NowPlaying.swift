@@ -537,19 +537,32 @@ struct QueueSheet: View {
                 if let cur = p.current {
                     Section("Now playing") { row(cur, playing: true) }
                 }
-                Section {
-                    if p.upNext.isEmpty { Text("Nothing queued. Use “Play next” or “Add to queue” from any song's menu.").text(.bodyS).foregroundStyle(.white.opacity(0.6)) }
-                    ForEach(p.upNext, id: \.0) { i, s in row(s, playing: false).onTapGesture { p.skip(to: i) } }
-                        .onDelete { set in set.forEach { p.remove(at: p.index + 1 + $0) } }
-                        .onMove { from, to in if let f = from.first { p.move(from: p.index + 1 + f, to: p.index + 1 + (to > f ? to - 1 : to)) } }
-                } header: {
-                    HStack { Text(p.source.map { "Next from: \($0)" } ?? "Next up"); Spacer(); if !p.upNext.isEmpty { Button("Clear") { p.clearUpNext() } } }
+                if p.upNext.isEmpty {
+                    Text("Nothing queued. Use “Play next” or “Add to queue” from any song's menu.").text(.bodyS).foregroundStyle(.white.opacity(0.6))
                 }
+                queueSection(p.manuallyQueued, title: "Added by you")
+                queueSection(p.nextFromSource, title: p.source.map { "Next from: \($0)" } ?? "From your playback list")
+                if !p.upNext.isEmpty { Button("Clear upcoming songs") { p.clearUpNext() } }
+
             }
             .listStyle(.plain).scrollContentBackground(.hidden)
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Queue").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { DismissButton() } }
+        }
+    }
+    @ViewBuilder private func queueSection(_ entries: [(Int, Song)], title: String) -> some View {
+        if !entries.isEmpty {
+            Section(title) {
+                ForEach(entries, id: \.0) { i, song in row(song, playing: false).onTapGesture { app.player.skip(to: i) } }
+                    .onDelete { offsets in offsets.map { entries[$0].0 }.sorted(by: >).forEach { app.player.remove(at: $0) } }
+                    .onMove { from, to in
+                        if let f = from.first {
+                            let target = min(entries.count - 1, to > f ? to - 1 : to)
+                            app.player.move(from: entries[f].0, to: entries[target].0)
+                        }
+                    }
+            }
         }
     }
     private func row(_ s: Song, playing: Bool) -> some View {

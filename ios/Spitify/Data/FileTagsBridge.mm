@@ -4,27 +4,37 @@
 #include <taglib/tvariant.h>
 
 @implementation FileTagsBridge
-+ (BOOL)writeAtPath:(NSString *)path values:(NSDictionary<NSString *, NSString *> *)values artwork:(NSData *)artwork error:(NSError **)error {
++ (BOOL)writeAtPath:(NSString *)path values:(NSDictionary<NSString *, NSString *> *)values artwork:(NSData *)artwork onlyMissing:(BOOL)onlyMissing error:(NSError **)error {
     auto fail = [&](NSString *message) {
         if (error) *error = [NSError errorWithDomain:@"Spitify.FileTags" code:1 userInfo:@{NSLocalizedDescriptionKey: message}];
         return NO;
     };
     try {
+        NSMutableDictionary<NSString *, NSString *> *changes = [values mutableCopy];
+        NSData *coverData = artwork;
         {
             TagLib::FileRef file(path.fileSystemRepresentation, false);
             if (file.isNull() || !file.file()->isValid()) return fail(@"This file type cannot store these edits.");
             auto properties = file.properties();
-            for (NSString *key in values) {
-                properties[TagLib::String(key.UTF8String)] = TagLib::StringList(TagLib::String(values[key].UTF8String, TagLib::String::UTF8));
+            if (onlyMissing) {
+                for (NSString *key in values) {
+                    auto existing = properties.value(TagLib::String(key.UTF8String));
+                    if (!existing.isEmpty() && !existing.front().stripWhiteSpace().isEmpty()) [changes removeObjectForKey:key];
+                }
+                if (!file.complexProperties("PICTURE").isEmpty()) coverData = nil;
+            }
+            if (changes.count == 0 && !coverData) return YES;
+            for (NSString *key in changes) {
+                properties[TagLib::String(key.UTF8String)] = TagLib::StringList(TagLib::String(changes[key].UTF8String, TagLib::String::UTF8));
             }
             const auto rejected = file.setProperties(properties);
-            for (NSString *key in values) {
+            for (NSString *key in changes) {
                 if (rejected.contains(TagLib::String(key.UTF8String))) return fail(@"This file type does not support all of these fields.");
             }
-            if (artwork) {
+            if (coverData) {
                 TagLib::List<TagLib::VariantMap> pictures;
                 TagLib::VariantMap cover;
-                cover.insert("data", TagLib::ByteVector(static_cast<const char *>(artwork.bytes), static_cast<unsigned int>(artwork.length)));
+                cover.insert("data", TagLib::ByteVector(static_cast<const char *>(coverData.bytes), static_cast<unsigned int>(coverData.length)));
                 cover.insert("mimeType", TagLib::String("image/jpeg"));
                 cover.insert("pictureType", TagLib::String("Front Cover"));
                 cover.insert("description", TagLib::String("Cover"));
@@ -42,15 +52,15 @@
         TagLib::FileRef check(path.fileSystemRepresentation, false);
         if (check.isNull()) return fail(@"The saved file could not be checked. Your original was kept.");
         const auto properties = check.properties();
-        for (NSString *key in values) {
+        for (NSString *key in changes) {
             auto found = properties.value(TagLib::String(key.UTF8String));
-            if (found.isEmpty() || found.front() != TagLib::String(values[key].UTF8String, TagLib::String::UTF8)) {
+            if (found.isEmpty() || found.front() != TagLib::String(changes[key].UTF8String, TagLib::String::UTF8)) {
                 return fail([NSString stringWithFormat:@"Could not verify the %@ field. Your original file was kept.", key.lowercaseString]);
             }
         }
-        if (artwork) {
+        if (coverData) {
             bool found = false;
-            TagLib::ByteVector wanted(static_cast<const char *>(artwork.bytes), static_cast<unsigned int>(artwork.length));
+            TagLib::ByteVector wanted(static_cast<const char *>(coverData.bytes), static_cast<unsigned int>(coverData.length));
             for (const auto &picture : check.complexProperties("PICTURE")) {
                 if (picture.value("data").toByteVector() == wanted) found = true;
             }

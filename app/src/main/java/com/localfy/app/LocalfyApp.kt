@@ -39,8 +39,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val library: LibraryRepository by lazy {
         LibraryRepository(this, database, appScope, metadata).also { repo ->
             repo.onScanned = { music, books ->
-                metadata.autoFixAll(music) { albumId, url -> if (metadata.customArt(albumId) == null && onlineArt.cached(albumId) == null) metadata.setArt(albumId, url) }
-                metadata.autoFixBooks(books)
+                metadata.autoFixAll(music + books)
             }
         }
     }

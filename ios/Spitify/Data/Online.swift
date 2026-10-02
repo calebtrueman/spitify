@@ -80,10 +80,18 @@ enum MusicCatalog {
     /// Only accept a match when length and title agree - auto-fix never guesses.
     static func confident(_ song: Song, _ candidates: [MetadataCandidate]) -> MetadataCandidate? {
         let words = Set(norm(query(for: song)).split(separator: " ").filter { $0.count > 1 })
-        return candidates.first { c in
+        let knownArtist = song.artist.isEmpty || song.artist.lowercased().hasPrefix("unknown") ? nil : song.artist
+        let knownAlbum = song.album.isEmpty || song.album.lowercased().hasPrefix("unknown") || song.album == (song.folder as NSString).lastPathComponent ? nil : song.album
+        return candidates.filter { c in
             let lengthOK = song.durationMs > 0 && c.durationMs > 0 && abs(c.durationMs - song.durationMs) <= 3_000
-            let tw = norm(c.title).split(separator: " ").filter { $0.count > 1 }
-            return lengthOK && !tw.isEmpty && tw.filter { words.contains($0) }.count >= (tw.count + 1) / 2
+            let title = norm(c.title).split(separator: " ").filter { $0.count > 1 }
+            let artist = norm(c.artist).split(separator: " ").filter { $0.count > 1 }
+            let artistOK = knownArtist.map { norm($0) == norm(c.artist) } ?? (!artist.isEmpty && artist.allSatisfy(words.contains))
+            return lengthOK && artistOK && !title.isEmpty && title.allSatisfy(words.contains) &&
+                (knownAlbum == nil || norm(knownAlbum!) == norm(c.album))
+        }.max { a, b in
+            func score(_ c: MetadataCandidate) -> Int { [c.year, c.track, c.disc].compactMap { $0 }.filter { $0 > 0 }.count + ((c.genre ?? "").isEmpty ? 0 : 1) }
+            return score(a) < score(b)
         }
     }
 

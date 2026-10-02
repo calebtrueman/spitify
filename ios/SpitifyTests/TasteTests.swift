@@ -49,15 +49,11 @@ final class TasteTests: XCTestCase {
         let mixes = PlaylistGenerator.generate(TasteModel(input()))
         let titles = mixes.map(\.title)
         XCTAssertFalse(titles.contains { $0.hasPrefix("Daily Mix") })
-        XCTAssertTrue(titles.contains("Discover Weekly"))
+        XCTAssertFalse(titles.contains("Discover Weekly"))
+        XCTAssertFalse(titles.contains("Release Radar"))
         XCTAssertTrue(titles.contains { $0.hasPrefix("daylist") })
         XCTAssertTrue(titles.contains("This Is Neon Harbor"))
-        let discover = mixes.first { $0.id == "discover" }!
-        let heard = Set(input().listens.filter(\.completed).map(\.songId))
-        XCTAssertFalse(discover.songs.contains { heard.contains($0.id) })
-        let firstSynth = discover.songs.firstIndex { $0.genre == "Synthwave" } ?? .max
-        let firstMetal = discover.songs.firstIndex { $0.genre == "Metal" } ?? .max
-        XCTAssertLessThan(firstSynth, firstMetal)
+
     }
 
     func testRadioStaysOnVibe() {

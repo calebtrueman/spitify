@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
                         app.taste // starts the recommendation engine
                         app.player.connect()
                     }
+                    AutomaticTagWritePermission(app)
                     LocalfyRoot(this@MainActivity)
                 }
             }
@@ -111,6 +112,10 @@ class MainActivity : ComponentActivity() {
 
     /** "Open with Spitify" from a file manager or another app. */
     private fun handleViewIntent(intent: Intent?) {
+        if (intent?.action == MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) {
+            playVoiceRequest(intent)
+            return
+        }
         val uri = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data ?: return
         lifecycleScope.launch {
             val id = if (uri.authority == MediaStore.AUTHORITY) uri.lastPathSegment?.toLongOrNull() else null
@@ -121,6 +126,32 @@ class MainActivity : ComponentActivity() {
             app.player.playSongs(listOf(song), source = "Opened file")
         }
     }
+    private fun playVoiceRequest(intent: Intent) {
+        lifecycleScope.launch {
+            fun explain(message: String) = android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_LONG).show()
+            if (ContextCompat.checkSelfPermission(this@MainActivity, audioPermission) != PackageManager.PERMISSION_GRANTED) {
+                explain("Allow Spitify to read your music first.")
+                return@launch
+            }
+            app.player.connect()
+            if (withTimeoutOrNull(8_000) { app.player.state.first { it.connected } } == null) {
+                explain("Spitify could not connect to the player. Please try again.")
+                return@launch
+            }
+            val request = com.localfy.app.playback.AutoLibrary.voiceRequest(intent.getStringExtra(android.app.SearchManager.QUERY).orEmpty(), intent.extras)
+            if (request.empty && app.player.state.value.hasMedia) {
+                if (!app.player.state.value.isPlaying) app.player.togglePlay()
+                return@launch
+            }
+            val selected = com.localfy.app.playback.AutoLibrary(this@MainActivity).voice(request)
+            val first = selected.songs.firstOrNull()
+            if (first == null) { explain("Nothing in your Spitify library matches that request."); return@launch }
+            if (first.isAudiobook) app.player.playBook(selected.songs, 0, selected.source)
+            else if (first.isPodcast) app.player.playEpisode(first, selected.source)
+            else app.player.playSongs(selected.songs, shuffle = request.empty, source = selected.source)
+        }
+    }
+
 }
 
 private val audioPermission =
@@ -186,5 +217,35 @@ private fun CrashScreen(report: String, onSend: () -> Unit, onContinue: () -> Un
         Button(onClick = onSend, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1ED760), contentColor = Color.Black)) { Text("Send crash report") }
         Spacer(Modifier.height(8.dp))
         androidx.compose.material3.TextButton(onClick = onContinue) { Text("Open Spitify", color = Color.White) }
+    }
+}
+
+/** Android grants writes to other apps' music files in one batch, never one prompt per song. */
+@Composable
+private fun AutomaticTagWritePermission(app: LocalfyApp) {
+    val pending by app.metadata.pendingWrites.collectAsStateWithLifecycle()
+    val fixing by app.metadata.fixing.collectAsStateWithLifecycle()
+    var resumed by remember { mutableStateOf(false) }
+    var requested by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
+    val asked = remember { mutableSetOf<android.net.Uri>() }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        app.metadata.finishAutomaticWrites(requested, result.resultCode == android.app.Activity.RESULT_OK)
+        requested = emptyList()
+    }
+    LifecycleResumeEffect(Unit) {
+        resumed = true
+        onPauseOrDispose { resumed = false }
+    }
+    LaunchedEffect(pending, fixing, resumed, requested) {
+        if (!resumed || fixing || requested.isNotEmpty()) return@LaunchedEffect
+        kotlinx.coroutines.delay(1500)
+        val batch = pending.filter { it !in asked }.take(2000)
+        if (batch.isEmpty()) return@LaunchedEffect
+        asked.addAll(batch)
+        try {
+            requested = batch
+            val request = MediaStore.createWriteRequest(app.contentResolver, batch)
+            launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build())
+        } catch (_: Exception) { requested = emptyList() }
     }
 }

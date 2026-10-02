@@ -13,6 +13,7 @@ enum SleepTimer: Equatable { case at(Date), endOfTrack }
 final class Player {
     private(set) var queue: [Song] = []
     private(set) var index = -1
+    private(set) var manualQueueIndices: Set<Int> = []
     private(set) var isPlaying = false
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
@@ -33,6 +34,8 @@ final class Player {
 
     var current: Song? { queue.indices.contains(index) ? queue[index] : nil }
     var upNext: [(Int, Song)] { index < 0 ? [] : Array(queue.enumerated().dropFirst(index + 1)) }
+    var manuallyQueued: [(Int, Song)] { upNext.filter { manualQueueIndices.contains($0.0) } }
+    var nextFromSource: [(Int, Song)] { upNext.filter { !manualQueueIndices.contains($0.0) } }
     var hasMedia: Bool { current != nil }
 
     private let engine = EngineBackend()
@@ -74,6 +77,7 @@ final class Player {
         } else {
             queue = usable; unshuffled = nil; index = startIdx
         }
+        manualQueueIndices = []
         setShuffle(doShuffle)
         self.source = source
         startCurrent(at: Double(positionMs) / 1000, play: true)
@@ -137,8 +141,7 @@ final class Player {
 
     func playNext(_ songs: [Song]) {
         guard current != nil else { return play(songs) }
-        queue.insert(contentsOf: songs.filter(\.playable), at: index + 1)
-        unshuffled?.append(contentsOf: songs)
+        insertManual(songs.filter(\.playable), at: index + 1)
         flash("Playing next")
     }
 
@@ -147,34 +150,76 @@ final class Player {
         let usable = songs.filter(\.playable)
         guard !usable.isEmpty else { flash("These files aren't supported"); return }
         if current == nil { play(usable) }
-        else { queue.append(contentsOf: usable); unshuffled?.append(contentsOf: usable) }
+        else { insertManual(usable, at: (manualQueueIndices.filter { $0 > index }.max() ?? index) + 1) }
         let skipped = songs.count - usable.count
         flash("Added \(usable.count) \(usable.count == 1 ? "song" : "songs") to queue" +
               (skipped > 0 ? " • \(skipped) unsupported skipped" : ""))
     }
 
-    func remove(at i: Int) { guard queue.indices.contains(i), i != index else { return }; let s = queue.remove(at: i); if i < index { index -= 1 }; unshuffled?.removeAll { $0 == s } }
+    private func insertManual(_ songs: [Song], at insertion: Int) {
+        guard !songs.isEmpty else { return }
+        manualQueueIndices = Set(manualQueueIndices.map { $0 >= insertion ? $0 + songs.count : $0 })
+        manualQueueIndices.formUnion(insertion..<(insertion + songs.count))
+        queue.insert(contentsOf: songs, at: insertion)
+        saveQueue()
+    }
+
+    func remove(at i: Int) {
+        guard queue.indices.contains(i), i != index else { return }
+        let wasManual = manualQueueIndices.contains(i)
+        let song = queue.remove(at: i)
+        manualQueueIndices = Set(manualQueueIndices.filter { $0 != i }.map { $0 > i ? $0 - 1 : $0 })
+        if i < index { index -= 1 }
+        if !wasManual, let original = unshuffled?.firstIndex(of: song) { unshuffled?.remove(at: original) }
+        saveQueue()
+    }
     func move(from: Int, to: Int) {
         guard queue.indices.contains(from), queue.indices.contains(to), from != index else { return }
-        let s = queue.remove(at: from); queue.insert(s, at: to)
+        let song = queue.remove(at: from); queue.insert(song, at: to)
+        manualQueueIndices = Set(manualQueueIndices.map { i in
+            if i == from { return to }
+            if from < to && i > from && i <= to { return i - 1 }
+            if from > to && i >= to && i < from { return i + 1 }
+            return i
+        })
         if from < index && to >= index { index -= 1 } else if from > index && to <= index { index += 1 }
+        saveQueue()
     }
-    func clearUpNext() { if index + 1 < queue.count { queue.removeSubrange((index + 1)...) }; unshuffled = nil }
+    func clearUpNext() {
+        if index + 1 < queue.count { queue.removeSubrange((index + 1)...) }
+        manualQueueIndices = manualQueueIndices.filter { $0 <= index }
+        unshuffled = nil
+        saveQueue()
+    }
 
-    /// Shuffle reorders the real queue (current stays first), so "Next up" is accurate; off restores the order.
+    /// Shuffle changes the album/library order but keeps manually added songs first.
     func toggleShuffle() {
         guard let cur = current else { setShuffle(!shuffle); return }
+        let currentWasManual = manualQueueIndices.contains(index)
+        let manual = manuallyQueued.map(\.1)
+        let background = queue.enumerated().filter { $0.offset != index && !manualQueueIndices.contains($0.offset) }.map(\.element)
         if !shuffle {
-            unshuffled = queue
-            queue = [cur] + queue.enumerated().filter { $0.offset != index }.map(\.element).shuffled()
+            unshuffled = queue.enumerated().filter { !manualQueueIndices.contains($0.offset) }.map(\.element)
+            queue = [cur] + manual + background.shuffled()
             index = 0
-        } else if let original = unshuffled {
-            let extras = queue.filter { !original.contains($0) }
-            queue = original.filter { queue.contains($0) } + extras
-            index = queue.firstIndex(of: cur) ?? 0
+        } else {
+            var remaining = background + (currentWasManual ? [] : [cur])
+            var restored: [Song] = []
+            for song in unshuffled ?? [] {
+                if let i = remaining.firstIndex(of: song) { restored.append(remaining.remove(at: i)) }
+            }
+            restored += remaining
+            let current = currentWasManual ? nil : restored.firstIndex(of: cur)
+            let before = current.map { Array(restored.prefix($0)) } ?? []
+            let after = current.map { Array(restored.dropFirst($0 + 1)) } ?? restored
+            queue = before + [cur] + manual + after
+            index = before.count
             unshuffled = nil
         }
+        manualQueueIndices = Set((index + 1)..<(index + 1 + manual.count))
+        if currentWasManual { manualQueueIndices.insert(index) }
         setShuffle(!shuffle)
+        saveQueue()
     }
 
     func cycleRepeat() {
@@ -309,6 +354,8 @@ final class Player {
 
     private func saveQueue() {
         let d = UserDefaults.standard
+        d.set(Array(manualQueueIndices), forKey: "queueManualIndices")
+        d.set(unshuffled?.map(\.id), forKey: "queueUnshuffled")
         d.set(queue.map(\.id), forKey: "queue"); d.set(index, forKey: "queueIndex"); d.set(position, forKey: "queuePosition"); d.set(source, forKey: "queueSource")
     }
 
@@ -316,9 +363,13 @@ final class Player {
     func restore(lookup: (String) -> Song?) {
         guard queue.isEmpty else { return }
         let d = UserDefaults.standard
-        let songs = (d.stringArray(forKey: "queue") ?? []).compactMap(lookup)
+        let savedManual = Set(d.array(forKey: "queueManualIndices") as? [Int] ?? [])
+        let restored = (d.stringArray(forKey: "queue") ?? []).enumerated().compactMap { i, id in lookup(id).map { (i, $0) } }
+        let songs = restored.map(\.1)
         guard !songs.isEmpty else { return }
         queue = songs
+        manualQueueIndices = Set(restored.enumerated().compactMap { i, pair in savedManual.contains(pair.0) ? i : nil })
+        unshuffled = d.stringArray(forKey: "queueUnshuffled")?.compactMap(lookup)
         index = min(max(0, d.integer(forKey: "queueIndex")), songs.count - 1)
         source = d.string(forKey: "queueSource")
         startCurrent(at: d.double(forKey: "queuePosition"), play: false)

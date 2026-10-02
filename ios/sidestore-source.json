@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.8",
+          "buildVersion": "9",
+          "date": "2026-10-02T06:39:05Z",
+          "localizedDescription": "Queue picks play first. Missing song details and covers fill automatically and save into files. Fixed player spacing, removed Discover and Release Radar, and added voice actions. Full CarPlay browsing requires an approved Apple signing profile.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.8/Spitify-1.0.8-unsigned.ipa",
+          "size": 2361622,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.7",
           "buildVersion": "8",
           "date": "2026-10-02T05:13:36Z",

@@ -59,3 +59,30 @@ Free Apple ID limits: 3 sideloaded apps at once (SideStore counts as one) and 10
 ## Releasing a new version
 
 Bump `MARKETING_VERSION` in `project.yml`, then publish a GitHub release tagged `vX.Y.Z`. CI then builds the IPA, attaches it to the release, and adds it to `ios/sidestore-source.json`. SideStore will offer the update.
+
+## Voice and car playback
+
+Siri shortcuts are included in the app. After opening Spitify and loading your library,
+try “Play [song, album, artist, playlist, or show] in Spitify,” “Resume Spitify,” or
+“Pause Spitify.” These actions play items already in your library or followed shows.
+They also appear in Apple's Shortcuts app. Siri still decides which app a spoken
+request belongs to; the phone needs a real voice check after installation.
+
+The car's built-in Now Playing screen uses the same audio, artwork, and play/pause/
+skip controls as the phone. The separate Spitify CarPlay screens include library
+browsing, podcasts, books, and the queue. They share the phone's player and work
+when the car launches the app first.
+
+Apple requires an approved CarPlay audio signing profile for that separate app
+icon and browsing interface. A free SideStore signature does not provide it.
+The regular SideStore build therefore leaves the restricted entitlement off.
+After approval, build with `SPITIFY_CARPLAY_ENTITLEMENTS=CarPlay.entitlements`
+and your matching team and provisioning profile. This setting also allows a
+CarPlay simulator build without changing the normal SideStore release.
+See [Apple's CarPlay setup](https://developer.apple.com/documentation/carplay/requesting-carplay-entitlements).
+
+Missing song details and covers are filled automatically when a matching online
+result is found. Existing file tags and artwork stay in place. Local files receive
+the missing values directly; Music app library files remain read-only. If a match
+is uncertain, Spitify leaves the field alone. “Find online” remains available for
+choosing a replacement yourself.

@@ -35,6 +35,7 @@ struct Profile: Codable, Equatable {
 /// Owns every store and keeps the generated playlists up to date.
 @MainActor @Observable
 final class AppModel {
+    static let shared = AppModel()
     let library = LibraryStore()
     let shows = ShowsStore()
     let lyrics = LyricsService()
@@ -43,20 +44,22 @@ final class AppModel {
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes() } }
-    var autoFix = UserDefaults.standard.object(forKey: "autoFix") as? Bool ?? true { didSet { UserDefaults.standard.set(autoFix, forKey: "autoFix") } }
-    var onlineArt = UserDefaults.standard.object(forKey: "onlineArt") as? Bool ?? true { didSet { UserDefaults.standard.set(onlineArt, forKey: "onlineArt") } }
+    var autoFix = UserDefaults.standard.object(forKey: "autoFix") as? Bool ?? true { didSet { UserDefaults.standard.set(autoFix, forKey: "autoFix"); if autoFix { Task { await backgroundFixes() } } } }
+    var onlineArt = UserDefaults.standard.object(forKey: "onlineArt") as? Bool ?? true { didSet { UserDefaults.standard.set(onlineArt, forKey: "onlineArt"); if onlineArt { Task { await backgroundFixes() } } } }
 
     private(set) var mixes: [Mix] = []
     private(set) var model: TasteModel?
     private(set) var fixing = false
     private var mixTask: Task<Void, Never>?
     private var started = false
+    private var fixesRequested = false
 
     static var photoURL: URL { Store.directory.appendingPathComponent("profile.jpg") }
 
     init() {
         player.library = library
         player.shows = shows
+        library.onScanCompleted = { [weak self] in Task { await self?.backgroundFixes() } }
         library.onTasteInputChanged = { [weak self] in self?.scheduleMixes() }
         musicDownloads.onImported = { [weak self] in await self?.importDownloadedMusic() }
     }
@@ -117,57 +120,77 @@ final class AppModel {
     // MARK: Online fixes (missing covers + untagged files)
 
     func backgroundFixes() async {
-        guard !fixing else { return }
+        if fixing { fixesRequested = true; return }
+        guard autoFix || onlineArt else { return }
         fixing = true
         defer { fixing = false }
-        var tried = Set(UserDefaults.standard.stringArray(forKey: "fixTried") ?? [])
-        if onlineArt {
-            for album in library.library.albums where !ArtCache.shared.hasArt(album.id) && !tried.contains("art:" + album.id) {
-                tried.insert("art:" + album.id)
-                if let url = await MusicCatalog.albumArt(artist: album.artist, album: album.title), let data = await HTTP.get(url) {
-                    ArtCache.shared.storeEmbedded(data, key: album.id)
-                    library.artVersion += 1
-                    for song in album.songs where song.kind == .file {
-                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(source: "online"), artwork: data)
-                    }
+        repeat {
+            fixesRequested = false
+            // Use a snapshot so a new import can request another pass without disrupting this one.
+            let songs = library.rawSongs.filter { $0.playable }
+            for raw in songs {
+                let song = library.library.songById[raw.id] ?? library.books.first { $0.id == raw.id } ?? raw
+                await fillMissing(song)
+            }
+        } while fixesRequested
+    }
+
+    private func fillMissing(_ song: Song) async {
+        let url = song.kind == .file ? Store.documents.appendingPathComponent(song.location) : nil
+        let tags: Tags
+        if let url { tags = await TagReader.read(url) }
+        else {
+            tags = Tags(title: song.title, artist: song.artist, album: song.album, albumArtist: song.albumArtist,
+                        genre: song.genre, year: song.year > 0 ? song.year : nil, track: song.track > 0 ? song.track : nil,
+                        disc: song.disc > 0 ? song.disc : nil)
+        }
+        let saved = library.overrides[song.id] ?? MetadataOverride(source: "online")
+        var suggested = MetadataOverride(source: "online")
+        var coverURL: String?
+        let defaults = UserDefaults.standard
+        var attempts = defaults.dictionary(forKey: "missingAttemptsV2") as? [String: Double] ?? [:]
+        let key = "tag:\(song.id):\(song.sizeBytes)"
+        let week: Double = 7 * 24 * 60 * 60
+        if autoFix && MissingMetadata.incomplete(tags.edit, saved: saved) && Date().timeIntervalSince1970 - (attempts[key] ?? 0) >= week {
+            if song.isAudiobook {
+                let guess = song.album.replacingOccurrences(of: "_", with: " ")
+                if let hit = await OpenLibrary.search(guess).first(where: { foldForSearch($0.title) == foldForSearch(guess) }) {
+                    suggested = MetadataOverride(artist: hit.author, album: hit.title, albumArtist: hit.author, genre: "Audiobook", year: hit.year, source: "online")
+                    coverURL = hit.coverURL
                 }
+            } else if let match = MusicCatalog.confident(song, await MusicCatalog.search(MusicCatalog.query(for: song), durationMs: song.durationMs)) {
+                suggested = MetadataOverride(title: match.title, artist: match.artist, album: match.album, albumArtist: match.artist,
+                    genre: match.genre, year: match.year, track: match.track, disc: match.disc, source: "online")
+                coverURL = match.artURL
+            }
+            attempts[key] = Date().timeIntervalSince1970
+            defaults.set(attempts, forKey: "missingAttemptsV2")
+            try? await Task.sleep(for: .milliseconds(1100))
+        }
+        let edit = autoFix ? MissingMetadata.fill(tags.edit, saved: saved, suggested: suggested) : MetadataOverride(source: "online")
+        if edit != MetadataOverride(source: "online") { library.saveMissingOverride(edit, for: song) }
+        let updated = library.library.songById[song.id] ?? library.books.first { $0.id == song.id } ?? song
+        var cover: Data?
+        if onlineArt && tags.artwork == nil {
+            // Existing app covers also get embedded automatically in files that have no cover.
+            let cache = ArtCache.shared
+            cover = cache.image(for: updated.albumKey)?.jpegData(compressionQuality: 0.92)
+                ?? cache.image(for: song.albumKey)?.jpegData(compressionQuality: 0.92)
+            let artKey = "art:" + updated.albumKey
+            if cover == nil && Date().timeIntervalSince1970 - (attempts[artKey] ?? 0) >= week {
+                if coverURL == nil { coverURL = await MusicCatalog.albumArt(artist: updated.albumArtist, album: updated.album) }
+                if let coverURL { cover = await HTTP.get(coverURL) }
+                attempts[artKey] = Date().timeIntervalSince1970
+                defaults.set(attempts, forKey: "missingAttemptsV2")
                 try? await Task.sleep(for: .milliseconds(800))
             }
-        }
-        if autoFix {
-            for song in library.library.songs where MusicCatalog.needsFix(song) && library.overrides[song.id] == nil && !tried.contains("tag:" + song.id) {
-                tried.insert("tag:" + song.id)
-                if let c = MusicCatalog.confident(song, await MusicCatalog.search(MusicCatalog.query(for: song), durationMs: song.durationMs)) {
-                    library.saveOverride(MetadataOverride(title: c.title, artist: c.artist, album: c.album, albumArtist: c.artist, genre: c.genre, year: c.year, track: c.track, disc: c.disc, source: "online"), for: [song])
-                    if song.kind == .file {
-                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(title: c.title, artist: c.artist, album: c.album, albumArtist: c.artist, genre: c.genre, year: c.year, track: c.track, disc: c.disc, source: "online"))
-                    }
-                    let key = Song.albumKey(album: c.album, artist: c.artist)
-                    if !ArtCache.shared.hasArt(key), let art = c.artURL, let data = await HTTP.get(art) {
-                        ArtCache.shared.storeEmbedded(data, key: key); library.artVersion += 1
-                        if song.kind == .file { try? await FileTags.shared.write(Store.documents.appendingPathComponent(song.location), edit: MetadataOverride(source: "online"), artwork: data) }
-                    }
-                }
-                try? await Task.sleep(for: .milliseconds(1100))
-            }
-            // Own audiobooks with a folder-name title: ask Open Library.
-            for (key, chapters) in Dictionary(grouping: library.books, by: \.albumKey) where !tried.contains("book:" + key) {
-                tried.insert("book:" + key)
-                let first = chapters[0]
-                guard first.artist.lowercased().hasPrefix("unknown") || first.album == (first.folder as NSString).lastPathComponent else { continue }
-                let guess = first.album.replacingOccurrences(of: "_", with: " ")
-                if let hit = await OpenLibrary.search(guess).first(where: { foldForSearch($0.title).contains(foldForSearch(guess)) || foldForSearch(guess).contains(foldForSearch($0.title)) }) {
-                    library.saveOverride(MetadataOverride(artist: hit.author, album: hit.title, albumArtist: hit.author, genre: "Audiobook", year: hit.year, source: "online"), for: chapters)
-                    var cover: Data?
-                    if let url = hit.coverURL { cover = await HTTP.get(url) }
-                    if let cover { ArtCache.shared.storeEmbedded(cover, key: Song.albumKey(album: hit.title, artist: hit.author)); library.artVersion += 1 }
-                    for chapter in chapters where chapter.kind == .file && library.overrides[chapter.id]?.source != "user" {
-                        try? await FileTags.shared.write(Store.documents.appendingPathComponent(chapter.location),
-                            edit: MetadataOverride(artist: hit.author, album: hit.title, albumArtist: hit.author, genre: "Audiobook", year: hit.year, source: "online"), artwork: cover)
-                    }
-                }
+            if let cover, !cache.hasArt(updated.albumKey) {
+                cache.storeEmbedded(cover, key: updated.albumKey)
+                library.artVersion += 1
             }
         }
-        UserDefaults.standard.set(Array(tried), forKey: "fixTried")
+        if let url, edit != MetadataOverride(source: "online") || cover != nil {
+            try? await FileTags.shared.write(url, edit: edit, artwork: cover, onlyMissing: true)
+        }
     }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import MediaPlayer
 import Observation
+import AppIntents
 
 /// Scans the Spitify Documents folder (+ the Music app library), and owns everything personal:
 /// likes, playlists, listening history, metadata edits and hidden recommendations.
@@ -13,6 +14,7 @@ final class LibraryStore {
     private(set) var lastScanFound = 0
 
     /// Fired when anything the taste engine learns from changes.
+    var onScanCompleted: (() -> Void)?
     var onTasteInputChanged: (() -> Void)?
 
     var liked: [String: Date] = [:] { didSet { Store.save(liked, "liked"); onTasteInputChanged?() } }
@@ -112,6 +114,8 @@ final class LibraryStore {
         rawSongs = songs
         lastScanFound = songs.count
         rebuild()
+        SpitifyShortcuts.updateAppShortcutParameters()
+        onScanCompleted?()
     }
 
     /// Downloaded, DRM-free songs from the Music app. (Streaming-only / protected tracks can't be played by other apps.)
@@ -239,6 +243,15 @@ final class LibraryStore {
             saveOverride(edit, for: [song])
         }
         await scan()
+    }
+
+    func saveMissingOverride(_ edit: MetadataOverride, for song: Song) {
+        var saved = overrides[song.id] ?? MetadataOverride(source: "online")
+        saved.title = saved.title ?? edit.title; saved.artist = saved.artist ?? edit.artist
+        saved.album = saved.album ?? edit.album; saved.albumArtist = saved.albumArtist ?? edit.albumArtist
+        saved.genre = saved.genre ?? edit.genre; saved.year = saved.year ?? edit.year
+        saved.track = saved.track ?? edit.track; saved.disc = saved.disc ?? edit.disc
+        overrides[song.id] = saved
     }
 
     func saveOverride(_ o: MetadataOverride, for songs: [Song]) {

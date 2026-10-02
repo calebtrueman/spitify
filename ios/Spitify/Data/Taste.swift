@@ -1,6 +1,6 @@
 import Foundation
 
-/// A generated playlist (Daily Mix, Discover Weekly, daylist, radio...).
+/// A generated playlist (daylist, artist mixes, radio...).
 struct Mix: Identifiable, Hashable {
     enum Section: String, CaseIterable { case madeForYou = "Made for you", discover = "Discover", yourMixes = "Your mixes", throwbacks = "Throwbacks & favourites" }
     enum CoverStyle { case collage, bold }
@@ -207,28 +207,8 @@ enum PlaylistGenerator {
         guard !songs.isEmpty else { return [] }
         let cal = Calendar.current
         let daySeed = cal.component(.year, from: input.now) * 1000 + (cal.ordinality(of: .day, in: .year, for: input.now) ?? 0)
-        let weekSeed = cal.component(.yearForWeekOfYear, from: input.now) * 100 + cal.component(.weekOfYear, from: input.now)
         let part = Daypart.of(hour: cal.component(.hour, from: input.now))
         var out: [Mix] = []
-        let forName = input.userName.flatMap { $0.isEmpty ? nil : $0 }
-
-        // Discover Weekly
-        var rw = SeededRandom(weekSeed)
-        let unheard = songs.filter { (m.completedPlays[$0.id] ?? 0) == 0 && !input.liked.contains($0.id) }
-        let discover = Array(diversify(unheard.map { ($0, m.predicted($0) + rw.double() * 0.15) }.sorted { $0.1 > $1.1 }.map(\.0), maxPerArtist: 2, maxPerAlbum: 2).prefix(30))
-        if discover.count >= 5 {
-            out.append(Mix(id: "discover", title: "Discover Weekly", description: "Your weekly mixtape of songs from your library you've never really listened to. Enjoy new music made for you\(forName.map { ", \($0)" } ?? "").",
-                           songs: discover, section: .madeForYou, style: .bold, accent: 0x2D46B9, why: "Picked because they sound like what you love.", refresh: "New every Monday"))
-        }
-
-        // Release Radar
-        let month = input.now.addingTimeInterval(-30 * 86_400)
-        var newest = songs.filter { $0.dateAdded > month }
-        if newest.isEmpty { newest = Array(songs.sorted { $0.dateAdded > $1.dateAdded }.prefix(40)) }
-        let radar = Array(newest.sorted { 0.6 * m.normArtist($0.artist) + 0.4 * $0.dateAdded.timeIntervalSince1970 / input.now.timeIntervalSince1970 > 0.6 * m.normArtist($1.artist) + 0.4 * $1.dateAdded.timeIntervalSince1970 / input.now.timeIntervalSince1970 }.prefix(30))
-        if radar.count >= 4 {
-            out.append(Mix(id: "radar", title: "Release Radar", description: "Catch the latest music added to your iPhone, with the artists you play most up front.", songs: radar, section: .madeForYou, style: .bold, accent: 0x8D67AB, refresh: "New every Friday"))
-        }
 
         // daylist
         let partGenreScores = (m.daypartGenre[part]?.isEmpty == false ? m.daypartGenre[part]! : m.genreScore)

@@ -148,3 +148,22 @@ final class LayoutTests: XCTestCase {
         app.buttons["Close lyrics"].tap(); sleep(3); shot("L4-after-lyrics")
     }
 }
+
+final class PlayerRailLayoutTests: XCTestCase {
+    func testHomeEndsAbovePlayerRail() {
+        let app = XCUIApplication()
+        app.launch()
+        let shuffle = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Shuffle your library'")).firstMatch
+        XCTAssertTrue(shuffle.waitForExistence(timeout: 10))
+        shuffle.tap()
+        let rail = app.buttons["miniPlayer"]
+        XCTAssertTrue(rail.waitForExistence(timeout: 5))
+        let page = app.scrollViews.firstMatch
+        XCTAssertLessThanOrEqual(page.frame.maxY, rail.frame.minY + 1)
+        page.swipeUp()
+        page.swipeUp()
+        XCTAssertLessThanOrEqual(page.frame.maxY, rail.frame.minY + 1)
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "Home stays above player"; shot.lifetime = .keepAlways; add(shot)
+    }
+}

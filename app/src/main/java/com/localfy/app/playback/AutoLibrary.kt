@@ -132,8 +132,15 @@ class AutoLibrary(private val context: Context) {
         // Voice: "play <query> on Spitify" (empty query = just play something).
         first.requestMetadata.searchQuery?.let { q ->
             awaitLibrary()
-            val songs = if (q.isBlank()) app.library.library.value.songs.shuffled() else search(q)
-            return Triple(songs.filter { it.playable }.take(200).map { it.toMediaItem().withArt() }, 0, 0)
+            val extras = first.requestMetadata.extras
+            val request = voiceRequest(q, extras)
+            if (request.empty) resumption()?.let { return it }
+            val selected = voice(request)
+            val songs = if (request.empty) selected.songs.shuffled() else selected.songs
+            require(songs.isNotEmpty()) { "Nothing in your Spitify library matches this request." }
+            val playable = if (songs.first().isPodcast && !songs.first().isAudiobook) songs.take(1) else songs
+            val position = if (playable.first().isPodcast || playable.first().isAudiobook) app.podcasts.resumePosition(playable.first().resumeKey) else 0L
+            return Triple(playable.map { it.toMediaItem().withArt() }, 0, position)
         }
         if (first.mediaId == SHUFFLE_ALL) {
             awaitLibrary()
@@ -165,18 +172,32 @@ class AutoLibrary(private val context: Context) {
         val prefs = context.getSharedPreferences(PlayerPrefs.FILE, Context.MODE_PRIVATE)
         val ids = prefs.getString("queue", null)?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
         if (ids.any { it < 0 }) withTimeoutOrNull(3_000) { app.podcasts.episodeSongs.first { it.isNotEmpty() } }
-        val songs = ids.mapNotNull(app::resolve)
-        if (songs.isEmpty()) return null
-        return Triple(songs.map { it.toMediaItem().withArt() }, prefs.getInt("index", 0).coerceIn(songs.indices), prefs.getLong("position", 0))
+        val manual = prefs.getString("manual_queue_indices", null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
+        val items = ids.mapIndexedNotNull { i, id -> app.resolve(id)?.toMediaItem()?.withArt()?.let { if (i in manual) it.asManualQueueItem() else it } }
+        if (items.isEmpty()) return null
+        return Triple(items, prefs.getInt("index", 0).coerceIn(items.indices), prefs.getLong("position", 0))
     }
 
     // ---------- search ----------
+
+    suspend fun voice(request: VoiceRequest): VoiceSelection {
+        awaitLibrary()
+        app.podcasts.start()
+        val playlists = app.library.playlists.value.map { it.name to it.songs } +
+            listOf("Liked songs" to app.library.library.value.songs.filter { it.id in app.library.likedIds.value })
+        val shows = app.podcasts.shows.value.filter { it.podcast.subscribedAt > 0 || it.podcast.kind == KIND_AUDIOBOOK }.map { show ->
+            show.podcast.title to show.episodes.sortedWith(compareBy({ if (show.podcast.kind == KIND_AUDIOBOOK) it.position else 0 }, { -it.pubDate })).map { it.toSong(show.podcast) }
+        } + (app.library.localBooks.value + app.library.localPodcasts.value).groupBy { it.album }.map { (name, songs) ->
+            name to songs.sortedWith(compareBy({ it.disc }, { it.track }))
+        }
+        return VoiceSearch.select(request, app.library.library.value.songs, playlists, shows)
+    }
 
     suspend fun search(query: String): List<Song> {
         awaitLibrary()
         val words = fold(query).split(' ').filter { it.isNotBlank() }
         if (words.isEmpty()) return emptyList()
-        val all = app.library.library.value.songs
+        val all = app.library.library.value.songs + app.library.localBooks.value + app.library.localPodcasts.value + app.podcasts.episodeSongs.value.values
         fun score(s: Song): Int {
             val title = fold(s.title); val artist = fold(s.artist); val album = fold(s.album)
             val hay = "$title $artist $album"
@@ -256,6 +277,13 @@ class AutoLibrary(private val context: Context) {
     private fun fold(s: String) = Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 
     companion object {
+        fun voiceRequest(query: String, extras: Bundle?) = VoiceRequest(
+            query, extras?.getString(android.provider.MediaStore.EXTRA_MEDIA_TITLE),
+            extras?.getString(android.provider.MediaStore.EXTRA_MEDIA_ARTIST),
+            extras?.getString(android.provider.MediaStore.EXTRA_MEDIA_ALBUM),
+            extras?.getString(android.provider.MediaStore.EXTRA_MEDIA_GENRE),
+            extras?.getString(android.provider.MediaStore.EXTRA_MEDIA_PLAYLIST),
+        )
         const val ROOT = "root"
         const val TAB_HOME = "tab:home"
         const val TAB_LIBRARY = "tab:library"

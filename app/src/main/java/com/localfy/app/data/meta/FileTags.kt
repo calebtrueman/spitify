@@ -24,18 +24,21 @@ object FileTags {
     ).filterValues { it != null }
 
     /** Only call on a temporary file. The caller publishes it after this read-back succeeds. */
-    fun tag(file: File, edit: MetadataEdit, artwork: ByteArray? = null) {
+    fun tag(file: File, edit: MetadataEdit, artwork: ByteArray? = null, onlyMissing: Boolean = false) {
         val audio = AudioFileIO.read(file)
         val tag = audio.tagOrCreateAndSetDefault
-        fields(edit).forEach { (key, value) -> tag.setField(key, value!!) }
-        if (artwork != null) {
-            val dimensions = jpegSize(artwork)
+        val changes = fields(edit).filter { (key, _) -> !onlyMissing || tag.getFirst(key).isBlank() }
+        val cover = artwork?.takeIf { !onlyMissing || tag.artworkList.isEmpty() }
+        if (changes.isEmpty() && cover == null) return
+        changes.forEach { (key, value) -> tag.setField(key, value!!) }
+        if (cover != null) {
+            val dimensions = jpegSize(cover)
             val image = object : AndroidArtwork() {
                 override fun setImageFromData() = true // Already decoded and normalized by the caller.
             }.apply {
                 width = dimensions.first
                 height = dimensions.second
-                binaryData = artwork
+                binaryData = cover
                 mimeType = "image/jpeg"
                 pictureType = 3
                 description = "Cover"
@@ -44,8 +47,8 @@ object FileTags {
         }
         audio.commit()
         val checked = AudioFileIO.read(file).tag
-        check(fields(edit).all { (key, value) -> checked.getFirst(key) == value }) { "The saved tags could not be checked. Your original file was kept." }
-        check(artwork == null || checked.artworkList.any { it.binaryData.contentEquals(artwork) }) { "The saved cover could not be checked. Your original file was kept." }
+        check(changes.all { (key, value) -> checked.getFirst(key) == value }) { "The saved tags could not be checked. Your original file was kept." }
+        check(cover == null || checked.artworkList.any { it.binaryData.contentEquals(cover) }) { "The saved cover could not be checked. Your original file was kept." }
     }
 
     private fun jpegSize(bytes: ByteArray): Pair<Int, Int> {
@@ -72,6 +75,27 @@ object FileTags {
         error("The cover image dimensions could not be read.")
     }
 
+    data class Snapshot(val fields: MetadataEdit, val artwork: ByteArray?)
+
+    fun read(context: Context, song: Song): Snapshot {
+        android.media.MediaMetadataRetriever().use { reader ->
+            reader.setDataSource(context, song.uri)
+            fun text(key: Int) = reader.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() && it != "<unknown>" }
+            fun number(key: Int) = text(key)?.substringBefore('/')?.take(4)?.toIntOrNull()?.takeIf { it > 0 }
+            return Snapshot(MetadataEdit(
+                title = text(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE),
+                artist = text(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                album = text(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                albumArtist = text(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
+                genre = text(android.media.MediaMetadataRetriever.METADATA_KEY_GENRE),
+                year = number(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR)
+                    ?: number(android.media.MediaMetadataRetriever.METADATA_KEY_DATE),
+                track = number(android.media.MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER),
+                disc = number(android.media.MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER),
+            ), reader.embeddedPicture)
+        }
+    }
+
     suspend fun recover(context: Context) = withContext(Dispatchers.IO) {
         lock.withLock {
             val dir = File(context.filesDir, "tag_backups")
@@ -95,7 +119,7 @@ object FileTags {
         }
     }
 
-    suspend fun write(context: Context, song: Song, edit: MetadataEdit, artwork: ByteArray? = null) = withContext(Dispatchers.IO) {
+    suspend fun write(context: Context, song: Song, edit: MetadataEdit, artwork: ByteArray? = null, onlyMissing: Boolean = false) = withContext(Dispatchers.IO) {
         lock.withLock {
             val dir = File(context.filesDir, "tag_backups").apply { mkdirs() }
             val original = File(dir, "${UUID.randomUUID()}.${song.fileName.substringAfterLast('.')}")
@@ -110,7 +134,7 @@ object FileTags {
                         checkNotNull(input).use { source -> original.outputStream().use { source.copyTo(it); it.fd.sync() } }
                     }
                     original.copyTo(staged)
-                    tag(staged, edit, artwork)
+                    tag(staged, edit, artwork, onlyMissing)
                     withContext(NonCancellable) {
                         val record = java.util.Properties().apply {
                             setProperty("uri", song.uri.toString())

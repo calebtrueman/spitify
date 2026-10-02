@@ -22,8 +22,8 @@ struct SettingsView: View {
             Section {
                 Toggle("Fill in missing song & book info", isOn: $app.autoFix)
                 Toggle("Fetch missing album art", isOn: $app.onlineArt)
-                Button(app.fixing ? "Working…" : "Run now") { Task { UserDefaults.standard.removeObject(forKey: "fixTried"); await app.backgroundFixes() } }.disabled(app.fixing)
-            } header: { Text("Metadata & artwork") } footer: { Text("Untagged files are matched on Deezer, iTunes or Open Library — only when the length matches. Your edits always win and files are never modified.") }
+                Button(app.fixing ? "Working…" : "Run now") { Task { UserDefaults.standard.removeObject(forKey: "missingAttemptsV2"); await app.backgroundFixes() } }.disabled(app.fixing)
+            } header: { Text("Metadata & artwork") } footer: { Text("Missing details and covers are filled automatically from matching online results and saved into local files. Existing tags and covers stay in place.") }
             Section {
                 Toggle("Include Music app library", isOn: $lib.includeMusicLibrary).onChange(of: lib.includeMusicLibrary) { Task { await app.library.scan() } }
                 Button(app.library.scanning ? "Scanning…" : "Rescan") { Task { await app.library.scan() } }

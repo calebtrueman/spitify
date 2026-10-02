@@ -4,7 +4,7 @@ import Foundation
 actor FileTags {
     static let shared = FileTags()
 
-    func write(_ url: URL, edit: MetadataOverride, artwork: Data? = nil) throws {
+    func write(_ url: URL, edit: MetadataOverride, artwork: Data? = nil, onlyMissing: Bool = false) throws {
         let fm = FileManager.default
         let temp = url.deletingLastPathComponent().appendingPathComponent(".tags-\(UUID().uuidString).\(url.pathExtension)")
         defer { try? fm.removeItem(at: temp) }
@@ -23,7 +23,7 @@ actor FileTags {
             }
             jpeg = image
         }
-        try FileTagsBridge.write(atPath: temp.path, values: changes, artwork: jpeg)
+        try FileTagsBridge.write(atPath: temp.path, values: changes, artwork: jpeg, onlyMissing: onlyMissing)
         _ = try fm.replaceItemAt(url, withItemAt: temp)
         try? fm.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
     }

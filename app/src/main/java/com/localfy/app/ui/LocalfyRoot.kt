@@ -65,6 +65,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -227,7 +229,7 @@ fun LocalfyRoot(activity: Activity) {
             // ----- Cover-screen player sheet: 0 = mini player, 1 = full player -----
             val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navTotal = if (wide) 0.dp else 80.dp + navInset
-            val miniHeight = 66.dp
+            var miniHeight by remember { mutableStateOf(72.dp) }
             val collapsedY = windowHeight - navTotal - miniHeight
             val collapsedPx = with(density) { collapsedY.toPx() }.coerceAtLeast(1f)
             val scope = rememberCoroutineScope()
@@ -290,7 +292,7 @@ fun LocalfyRoot(activity: Activity) {
                     }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                         NavHost(
                             nav,
                             startDestination = Routes.HOME,
@@ -367,7 +369,9 @@ fun LocalfyRoot(activity: Activity) {
                                         },
                                     ),
                             ) {
-                                MiniPlayer(onExpand = { playerExpanded = true })
+                                MiniPlayer(onExpand = { playerExpanded = true }, modifier = Modifier.onSizeChanged { size ->
+                                    miniHeight = with(density) { size.height.toDp() }
+                                })
                             }
                         }
                     }
