@@ -27,7 +27,7 @@ A free Apple ID signature lasts 7 days. SideStore renews it **on the iPhone, in 
 
 ### One-time setup (≈15 min, iPhone plugged into the Mac)
 
-1. On the iPhone, install **[LocalDevVPN](https://apps.apple.com/app/localdevvpn/id6755608044)** from the App Store.
+1. On the iPhone, install **LocalDevVPN** from the App Store (search "LocalDevVPN").
 2. On the Mac, open **iloader** (Applications), sign in with your Apple ID, select the iPhone, and choose **Install SideStore (Stable)**. iloader also saves the pairing file SideStore needs.
 3. On the iPhone:
    - Settings › General › **VPN & Device Management** › trust your Apple ID.
