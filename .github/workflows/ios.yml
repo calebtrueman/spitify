@@ -36,4 +36,7 @@ jobs:
       - name: Attach to release
         if: github.event_name == 'release'
         env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release upload "${{ github.event.release.tag_name }}" ios/build/Spitify.ipa --clobber
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          cp ios/build/Spitify.ipa "ios/build/Spitify-${TAG#v}-unsigned.ipa"
+          gh release upload "$TAG" "ios/build/Spitify-${TAG#v}-unsigned.ipa" --clobber
