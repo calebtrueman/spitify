@@ -321,8 +321,8 @@ interface StatsDao {
 }
 
 @Database(
-    entities = [PlaylistEntity::class, PlaylistEntryEntity::class, LikedEntity::class, PlayStatEntity::class, LyricsEntity::class, PodcastEntity::class, EpisodeEntity::class, ResumeEntity::class, MetadataOverrideEntity::class, PlayEventEntity::class],
-    version = 5,
+    entities = [PlaylistEntity::class, PlaylistEntryEntity::class, LikedEntity::class, PlayStatEntity::class, LyricsEntity::class, PodcastEntity::class, EpisodeEntity::class, ResumeEntity::class, MetadataOverrideEntity::class, PlayEventEntity::class, com.localfy.app.data.music.MusicDownloadEntity::class],
+    version = 6,
     exportSchema = true,
 )
 abstract class LocalfyDatabase : RoomDatabase() {
@@ -333,12 +333,19 @@ abstract class LocalfyDatabase : RoomDatabase() {
     abstract fun podcasts(): PodcastDao
     abstract fun metadata(): MetadataDao
     abstract fun events(): EventDao
+    abstract fun musicDownloads(): com.localfy.app.data.music.MusicDownloadDao
 
     companion object {
         fun create(context: Context): LocalfyDatabase =
             Room.databaseBuilder(context, LocalfyDatabase::class.java, "localfy.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(com.localfy.app.data.music.MUSIC_DOWNLOAD_MIGRATION_SQL)
+            }
+        }
 
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {

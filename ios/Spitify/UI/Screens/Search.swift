@@ -5,6 +5,7 @@ struct SearchView: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @State private var query = ""
+    @State private var online = false
 
     var body: some View {
         let lib = app.library.library
@@ -12,7 +13,13 @@ struct SearchView: View {
         let match: (String) -> Bool = { hay in let h = foldForSearch(hay); return words.allSatisfy { h.contains($0) } }
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if words.isEmpty {
+                Picker("Search location", selection: $online) {
+                    Text("On device").tag(false)
+                    Text("Online").tag(true)
+                }.pickerStyle(.segmented).padding(16)
+                if online {
+                    OnlineMusicView(query: query)
+                } else if words.isEmpty {
                     if !lib.genres.isEmpty { SectionHeader(title: "Browse your genres") ; browse(lib.genres.map { ($0.name, $0.songs, Route.genre($0.name)) }) }
                     if lib.folders.count > 1 { SectionHeader(title: "Browse folders"); browse(lib.folders.map { ($0.name, $0.songs, Route.folder($0.path)) }) }
                 } else {

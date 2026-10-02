@@ -34,6 +34,7 @@ Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager �
 ### 🎵 Your music, Spotify-style
 - Home with quick picks, generated playlists, Jump back in, Recently added and top artists.
 - Search across songs, artists, albums and playlists, plus browsing by genre and folder.
+- Optional **Search → Online** finds songs and albums on Monochrome and downloads FLAC files into your library. Includes a saved queue, Wi-Fi-only downloads, cancellation and retries on Android and iPhone. See [how it works and how to test it](docs/MONOCHROME.md).
 - Your Library with filters, sorting, and grid or list view.
 - Album, artist and playlist pages with collapsing headers coloured from the artwork.
 - Liked Songs, playlists, and a queue you can reorder by dragging.
@@ -160,10 +161,11 @@ scripts/          emulator setup, test music, FFmpeg build
 
 ## Privacy
 
-Everything stays on the phone: your library, listening history, taste profile, name and photo. Spitify only goes online when a feature needs it, and sends only search terms such as an artist and album name. Each of these can be switched off in Settings:
+Your library, listening history, taste profile, name and photo stay on the phone. Spitify only goes online when a feature needs it. Online music search sends your query to Monochrome; choosing an album or download sends its source ID. Music downloads only start when you request them. The other optional lookups can be switched off in Settings:
 
 | Feature | Service |
 |---|---|
+| Online music search and requested downloads | Monochrome Tracks |
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
 | Synced lyrics | LRCLIB |

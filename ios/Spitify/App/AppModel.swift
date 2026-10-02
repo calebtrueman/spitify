@@ -39,6 +39,7 @@ final class AppModel {
     let shows = ShowsStore()
     let lyrics = LyricsService()
     let player = Player()
+    let musicDownloads = MusicDownloads.shared
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes() } }
@@ -57,17 +58,35 @@ final class AppModel {
         player.library = library
         player.shows = shows
         library.onTasteInputChanged = { [weak self] in self?.scheduleMixes() }
+        musicDownloads.onImported = { [weak self] in await self?.importDownloadedMusic() }
     }
 
     func start() async {
         guard !started else { return }
         started = true
         await library.scan()
+        musicDownloads.start()
+        await importDownloadedMusic(rescan: false)
         player.restore { [weak self] id in self?.lookup(id) }
         Task { await shows.refreshAll() }
         Task { await backgroundFixes() }
         // Time-based playlists (daylist) move on even if nothing else changes.
         Task { while true { try? await Task.sleep(for: .seconds(1800)); scheduleMixes() } }
+    }
+
+    private func importDownloadedMusic(rescan: Bool = true) async {
+        if rescan {
+            while library.scanning { try? await Task.sleep(for: .milliseconds(100)) }
+            await library.scan()
+        }
+        for job in musicDownloads.jobs where job.state == .complete {
+            guard let song = library.rawSongs.first(where: { $0.location == job.relativePath }), library.overrides[song.id] == nil else { continue }
+            // The source may reuse a recording tagged with a different release. Keep the chosen album.
+            let track = job.track
+            library.saveOverride(MetadataOverride(title: track.title, artist: track.artist,
+                album: track.album.isEmpty ? nil : track.album, track: track.trackNumber > 0 ? track.trackNumber : nil,
+                disc: track.discNumber, source: "online"), for: [song])
+        }
     }
 
     func lookup(_ id: String) -> Song? {

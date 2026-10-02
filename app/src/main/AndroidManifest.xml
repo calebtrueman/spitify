@@ -23,6 +23,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Localfy">
 
+        <receiver android:name=".data.music.MusicDownloadReceiver" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.DOWNLOAD_COMPLETE" /></intent-filter>
+        </receiver>
+
         <!-- Android Auto: this is a media app (browse + playback via PlaybackService). -->
         <meta-data
             android:name="com.google.android.gms.car.application"

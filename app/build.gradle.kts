@@ -12,6 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.localfy.app"
+        if (providers.gradleProperty("monochromeTestApp").isPresent) applicationId = "com.localfy.app.monochrometest"
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
@@ -38,6 +39,7 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
@@ -51,6 +53,7 @@ ksp {
 }
 
 dependencies {
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
