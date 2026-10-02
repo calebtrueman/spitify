@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "buildVersion": "2",
+          "date": "2026-10-02T03:16:27Z",
+          "localizedDescription": "- Swiping Spitify away from Recents now stops the music (Android)\n- Daily Mix filler removed; a calmer, less cluttered Home\n- Rows never show half-cut artwork or text\n- Smoother transitions between the two halves of the Fold8 split view\n- Portrait: tap the mini player to open the full player\n- Lyrics are fetched automatically when you're online (no more \"Search lyrics\")\n\nThe iPhone IPA is attached automatically by CI once it finishes building; SideStore picks the update up from the source.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.1/Spitify-1.0.1-unsigned.ipa",
+          "size": 1804563,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.0",
           "buildVersion": "1",
           "date": "2026-10-02T02:24:14Z",
