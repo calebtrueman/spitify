@@ -120,7 +120,12 @@ class PlayerConnection(
                         _state.value = _state.value.copy(isPlaying = false)
                     }
                 })
-                .buildAsync().await()
+                .buildAsync().let { f -> runCatching { f.await() } }
+                .getOrElse {
+                    // The service refused or died mid-connect; never crash the app over it; onStart retries.
+                    connecting = false
+                    return@launch
+                }
             controller = c
             connecting = false
             c.addListener(listener)
@@ -129,6 +134,16 @@ class PlayerConnection(
             publish()
             startTicker()
         }
+    }
+
+    /** Drops our binding to the service so it can actually stop (see PlaybackService.onTaskRemoved). */
+    fun disconnect() {
+        val c = controller ?: return
+        controller = null
+        ticker?.cancel()
+        c.removeListener(listener)
+        c.release()
+        _state.value = _state.value.copy(isPlaying = false)
     }
 
     private val listener = object : Player.Listener {

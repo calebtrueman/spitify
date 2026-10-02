@@ -144,12 +144,14 @@ class PlaybackService : MediaLibraryService() {
     /** Swiping Spitify away from Recents stops playback and the service (like closing the app). */
     override fun onTaskRemoved(rootIntent: Intent?) {
         app.player.saveNow()
-        session?.player?.pause()
-        // The app's own MediaController keeps the service bound, so stopSelf() alone leaves it (and its
-        // notification) alive. Releasing the session disconnects every controller and drops the notification.
-        shutdown()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // The app's own MediaController keeps the service bound, so stopSelf() alone would leave it running.
+        // Unbind it, and the stopped service is destroyed (releasing the session) once nothing else is bound.
+        // Never release the session while the service lives: a restart with no session can't start in the
+        // foreground and Android kills the app for it.
+        app.player.disconnect()
+        // Pauses, takes the service out of the foreground and stops it in one step; a plain pause() + stopSelf()
+        // races Media3's notification update, which starts the service again.
+        pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
