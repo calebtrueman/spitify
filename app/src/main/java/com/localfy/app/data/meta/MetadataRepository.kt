@@ -234,7 +234,7 @@ class MetadataRepository(
             _fixing.value = true
             val done = tried.toMutableSet()
             for (song in todo.take(200)) {
-                val match = confidentMatch(song, search(queryFor(song), song.durationMs))
+                val match = runCatching { confidentMatch(song, search(queryFor(song), song.durationMs)) }.getOrNull()
                 if (match != null) {
                     save(listOf(song), MetadataEdit(match.title, match.artist, match.album, match.artist, match.genre, match.year, match.track, match.disc), SOURCE_ONLINE).join()
                     match.artUrl?.let { url -> onArt(syntheticAlbumId(match.album, match.artist), url) }

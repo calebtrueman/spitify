@@ -188,6 +188,14 @@ fun SettingsScreen() {
         item {
             SettingRow("Tip", "Settings › Display › Screen continuity — set Spitify to “Always” so it carries on seamlessly when you close the phone.") {}
         }
+        item { SectionHeader("Help") }
+        item {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val version = androidx.compose.runtime.remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }
+            SettingRow("Send problem report", "Spitify $version · shares any errors the app recovered from, so they can be fixed") {
+                com.localfy.app.CrashReport.share(context, com.localfy.app.CrashReport.problems(context) ?: "No problems recorded — Spitify $version")
+            }
+        }
     }
 }
 

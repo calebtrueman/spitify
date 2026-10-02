@@ -88,4 +88,16 @@ class TasteTest {
         assertEquals("Juniper Fields", m.topArtists().first())
         assertTrue(PlaylistGenerator.generate(m).any { it.title == "This Is Juniper Fields" })
     }
+
+    /** Regression: random jitter inside sort keys crashed real-sized libraries ("Comparison method violates its general contract!"). */
+    @Test
+    fun bigLibrariesDontCrashTheGenerator() {
+        val genres = listOf("Rock", "Pop", "Hip-Hop", "Jazz", "Electronic", "Folk")
+        val big = (1..600).map { i -> song("Artist ${i % 60}", genres[i % genres.size], album = "Album ${i % 120}", year = 1970 + i % 55) }
+        val listens = big.shuffled(kotlin.random.Random(1)).take(300).mapIndexed { i, s -> listen(s, i / 20.0, minuteOffset = i % 20 * 4) }
+        repeat(20) { seed ->
+            val mixes = PlaylistGenerator.generate(TasteModel(TasteInput(big, listens, emptySet(), userName = "Sam", now = now + seed * 3_600_000L)))
+            assertTrue(mixes.isNotEmpty())
+        }
+    }
 }

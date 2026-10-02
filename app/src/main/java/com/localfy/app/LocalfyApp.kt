@@ -23,6 +23,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReport.install(this)
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
     }

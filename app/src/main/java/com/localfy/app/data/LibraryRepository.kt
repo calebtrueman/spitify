@@ -170,6 +170,10 @@ class LibraryRepository(
                 onScanned?.invoke(_raw.value, _rawBooks.value)
             } catch (_: SecurityException) {
                 // Permission not granted yet; the UI will prompt and call start() again.
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                // One unreadable file or odd MediaStore row must not crash the app on every launch.
+                com.localfy.app.CrashReport.recordNonFatal(context, "Scanning your library", e)
             } finally {
                 _scanning.value = false
             }

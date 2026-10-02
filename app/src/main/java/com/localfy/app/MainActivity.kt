@@ -62,6 +62,12 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        // Crashed last time: show the report before loading anything that might crash again.
+        CrashReport.pending(this)?.let { report ->
+            crashScreen = true
+            setContent { CrashScreen(report, onSend = { CrashReport.share(this, report) }, onContinue = { CrashReport.dismiss(this); crashScreen = false; recreate() }) }
+            return
+        }
         setContent {
             val settings by app.theme.settings.collectAsStateWithLifecycle()
             // "Accent from album art": follow whatever is playing.
@@ -91,9 +97,11 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleViewIntent(intent)
     }
 
+    private var crashScreen = false
+
     override fun onStart() {
         super.onStart()
-        app.player.connect() // no-op if already connected
+        if (!crashScreen) app.player.connect() // no-op if already connected
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -156,5 +164,27 @@ private fun ComponentActivity.PermissionGate(content: @Composable () -> Unit) {
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = com.localfy.app.ui.theme.LocalPalette.current.onBrand),
         ) { Text("Allow access to music") }
+    }
+}
+
+@Composable
+private fun CrashScreen(report: String, onSend: () -> Unit, onContinue: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().background(Color(0xFF0B0B0D)).padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Spitify crashed", style = MaterialTheme.typography.headlineMedium, color = Color.White, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Sorry about that. Sending the report tells the developer exactly what went wrong. It only contains the error and your phone model, nothing from your library.",
+            style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB3B3B3), textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(report.lineSequence().take(6).joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = Color(0xFF7A7A7A), maxLines = 6)
+        Spacer(Modifier.height(28.dp))
+        Button(onClick = onSend, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1ED760), contentColor = Color.Black)) { Text("Send crash report") }
+        Spacer(Modifier.height(8.dp))
+        androidx.compose.material3.TextButton(onClick = onContinue) { Text("Open Spitify", color = Color.White) }
     }
 }

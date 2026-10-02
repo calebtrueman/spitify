@@ -99,9 +99,10 @@ class TasteRepository(
                 )
             }.debounce(800).collect { input ->
                 if (input.songs.isEmpty()) return@collect
-                val (model, mixes) = withContext(Dispatchers.Default) { TasteModel(input).let { it to PlaylistGenerator.generate(it) } }
-                _model.value = model
-                library.publishMixes(mixes)
+                // A bug in one recommendation must never take the whole app down: log it and keep going.
+                val result = withContext(Dispatchers.Default) { runCatching { TasteModel(input).let { it to PlaylistGenerator.generate(it) } } }
+                result.onSuccess { (model, mixes) -> _model.value = model; library.publishMixes(mixes) }
+                    .onFailure { com.localfy.app.CrashReport.recordNonFatal(context, "Generating playlists", it) }
             }
         }
         scope.launch { while (isActive) { delay(30 * 60_000L); tick.value = System.currentTimeMillis() } }

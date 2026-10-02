@@ -200,7 +200,7 @@ object PlaylistGenerator {
         // ---- Discover Weekly: songs you own but haven't really heard, that fit your taste. Mondays.
         val rndW = Random(weekSeed)
         val unheard = songs.filter { (model.completedPlays[it.id] ?: 0) == 0 && it.id !in input.liked }
-        val discover = diversify(unheard.sortedByDescending { model.predicted(it) + rndW.nextDouble() * 0.15 }, maxPerArtist = 2, maxPerAlbum = 2).take(30)
+        val discover = diversify(unheard.rankedBy { model.predicted(it) + rndW.nextDouble() * 0.15 }, maxPerArtist = 2, maxPerAlbum = 2).take(30)
         if (discover.size >= 5) out += Mix(
             "discover", "Discover Weekly", "Your weekly mixtape of songs from your library you've never really listened to. Enjoy new music made for you${forName?.let { ", $it" } ?: ""}.",
             discover, MixSection.MadeForYou, CoverStyle.Bold, 0xFF2D46B9,
@@ -222,7 +222,7 @@ object PlaylistGenerator {
         val partSongs = model.daypartSong[part].orEmpty()
         val rndD = Random(daySeed * 10 + part.ordinal)
         val daylist = songs.filter { partGenres.isEmpty() || it.genreKey() in partGenres }
-            .sortedByDescending { (partSongs[it.id] ?: 0.0) * 0.8 + model.predicted(it) * 0.5 + rndD.nextDouble() * 0.3 }
+            .rankedBy { (partSongs[it.id] ?: 0.0) * 0.8 + model.predicted(it) * 0.5 + rndD.nextDouble() * 0.3 }
             .let { diversify(it, maxPerArtist = 4) }.take(40)
         if (daylist.size >= 5) out += Mix(
             "daylist", "daylist • ${part.mood} ${partGenres.joinToString(" ")} $weekday ${part.label}".replace(Regex("\\s+"), " ").trim(),
@@ -262,7 +262,7 @@ object PlaylistGenerator {
             val hits = songs.filter { s -> s.genreKey()?.let { g -> keys.any { g.contains(it) } } == true }
             if (hits.size >= 8) out += Mix(
                 "mood:$name", "$name Mix", when (name) { "Chill" -> "Kick back to soft, easy sounds."; "Energy" -> "Turn it up."; else -> "Music to get things done." },
-                diversify(hits.sortedByDescending { model.predicted(it) + rnd.nextDouble() * 0.4 }, maxPerArtist = 4).take(40),
+                diversify(hits.rankedBy { model.predicted(it) + rnd.nextDouble() * 0.4 }, maxPerArtist = 4).take(40),
                 MixSection.YourMixes, CoverStyle.Bold, when (name) { "Chill" -> 0xFF477D95; "Energy" -> 0xFFDC148C; else -> 0xFF537AA1 }, refresh = "Updated daily",
             )
         }
@@ -273,7 +273,7 @@ object PlaylistGenerator {
                 val hits = songs.filter { it.genreKey() == g }
                 if (hits.size >= 5) out += Mix(
                     "genre:$g", "${g.replaceFirstChar { it.uppercase() }} Mix", "The best ${g.replaceFirstChar { it.uppercase() }} in your library.",
-                    diversify(hits.sortedByDescending { model.predicted(it) + Random(daySeed + i).nextDouble() * 0.3 }, maxPerArtist = 4).take(50),
+                    diversify(hits.rankedBy { model.predicted(it) + Random(daySeed + i).nextDouble() * 0.3 }, maxPerArtist = 4).take(50),
                     MixSection.YourMixes, CoverStyle.Collage, palette[(i + 1) % palette.size],
                 )
             }
@@ -299,7 +299,7 @@ object PlaylistGenerator {
     /** Song radio: the seed, then the songs most like it (co-listened, same vibe), varied by artist. */
     fun songRadio(model: TasteModel, seed: Song, size: Int = 50): List<Song> {
         val pool = model.input.songs.filter { it.playable && it.id != seed.id && !model.hidden(it) }
-        val ranked = pool.sortedByDescending { model.similarity(seed, it) + 0.2 * model.predicted(it) + Random(seed.id).nextDouble() * 0.05 }
+        val ranked = pool.rankedBy { model.similarity(seed, it) + 0.2 * model.predicted(it) + Random(seed.id).nextDouble() * 0.05 }
         return listOf(seed) + diversify(ranked, maxPerArtist = 6).take(size - 1)
     }
 
@@ -337,3 +337,11 @@ object PlaylistGenerator {
     }
 
 }
+
+/**
+ * Sorts by a score computed once per item. `sortedByDescending` recomputes its key on every comparison,
+ * so a key with random jitter changes mid-sort; TimSort then throws "Comparison method violates its general
+ * contract!" on lists of more than ~32 items (real libraries).
+ */
+internal inline fun <T> Iterable<T>.rankedBy(score: (T) -> Double): List<T> =
+    map { it to score(it) }.sortedByDescending { it.second }.map { it.first }
