@@ -114,7 +114,7 @@ class PlaybackService : MediaLibraryService() {
             combine(app.lockScreenArt.enabled, app.lockScreenArt.allowed, app.player.state) { enabled, allowed, state ->
                 if (!state.connected || !state.hasMedia || state.playbackState == Player.STATE_ENDED || state.playbackState == Player.STATE_IDLE) playbackStarted = false
                 else if (state.isPlaying) playbackStarted = true
-                (if (enabled && allowed && playbackStarted) player.currentMediaItem?.mediaMetadata?.artworkUri else null) to state.isPlaying
+                (if (enabled && allowed && playbackStarted && !closing) player.currentMediaItem?.mediaMetadata?.artworkUri else null) to state.isPlaying
             }.distinctUntilChanged().collectLatest { (uri, playing) ->
                 if (uri == null) {
                     withContext(NonCancellable) { app.lockScreenArt.restore() }
@@ -172,16 +172,21 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     /** Swiping Spitify away from Recents stops playback and the service (like closing the app). */
+    private var closing = false
     override fun onTaskRemoved(rootIntent: Intent?) {
+        if (closing) return
+        closing = true
         app.player.saveNow()
         // The app's own MediaController keeps the service bound, so stopSelf() alone would leave it running.
         // Unbind it, and the stopped service is destroyed (releasing the session) once nothing else is bound.
         // Never release the session while the service lives: a restart with no session can't start in the
         // foreground and Android kills the app for it.
-        app.player.disconnect()
-        // Pauses, takes the service out of the foreground and stops it in one step; a plain pause() + stopSelf()
-        // races Media3's notification update, which starts the service again.
-        pauseAllPlayersAndStopSelf()
+        session?.player?.pause()
+        scope.launch {
+            withContext(NonCancellable) { app.lockScreenArt.restore() }
+            app.player.disconnect()
+            pauseAllPlayersAndStopSelf()
+        }
     }
 
     override fun onDestroy() {

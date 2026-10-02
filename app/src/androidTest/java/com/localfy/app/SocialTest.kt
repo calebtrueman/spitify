@@ -25,6 +25,28 @@ class SocialTest {
     private fun events(storage: String) = JSONArray(context.getSharedPreferences(storage, Context.MODE_PRIVATE).getString("events", "[]"))
     private fun scope() = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    @Test fun streamingLookupUsesIndexForLargeSavedCatalogue() {
+        val storage = "lookup-test-" + UUID.randomUUID()
+        val prefs = context.getSharedPreferences(storage, Context.MODE_PRIVATE)
+        try {
+            val rows = JSONArray()
+            repeat(2000) { i -> rows.put(JSONObject().put("trackId", "$i").put("title", "Song $i").put("artistNames", JSONArray().put("Artist")).put("albumTitle", "Album").put("releaseId", "1").put("duration", 180000)) }
+            prefs.edit().putString("tracks", rows.toString()).commit()
+            val streams = com.localfy.app.data.music.MusicStreams(context, storage)
+            val id = com.localfy.app.data.music.MusicStreams.streamId("1999")
+            val tracks = streams.knownTracks()
+            repeat(20) { assertEquals("Song 1999", streams.lookup(id)?.title) }
+            val indexedStart = System.nanoTime()
+            repeat(100) { assertEquals("Song 1999", streams.lookup(id)?.title) }
+            val indexed = System.nanoTime() - indexedStart
+            val scanStart = System.nanoTime()
+            repeat(100) { assertNotNull(tracks.firstOrNull { com.localfy.app.data.music.MusicStreams.streamId(it.id) == id }) }
+            val scanned = System.nanoTime() - scanStart
+            android.util.Log.i("SpitifyLookupTest", "100 lookups: indexed=${indexed / 1000000.0}ms oldScan=${scanned / 1000000.0}ms")
+            assertTrue("Direct lookup should avoid the full catalogue scan", indexed < scanned)
+        } finally { context.deleteSharedPreferences(storage) }
+    }
+
     @Test fun officialArtistVideoTitlesNeedNoOfficialLabel() {
         for (title in listOf("Video Games", "Born To Die")) {
             assertTrue(com.localfy.app.data.music.MusicVideoLookup.matches(title, "Lana Del Rey", 282000, "Lana Del Rey - $title", "Lana Del Rey", 287000))

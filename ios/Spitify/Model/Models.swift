@@ -106,7 +106,27 @@ struct Library {
 
     var isEmpty: Bool { songs.isEmpty }
 
+    static func songMatchKey(_ song: Song) -> String { SearchMatch.fold(song.title) + "|" + SearchMatch.fold(song.artist) }
+    static func completeAlbumDetails(_ local: Song, from saved: [Song]) -> Song {
+        guard local.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || local.album == "Unknown album" else { return local }
+        let matches = saved.filter { songMatchKey($0) == songMatchKey(local) && !$0.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.album != "Unknown album" && abs($0.durationMs - local.durationMs) <= 5000 }
+        guard Set(matches.map(\.albumKey)).count == 1, let match = matches.first else { return local }
+        var result = local; result.album = match.album; result.albumArtist = match.albumArtist; result.artURL = local.artURL ?? match.artURL
+        return result
+    }
+    static func isDownloadedCopy(_ local: Song, of saved: Song) -> Bool {
+        let missingAlbum = saved.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return SearchMatch.fold(local.title) == SearchMatch.fold(saved.title)
+            && SearchMatch.fold(local.artist) == SearchMatch.fold(saved.artist)
+            && (saved.durationMs <= 0 || local.durationMs <= 0 || abs(local.durationMs - saved.durationMs) <= 5000)
+            && (missingAlbum || AudioFallback.sameRelease(local.album, saved.album))
+    }
     static func build(_ songs: [Song]) -> Library {
+        let songs = songs.map { song -> Song in
+            var song = song
+            if song.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { song.album = "Unknown album" }
+            return song
+        }
         let credits = Dictionary(grouping: songs, by: { $0.album.trimmingCharacters(in: .whitespaces).lowercased() })
             .mapValues { tracks in Set(tracks.map { Song.albumArtist($0.albumArtist) }).sorted { $0.count > $1.count } }
         let input = songs.map { song -> Song in

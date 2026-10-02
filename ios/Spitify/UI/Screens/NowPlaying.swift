@@ -56,16 +56,14 @@ struct NowPlayingView: View {
     @State private var dragDown: CGFloat = 0
     @State private var scrollTop: CGFloat = 0
     @State private var canCollapse: Bool?
-    @State private var videoOpen = false
+    @AppStorage("musicVideoEnabled") private var videoOpen = false
     enum Sheet: String, Identifiable { case lyrics, queue, sleep, playback; var id: String { rawValue } }
 
     var body: some View {
         let player = app.player
         ZStack {
             Color.clear
-            if videoOpen && player.current?.isSpoken == false {
-                Color.clear.contentShape(Rectangle()).ignoresSafeArea().onTapGesture { videoOpen = false }
-            } else if let s = player.current {
+            if let s = player.current {
                 // Measure once, outside the scroll view, so the player page always fits the screen exactly.
                 GeometryReader { outer in
                     ScrollView {

@@ -151,7 +151,10 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
             val loaded = Monochrome.album(album.id)
             tracks = if (single == null) loaded else loaded.filter { it.id == single.id }.ifEmpty { listOf(single) }
         } catch (e: Exception) { if (e is CancellationException) throw e; failed = tracks.isEmpty() }
-        finally { loading = false }
+        finally {
+            tracks = tracks.map { it.copy(album = it.album.ifBlank { album.title }, releaseId = it.releaseId.ifBlank { album.id }, albumArtist = it.albumArtist ?: album.artist, artwork = it.artwork ?: album.artwork) }
+            loading = false
+        }
     }
     val streams = (LocalContext.current.applicationContext as LocalfyApp).musicStreams
     val saved by streams.saved.collectAsStateWithLifecycle()

@@ -37,5 +37,34 @@ final class Router {
     func path(_ t: Tab) -> Binding<NavigationPath> {
         Binding(get: { self.paths[t] ?? .init() }, set: { self.paths[t] = $0 })
     }
-    func reselect(_ t: Tab) { if tab == t { paths[t] = .init() } else { tab = t } }
+    func reselect(_ t: Tab) { if t == .home || tab == t { paths[t] = .init() }; tab = t }
+    @ObservationIgnored lazy var tabTapDelegate = HomeTabDelegate(router: self)
+}
+
+@MainActor final class HomeTabDelegate: NSObject, UITabBarControllerDelegate {
+    weak var router: Router?
+    weak var original: UITabBarControllerDelegate?
+    init(router: Router) { self.router = router }
+    func tabBarController(_ controller: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        if controller.viewControllers?.first === viewController { router?.reselect(.home) }
+        return original?.tabBarController?(controller, shouldSelect: viewController) ?? true
+    }
+    override func responds(to selector: Selector!) -> Bool { super.responds(to: selector) || original?.responds(to: selector) == true }
+    override func forwardingTarget(for selector: Selector!) -> Any? { original }
+}
+
+struct HomeTabTapObserver: UIViewControllerRepresentable {
+    var router: Router
+    final class Observer: UIViewController {
+        var router: Router?
+        override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); connect() }
+        override func didMove(toParent parent: UIViewController?) { super.didMove(toParent: parent); DispatchQueue.main.async { self.connect() } }
+        func connect() {
+            guard let tabs = tabBarController, let router else { return }
+            let delegate = router.tabTapDelegate
+            if tabs.delegate !== delegate { delegate.original = tabs.delegate; tabs.delegate = delegate }
+        }
+    }
+    func makeUIViewController(context: Context) -> Observer { let view = Observer(); view.router = router; return view }
+    func updateUIViewController(_ controller: Observer, context: Context) { controller.router = router; DispatchQueue.main.async { controller.connect() } }
 }

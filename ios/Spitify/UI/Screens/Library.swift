@@ -38,7 +38,7 @@ struct LibraryView: View {
                                     Text("Playlist · \(playlist.tracks.count) songs").text(.bodyS).foregroundStyle(p.secondary)
                                 }
                                 Spacer()
-                            }.padding(.horizontal, 16).padding(.vertical, 6)
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                     pinned("All Songs", "Pinned • \(songCount(lib.library.songs.count))", "music.note.list", [Color(hex: 0x4B2BD6), Color(hex: 0x9AB8F0)]) { router.go(.smart(.allSongs)) }

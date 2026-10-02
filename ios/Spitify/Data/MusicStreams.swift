@@ -16,7 +16,14 @@ final class MusicStreams {
         savedIDs = Store.load(Set<String>.self, storageName + "Library") ?? []
         savedAt = Store.load([String: Date].self, storageName + "SavedAt") ?? [:]
     }
-    @discardableResult func register(_ track: OnlineTrack) -> Song {
+    @discardableResult func register(_ incoming: OnlineTrack) -> Song {
+        var track = incoming
+        if let previous = tracks[track.id] {
+            if track.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { track.album = previous.album }
+            if track.releaseID.isEmpty { track.releaseID = previous.releaseID }
+            if track.albumArtist == nil { track.albumArtist = previous.albumArtist }
+            if track.artwork == nil { track.artwork = previous.artwork }
+        }
         if tracks[track.id] != track { tracks[track.id] = track; Store.save(tracks, storageName + "Tracks") }
         return Self.song(track)
     }

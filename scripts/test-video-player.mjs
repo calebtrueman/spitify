@@ -6,12 +6,15 @@ const html = fs.readFileSync(new URL('../shared/video/music-video.html', import.
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const calls = [];
 let options;
+let timer;
+const reports = [];
 let position = 0;
 let state = -1;
 let rate = 1;
 let visibility;
 const stage = {clientWidth: 400, clientHeight: 800};
-const frame = {style: {}};
+const frame = {style: {}, contentWindow: {}};
+const events = {};
 const mock = {
   unloadModule: name => calls.push(['unload', name]),
   setOption: (module, option, value) => calls.push(['option', module, option, value]),
@@ -24,8 +27,8 @@ const mock = {
   seekTo: v => { position = v; calls.push(['seek', v]); },
   stopVideo: () => calls.push('stop'), destroy: () => calls.push('destroy')
 };
-const context = vm.createContext({console: {log() {}}, Date, location: {origin: 'https://com.calebtrueman.spitify'},
-  document: {hidden: false, getElementById: id => id === 'stage' ? stage : frame, addEventListener: (_, f) => visibility = f}, window: {addEventListener() {}},
+const context = vm.createContext({console: {log(value) { reports.push(value); }}, setTimeout: fn => { timer = fn; return 1; }, clearTimeout: () => { timer = null; }, Date, location: {origin: 'https://com.calebtrueman.spitify'},
+  document: {hidden: false, getElementById: id => id === 'stage' ? stage : frame, addEventListener: (_, f) => visibility = f}, window: {addEventListener(name, fn) { events[name] = fn; }},
   YT: {Player: function(_, config) { options = config; return mock; }}
 });
 vm.runInContext(source, context);
@@ -56,3 +59,23 @@ assert.equal(state, 2, 'Hidden video must stop playing');
 context.spitifyStop();
 assert.equal(calls.at(-1), 'destroy', 'Closing video releases the embed');
 console.log('Video controls: mute before play, seek, pause, speed, background and teardown passed.');
+
+const before = reports.length;
+context.onYouTubeIframeAPIReady();
+options.events.onReady();
+assert.equal(reports.at(-1), 'SPITIFY_VIDEO_READY', 'Ready video displays immediately, without a timer');
+context.spitifyBeginDisplay();
+assert.equal(reports.length, before + 2, 'Reopening a prepared video reports ready immediately');
+console.log('Prepared videos appear immediately.');
+
+events.message({origin: 'https://wrong.example', source: frame.contentWindow, data: {spitifyVideoSurface: true}});
+assert.equal(frame.style.height, '675px');
+events.message({origin: 'https://www.youtube.com', source: {}, data: {spitifyVideoSurface: true}});
+assert.equal(frame.style.height, '675px');
+events.message({origin: 'https://www.youtube.com', source: frame.contentWindow, data: {spitifyVideoSurface: true}});
+assert.equal(frame.style.height, '600px');
+assert.equal(frame.style.width, '1200px');
+stage.clientWidth = 400; stage.clientHeight = 800; context.spitifyResize();
+assert.equal(frame.style.height, '800px');
+assert.equal(frame.style.width, '400px');
+console.log('Native video fills portrait and landscape; unrelated frame messages are ignored.');

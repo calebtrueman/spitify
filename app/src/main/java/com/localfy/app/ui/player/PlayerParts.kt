@@ -173,7 +173,7 @@ fun MiniPlayer(onExpand: () -> Unit, modifier: Modifier = Modifier) {
 private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> Unit, modifier: Modifier) {
     val app = LocalApp.current
     val liked = song.id in app.repo.likedIds.collectAsStateWithLifecycle().value
-    val position by app.player.positionMs.collectAsStateWithLifecycle()
+    val position = app.player.positionMs.collectAsStateWithLifecycle()
     val tint = rememberPlayerTint(song)
     val haptics = rememberHaptics()
 
@@ -210,9 +210,11 @@ private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> 
             }
         }
         // Progress hairline along the bottom edge.
-        val progress = if (state.durationMs > 0) (position / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-        Box(Modifier.align(Alignment.BottomStart).padding(horizontal = 10.dp).fillMaxWidth().height(2.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)))
-        Box(Modifier.align(Alignment.BottomStart).padding(horizontal = 10.dp).fillMaxWidth(progress).height(2.dp).clip(CircleShape).background(Color.White))
+        androidx.compose.foundation.Canvas(Modifier.align(Alignment.BottomStart).padding(horizontal = 10.dp).fillMaxWidth().height(2.dp)) {
+            val progress = if (state.durationMs > 0) (position.value / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+            drawRect(Color.White.copy(alpha = 0.2f))
+            drawRect(Color.White, size = androidx.compose.ui.geometry.Size(size.width * progress, size.height))
+        }
     }
 }
 

@@ -2,6 +2,18 @@ import XCTest
 @testable import Spitify
 
 final class SocialTests: XCTestCase {
+    @MainActor func testHomeAlwaysClearsItsOldPage() {
+        let router = Router()
+        router.go(.settings)
+        router.reselect(.home)
+        XCTAssertEqual(router.paths[.home]?.count, 0)
+        router.go(.settings)
+        router.reselect(.library)
+        router.reselect(.home)
+        XCTAssertEqual(router.tab, .home)
+        XCTAssertEqual(router.paths[.home]?.count, 0)
+    }
+
     func testMusicVideosAllowLabelUploadsAndLongerEdits() {
         XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller (2009 Remastered Version)", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Michael Jackson - Thriller (Official Video)", channel: "Sony Music", videoDurationMs: 840000))
         XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 0, videoTitle: "Michael Jackson - Thriller", channel: "Epic Records", videoDurationMs: 357000))

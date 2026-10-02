@@ -32,11 +32,13 @@ import com.localfy.app.ui.art.Artwork
 import com.localfy.app.ui.art.artKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun MusicVideoButton() {
-    val enabled = LocalApp.current.musicVideoEnabled
-    IconButton(onClick = { enabled.value = !enabled.value }) { Icon(Icons.Rounded.Videocam, if (enabled.value) "Show album art" else "Watch music video", tint = if (enabled.value) MaterialTheme.colorScheme.primary else Color.White) }
+    val actions = LocalApp.current
+    val enabled = actions.musicVideoEnabled
+    IconButton(onClick = { actions.toggleMusicVideo() }) { Icon(Icons.Rounded.Videocam, if (enabled.value) "Show album art" else "Watch music video", tint = if (enabled.value) MaterialTheme.colorScheme.primary else Color.White) }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -45,8 +47,8 @@ fun MusicVideoBackdrop() {
     val app = LocalApp.current
     val song = rememberCurrentSong()
     val playback = rememberPlayerState()
-    val position by app.player.positionMs.collectAsStateWithLifecycle()
-    val syncScript by rememberUpdatedState("if(window.spitifySync) spitifySync(${position / 1000.0},${playback.isPlaying},${playback.speed});")
+    val latestPlayback by rememberUpdatedState(playback)
+    val syncScript by rememberUpdatedState("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying},${playback.speed});")
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var visible by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
@@ -59,6 +61,14 @@ fun MusicVideoBackdrop() {
         if (alternatives.isNotEmpty()) {
             video = alternatives.first(); alternatives = alternatives.drop(1); loading = true; message = null
         } else { loading = false; message = "This video cannot play here. Your song is still playing." }
+    }
+    LaunchedEffect(webView, visible) {
+        val view = webView ?: return@LaunchedEffect
+        if (!visible) return@LaunchedEffect
+        app.player.positionMs.collect { position ->
+            val state = latestPlayback
+            view.evaluateJavascript("if(window.spitifySync) spitifySync(${position / 1000.0},${state.isPlaying},${state.speed});", null)
+        }
     }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -106,7 +116,7 @@ fun MusicVideoBackdrop() {
                                 return true
                             }
                         }
-                        evaluateJavascript("if(typeof ready !== 'undefined' && ready && [1,2].includes(player.getPlayerState())) report('READY');", null)
+                        evaluateJavascript("if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
                         webView = this
                     }
                 }, modifier = Modifier.fillMaxSize().then(Modifier.graphicsLayer { alpha = if (loading) 0f else 1f }), onReset = null, onRelease = { view ->
@@ -114,9 +124,10 @@ fun MusicVideoBackdrop() {
                     view.webChromeClient = null; view.webViewClient = WebViewClient()
                     VideoWebCache.store(view, clip.id)
                     if (webView === view) webView = null
-                }, update = { view -> view.evaluateJavascript("if(window.spitifySync) spitifySync(${position / 1000.0},${playback.isPlaying && visible},${playback.speed});", null) })
+                }, update = { view -> view.evaluateJavascript("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying && visible},${playback.speed});", null) })
             }
         }
+        Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
     }
 }
 
@@ -137,6 +148,10 @@ internal object VideoWebCache {
     private fun make(context: android.content.Context, id: String): WebView = WebView(context.applicationContext).apply {
         settings.javaScriptEnabled = true; settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = false; settings.allowContentAccess = false; settings.domStorageEnabled = true
+        if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            val script = context.assets.open("video-controls.js").bufferedReader().use { it.readText() }
+            androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, script, setOf("https://www.youtube.com"))
+        }
         val html = context.assets.open("music-video.html").bufferedReader().use { it.readText() }.replace("__VIDEO_ID__", id)
         loadDataWithBaseURL("https://${context.packageName.lowercase()}", html, "text/html", "UTF-8", null)
     }

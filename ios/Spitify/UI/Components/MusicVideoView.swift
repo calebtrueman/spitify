@@ -30,7 +30,7 @@ struct SilentVideoSurface: UIViewRepresentable {
         let view = VideoWebCache.take(videoID)
         view.configuration.userContentController.add(context.coordinator, name: "videoState")
         view.navigationDelegate = context.coordinator
-        view.evaluateJavaScript("if(typeof ready !== 'undefined' && ready && [1,2].includes(player.getPlayerState())) report('READY');", completionHandler: nil)
+        view.evaluateJavaScript("if(window.spitifyBeginDisplay) spitifyBeginDisplay();", completionHandler: nil)
         return view
     }
     func updateUIView(_ view: WKWebView, context: Context) {
@@ -64,6 +64,7 @@ struct MusicVideoBackdrop: View {
                         if state == "ERROR" { tryNextVideo() }
                     }.id(video.id).frame(width: geometry.size.width, height: geometry.size.height).opacity(loading ? 0 : 1)
                 }
+                LinearGradient(colors: [.black.opacity(0.3), .clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
             }.clipped()
         }.ignoresSafeArea().allowsHitTesting(false)
         .task(id: app.player.current?.id) {
@@ -105,6 +106,9 @@ struct MusicVideoBackdrop: View {
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsAirPlayForMediaPlayback = false
         configuration.mediaTypesRequiringUserActionForPlayback = []
+        if let url = Bundle.main.url(forResource: "video-controls", withExtension: "js"), let script = try? String(contentsOf: url, encoding: .utf8) {
+            configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false; view.backgroundColor = .black; view.scrollView.isScrollEnabled = false
         view.scrollView.contentInsetAdjustmentBehavior = .never

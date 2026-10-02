@@ -9,6 +9,8 @@ import androidx.core.content.edit
 import com.localfy.app.data.db.LikedEntity
 import com.localfy.app.data.db.LocalfyDatabase
 import com.localfy.app.data.db.PlaylistEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -74,10 +76,18 @@ class LibraryRepository(
     private val _rawBooks = MutableStateFlow<List<Song>>(emptyList())
 
     val library: StateFlow<Library> = combine(_raw, metadata.overrides, metadata.artVersions, (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.saved) { raw, o, _, saved ->
-        val local = raw.map { metadata.apply(it, o[it.id]) }
-        val remote = saved.filter { stream -> local.none { com.localfy.app.data.music.SearchMatch.sameSong(it.title, it.artist, it.durationMs, stream.title, stream.artist, stream.durationMs) && com.localfy.app.data.music.AudioFallback.sameRelease(it.album, stream.album) } }
+        fun key(song: Song) = com.localfy.app.data.music.SearchMatch.fold(song.title) + "|" + com.localfy.app.data.music.SearchMatch.fold(song.artist)
+        val savedBySong = saved.groupBy(::key)
+        val local = raw.map { metadata.apply(it, o[it.id]) }.map { song ->
+            if (song.album.isNotBlank() && song.album != "Unknown album") song else {
+                val matches = savedBySong[key(song)].orEmpty().filter { it.album.isNotBlank() && it.album != "Unknown album" && kotlin.math.abs(it.durationMs - song.durationMs) <= 5000 }
+                if (matches.map { it.album }.distinct().size == 1) song.copy(album = matches.first().album, albumArtist = matches.first().albumArtist, artUrl = song.artUrl ?: matches.first().artUrl) else song
+            }
+        }
+        val localBySong = local.groupBy(::key)
+        val remote = saved.filter { stream -> localBySong[key(stream)].orEmpty().none { com.localfy.app.data.music.SearchMatch.sameSong(it.title, it.artist, it.durationMs, stream.title, stream.artist, stream.durationMs) && (stream.album.isBlank() || com.localfy.app.data.music.AudioFallback.sameRelease(it.album, stream.album)) } }
         Library.from(mergeAlbums(local + remote))
-    }.stateIn(scope, SharingStarted.Eagerly, Library())
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, Library())
 
     /** A corrected song whose album already exists on the device joins that album instead of duplicating it. */
     private fun mergeAlbums(songs: List<Song>): List<Song> = AlbumGrouping.merge(songs)

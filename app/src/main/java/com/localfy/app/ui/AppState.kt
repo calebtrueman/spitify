@@ -65,6 +65,7 @@ data class SongMenuExtras(val removeLabel: String? = null, val onRemove: (() -> 
 
 @Stable
 class AppActions(
+    val videoPreferences: android.content.SharedPreferences,
     val repo: LibraryRepository,
     val player: PlayerConnection,
     val lyrics: LyricsRepository,
@@ -78,7 +79,11 @@ class AppActions(
     val editMetadata: (List<Song>, Boolean) -> Unit,
     val openPlayer: () -> Unit,
 ) {
-    val musicVideoEnabled = androidx.compose.runtime.mutableStateOf(false)
+    val musicVideoEnabled = androidx.compose.runtime.mutableStateOf(videoPreferences.getBoolean("enabled", false))
+    fun toggleMusicVideo() {
+        musicVideoEnabled.value = !musicVideoEnabled.value
+        videoPreferences.edit().putBoolean("enabled", musicVideoEnabled.value).apply()
+    }
 
     fun navigate(route: String) = nav.navigate(route) { launchSingleTop = true }
 
@@ -92,7 +97,7 @@ class AppActions(
     fun navigateTopLevel(route: String) = nav.navigate(route) {
         popUpTo(Routes.HOME) { saveState = true }
         launchSingleTop = true
-        restoreState = true
+        restoreState = route != Routes.HOME
     }
 }
 

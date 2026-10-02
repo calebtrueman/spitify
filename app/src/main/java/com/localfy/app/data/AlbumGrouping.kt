@@ -4,7 +4,8 @@ object AlbumGrouping {
     fun albumArtist(credit: String): String = credit
         .split(Regex("(?i)\\s+(?:feat\\.?|ft\\.?|featuring)\\s+|\\s*;\\s*"), limit = 2).first().trim()
 
-    fun merge(songs: List<Song>): List<Song> {
+    fun merge(source: List<Song>): List<Song> {
+        val songs = source.map { if (it.album.isBlank()) it.copy(album = "Unknown album") else it }
         val creditsByAlbum = songs.groupBy { it.album.trim().lowercase() }
             .mapValues { (_, tracks) -> tracks.map { albumArtist(it.albumArtist) }.distinct().sortedByDescending { it.length } }
         val normalized = songs.map { song ->

@@ -146,8 +146,11 @@ final class LibraryStore {
     func rebuild() {
         let applied = rawSongs.map { apply($0) }
         books = applied.filter(\.isAudiobook)
-        let local = applied.filter { !$0.isSpoken }
-        let remote = MusicStreams.shared.savedSongs.filter { stream in !local.contains { SearchMatch.fold($0.title) == SearchMatch.fold(stream.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(stream.artist) && AudioFallback.sameRelease($0.album, stream.album) } }
+        let saved = MusicStreams.shared.savedSongs
+        let savedBySong = Dictionary(grouping: saved, by: Library.songMatchKey)
+        let local = applied.filter { !$0.isSpoken }.map { Library.completeAlbumDetails($0, from: savedBySong[Library.songMatchKey($0)] ?? []) }
+        let localBySong = Dictionary(grouping: local, by: Library.songMatchKey)
+        let remote = saved.filter { stream in !(localBySong[Library.songMatchKey(stream)] ?? []).contains { Library.isDownloadedCopy($0, of: stream) } }
         library = Library.build(local + remote)
         onTasteInputChanged?()
     }

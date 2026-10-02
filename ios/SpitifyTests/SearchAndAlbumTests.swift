@@ -2,6 +2,19 @@ import XCTest
 @testable import Spitify
 
 final class SearchAndAlbumTests: XCTestCase {
+    func testBlankSavedAlbumDoesNotDuplicateDownloadedSong() {
+        let local = Song(id: "file", title: "Style", artist: "Taylor Swift", album: "1989 (Deluxe Edition)", albumArtist: "Taylor Swift", durationMs: 231000, track: 3, disc: 1, year: 2014, location: "Style.flac", kind: .file, dateAdded: Date(), sizeBytes: 100, fileExtension: "flac")
+        var blankLocal = local; blankLocal.album = ""
+        XCTAssertEqual(Library.completeAlbumDetails(blankLocal, from: [local]).album, local.album)
+        var saved = local; saved.id = "stream"; saved.kind = .remote; saved.album = ""
+        XCTAssertTrue(Library.isDownloadedCopy(local, of: saved))
+        saved.title = "Blank Space"
+        XCTAssertFalse(Library.isDownloadedCopy(local, of: saved))
+        XCTAssertEqual(Library.build([saved]).albums.first?.title, "Unknown album")
+        saved.title = local.title; saved.album = "1989 (Taylor's Version)"
+        XCTAssertFalse(Library.isDownloadedCopy(local, of: saved))
+    }
+
     func testExactTitleWinsAndAllQueryWordsMustMatch() {
         XCTAssertGreaterThan(SearchMatch.score("hello", title: "Hello", artist: "Adele")!, SearchMatch.score("hello", title: "Hello Again", artist: "Other")!)
         XCTAssertNotNil(SearchMatch.score("joji high hopes", title: "High Hopes", artist: "Joji, Omar Apollo"))

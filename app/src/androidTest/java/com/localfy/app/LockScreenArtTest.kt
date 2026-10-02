@@ -25,7 +25,9 @@ class LockScreenArtTest {
             val image = BitmapFactory.decodeFileDescriptor(descriptor.fileDescriptor)
             image.getPixel(image.width / 2, image.height / 2).also { image.recycle() }
         }
-        val art = LockScreenArt(context)
+        manager.setBitmap(bitmap(Color.YELLOW), null, false, WallpaperManager.FLAG_SYSTEM)
+        val storage = "wallpaper-native-test-${System.nanoTime()}"
+        val art = LockScreenArt(context, storageName = storage)
         art.setEnabled(true)
         manager.setBitmap(bitmap(Color.BLUE), null, false, WallpaperManager.FLAG_LOCK)
         art.show(bitmap(Color.RED), "red")
@@ -37,13 +39,14 @@ class LockScreenArtTest {
         art.restore()
         assertEquals(Color.GREEN, color())
         // A fresh object recovers the saved wallpaper after the app restarts.
+        art.setEnabled(true)
         art.show(bitmap(Color.RED), "restart")
-        LockScreenArt(context).restore()
+        LockScreenArt(context, storageName = storage).restore()
         assertEquals(Color.GREEN, color())
         manager.clear(WallpaperManager.FLAG_LOCK)
         art.show(bitmap(Color.RED), "shared")
         art.restore()
-        assertNull(manager.getWallpaperFile(WallpaperManager.FLAG_LOCK))
+        assertEquals(Color.YELLOW, color())
     }
     @Test fun playingAndPausedKeepArtButStopRestoresWallpaper() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -60,6 +63,7 @@ class LockScreenArtTest {
         }
         val manager = WallpaperManager.getInstance(app)
         val background = Bitmap.createBitmap(720, 1280, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLUE) }
+        manager.setBitmap(background, null, false, WallpaperManager.FLAG_SYSTEM)
         manager.setBitmap(background, null, false, WallpaperManager.FLAG_LOCK)
         val originalId = manager.getWallpaperId(WallpaperManager.FLAG_LOCK)
         val art = java.io.File(app.cacheDir, "wallpaper-test.png")

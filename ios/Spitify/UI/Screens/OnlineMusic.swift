@@ -125,6 +125,14 @@ struct OnlineAlbumView: View {
                     tracks = single.map { chosen in loaded.filter { $0.id == chosen.id } } ?? loaded
                     if tracks.isEmpty, let single { tracks = [single] }
                 } catch { failed = tracks.isEmpty }
+                tracks = tracks.map { track in
+                    var track = track
+                    if track.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { track.album = album.title }
+                    if track.releaseID.isEmpty { track.releaseID = album.id }
+                    if track.albumArtist == nil { track.albumArtist = album.artist }
+                    if track.artwork == nil { track.artwork = album.artwork }
+                    return track
+                }
                 tracks.forEach { app.musicStreams.register($0) }
                 loading = false
             }

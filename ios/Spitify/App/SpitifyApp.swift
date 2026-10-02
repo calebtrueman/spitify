@@ -91,6 +91,7 @@ struct RootView: View {
                 content()
                     .navigationDestination(for: Route.self) { RouteView(route: $0).toolbar(.visible, for: .navigationBar) }
             }
+            .background(HomeTabTapObserver(router: router).frame(width: 0, height: 0))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Reserve space in the layout itself, including pushed screens.
             MiniPlayer().background(p.background)

@@ -16,8 +16,8 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.13"
-    CURRENT_PROJECT_VERSION: "17"
+    MARKETING_VERSION: "1.0.14"
+    CURRENT_PROJECT_VERSION: "18"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
@@ -32,6 +32,8 @@ targets:
       - path: ../licenses
         buildPhase: resources
       - path: ../shared/video/music-video.html
+        buildPhase: resources
+      - path: ../shared/video/video-controls.js
         buildPhase: resources
     dependencies:
       - package: TagLibSwift

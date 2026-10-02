@@ -17,9 +17,10 @@ import java.io.IOException
 import java.security.MessageDigest
 
 /** Library membership is small saved data. Listening bytes live in a separate, disposable cache. */
-class MusicStreams(private val context: Context) {
-    private val prefs = context.getSharedPreferences("music_streams", Context.MODE_PRIVATE)
+class MusicStreams(private val context: Context, storageName: String = "music_streams") {
+    private val prefs = context.getSharedPreferences(storageName, Context.MODE_PRIVATE)
     private val tracks = linkedMapOf<String, OnlineTrack>()
+    private val tracksBySongId = mutableMapOf<Long, OnlineTrack>()
     private val savedIds = prefs.getStringSet("saved", emptySet())!!.toMutableSet()
     private val _saved = MutableStateFlow<List<Song>>(emptyList())
     val saved = _saved.asStateFlow()
@@ -28,11 +29,20 @@ class MusicStreams(private val context: Context) {
             val entries = JSONArray(prefs.getString("tracks", "[]"))
             for (i in 0 until entries.length()) Monochrome.parseTrack(entries.getJSONObject(i))?.let { tracks[it.id] = it }
         }
+        tracks.values.forEach { tracksBySongId[streamId(it.id)] = it }
         publish()
     }
-    @Synchronized fun register(track: OnlineTrack): Song {
+    @Synchronized fun register(incoming: OnlineTrack): Song {
+        val previous = tracks[incoming.id]
+        val track = if (previous == null) incoming else incoming.copy(
+            album = incoming.album.ifBlank { previous.album },
+            releaseId = incoming.releaseId.ifBlank { previous.releaseId },
+            albumArtist = incoming.albumArtist ?: previous.albumArtist,
+            artwork = incoming.artwork ?: previous.artwork,
+        )
         if (tracks[track.id] != track) {
             tracks[track.id] = track
+            tracksBySongId[streamId(track.id)] = track
             prefs.edit().putString("tracks", JSONArray(tracks.values.map { JSONObject(it.json()) }).toString()).apply()
         }
         return song(track)
@@ -40,7 +50,7 @@ class MusicStreams(private val context: Context) {
     @Synchronized fun knownTracks(): List<OnlineTrack> = tracks.values.toList()
     @Synchronized fun track(id: String): OnlineTrack? = tracks[id]
     @Synchronized fun track(song: Song): OnlineTrack? = song.sourceUri?.takeIf { it.scheme == "spitify" }?.lastPathSegment?.let(tracks::get)
-    @Synchronized fun lookup(id: Long): Song? = tracks.values.firstOrNull { streamId(it.id) == id }?.let(::song)
+    @Synchronized fun lookup(id: Long): Song? = tracksBySongId[id]?.let(::song)
     @Synchronized fun contains(track: OnlineTrack) = track.id in savedIds
     @Synchronized fun save(items: List<OnlineTrack>) { items.forEach { register(it); if (savedIds.add(it.id)) prefs.edit().putLong("added:${it.id}", System.currentTimeMillis() / 1000).apply() }; persistSaved() }
     @Synchronized fun remove(items: List<OnlineTrack>) { items.forEach { savedIds.remove(it.id) }; persistSaved() }
