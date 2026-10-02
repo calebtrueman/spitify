@@ -22,7 +22,15 @@ jobs:
         run: |
           cd ios
           xcodebuild test -project Spitify.xcodeproj -scheme Spitify -only-testing:SpitifyTests \
-            -destination 'platform=iOS Simulator,name=iPhone 17' -quiet
+            -destination 'platform=iOS Simulator,name=iPhone 17' -parallel-testing-enabled NO \
+            -resultBundlePath build/SpitifyTests.xcresult -quiet
+      - name: Keep test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhone-test-report
+          path: ios/build/SpitifyTests.xcresult
+          if-no-files-found: ignore
       - name: Build unsigned IPA
         run: |
           cd ios
