@@ -30,10 +30,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -131,7 +129,6 @@ fun HomeScreen() {
                         LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(HomeFilter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = f }) }
                         }
-                        IconButton(onClick = { app.navigate(Routes.STATS) }) { Icon(Icons.Rounded.Insights, "Your stats") }
                     }
                     val name = app.profiles.profile.collectAsStateWithLifecycle().value.name
                     Text(if (name.isBlank()) greeting else "$greeting, $name", style = MaterialTheme.typography.headlineLarge, maxLines = 2, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp))
@@ -275,4 +272,3 @@ private fun LoadingSkeleton(columns: Int) {
         }
     }
 }
-
