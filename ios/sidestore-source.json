@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.6",
+          "buildVersion": "7",
+          "date": "2026-10-02T04:54:19Z",
+          "localizedDescription": "- Search for songs and albums under Search \u2192 Online on Android and iPhone.\n- Download music from Monochrome into your library for offline playback.\n- Downloads use Wi-Fi by default, keep a saved queue, and support cancellation and retries.\n- Replace Android's layered launcher icon with the complete colour image to address the white icon reported on Fold8. This still needs confirmation on that phone.\n- Remove the stats shortcut beside Android Home's filters. Your stats remain available in the profile/settings area.\n\nIncludes the latest crash fixes from 1.0.5.\n\nThe Android APK is attached. The iPhone IPA will be attached by the release workflow; SideStore updates when that build finishes.\n\nThe mapping text file helps decode Android crash reports. You do not need it to install the app.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.6/Spitify-1.0.6-unsigned.ipa",
+          "size": 1887888,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.5",
           "buildVersion": "6",
           "date": "2026-10-02T04:39:16Z",
