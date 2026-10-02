@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.9",
+          "buildVersion": "10",
+          "date": "2026-10-02T08:20:24Z",
+          "localizedDescription": "Combined music search, All Songs, player gesture fixes, and lock-screen artwork controls. See the release notes for setup and limits.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.9/Spitify-1.0.9-unsigned.ipa",
+          "size": 2426138,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.8",
           "buildVersion": "9",
           "date": "2026-10-02T06:50:47Z",
