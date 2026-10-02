@@ -32,10 +32,10 @@
         {
           "version": "1.0.13",
           "buildVersion": "17",
-          "date": "2026-10-02T20:18:36Z",
-          "localizedDescription": "Full-screen videos with tap to exit, broader matching, background preparation, and captions off. All Songs sorting includes Most Played. Tap the accent-coloured audio output to change device.",
+          "date": "2026-10-02T20:31:58Z",
+          "localizedDescription": "Music videos now fill the screen, including behind the status bar. Song controls stay hidden in video mode; tap the video to return to the player. This also applies to Android's foldable layouts.\n\nVideo matching accepts label uploads, alternate title formatting, reuploads, and longer music-video edits. If a video cannot play, the player tries another match. Lookup starts when a song starts. Recent matches stay in memory for up to a day (100 songs maximum), and one embedded player stays ready for reuse. Artwork stays visible until video playback starts, without a fetching message. This does not download videos for offline use.\n\nCaptions are requested off when the player loads and when caption modules arrive. Text burned into the video cannot be removed. YouTube can still display its own branding or ads.\n\nAll Songs now has sorting by Title, Artist, Album, Recently Added, and Most Played. The audio output at the bottom uses the accent colour and opens the phone's device picker; older Android versions use the system audio settings.\n\nChecks: 59 iPhone unit tests passed, six optional tests skipped; six Android device tests passed. Both release builds and the shared video-control checks passed. Physical-phone appearance and audio-device switching still need a device check. The earlier GitHub-hosted lock-screen-artwork test failure has not been claimed fixed.",
           "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.13/Spitify-1.0.13-unsigned.ipa",
-          "size": 7272972,
+          "size": 7279045,
           "minOSVersion": "17.0"
         },
         {
