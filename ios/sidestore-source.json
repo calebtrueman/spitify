@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.4",
+          "buildVersion": "5",
+          "date": "2026-10-02T04:30:29Z",
+          "localizedDescription": "- **Fixes the app crashing every time it opens** once your music library loads (anything over a few dozen songs could trigger it)\n- If Spitify ever crashes again, the next launch shows a \"Send crash report\" button, so it can be fixed quickly\n- Settings \u203a Help \u203a Send problem report\n\n`Spitify-1.0.4-mapping.txt` is for decoding crash reports; you don't need to download it.\n\nIncludes everything from 1.0.3.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.4/Spitify-1.0.4-unsigned.ipa",
+          "size": 1806508,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.3",
           "buildVersion": "4",
           "date": "2026-10-02T04:03:28Z",
