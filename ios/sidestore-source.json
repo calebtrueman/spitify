@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.3",
+          "buildVersion": "4",
+          "date": "2026-10-02T04:03:28Z",
+          "localizedDescription": "- Profile pictures (and custom album art) are no longer sideways\n- Fixed the app crashing right after setup when choosing a photo taken with the phone's camera (high-resolution photos ran it out of memory)\n\nIncludes everything from 1.0.2.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.3/Spitify-1.0.3-unsigned.ipa",
+          "size": 1806508,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.2",
           "buildVersion": "3",
           "date": "2026-10-02T03:29:17Z",
