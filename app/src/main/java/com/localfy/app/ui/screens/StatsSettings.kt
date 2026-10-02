@@ -135,8 +135,8 @@ fun SettingsScreen() {
         item { SectionHeader("Lyrics") }
         item {
             SwitchRow(
-                "Find lyrics online",
-                "Look up synced lyrics on LRCLIB (free, open database) when a song has none. Sends only artist, title, album and length.",
+                "Find lyrics online automatically",
+                "When a song has no lyrics of its own, fetch synced lyrics from LRCLIB whenever you're online. Sends only artist, title, album and length.",
                 online, app.lyrics::setOnlineEnabled, Modifier.padding(horizontal = 16.dp),
             )
         }

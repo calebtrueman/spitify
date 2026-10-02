@@ -34,6 +34,7 @@ import com.localfy.app.ui.art.artKey
 import com.localfy.app.ui.components.EmptyState
 import com.localfy.app.ui.components.MediaTile
 import com.localfy.app.ui.components.SectionHeader
+import com.localfy.app.ui.components.FittedTileRow
 import com.localfy.app.ui.components.TileData
 import com.localfy.app.ui.components.songCount
 import com.localfy.app.ui.theme.LocalfyColors
@@ -59,13 +60,11 @@ fun AlbumScreen(albumId: Long) {
             if (more.isNotEmpty()) item(key = "more") {
                 Column {
                     SectionHeader("More by ${album.artist}", action = "Artist") { app.navigate(Routes.artist(album.artist)) }
-                    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        items(more, key = { it.id }) { a ->
-                            MediaTile(TileData("a${a.id}", a.title, a.year.takeIf { it > 0 }?.toString() ?: "Album", a.cover.artKey) {
+                    FittedTileRow(more, key = { it.id }, tileWidth = 148.dp) { a ->
+                            TileData("a${a.id}", a.title, a.year.takeIf { it > 0 }?.toString() ?: "Album", a.cover.artKey) {
                                 app.navigate(Routes.album(a.id))
-                            }, 148.dp)
-                        }
-                    }
+                            }
+}
                 }
             }
         },
@@ -97,13 +96,11 @@ fun ArtistScreen(name: String) {
             if (artist.albums.isNotEmpty()) item(key = "albums") {
                 Column {
                     SectionHeader("Discography")
-                    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                        items(artist.albums, key = { it.id }) { a ->
-                            MediaTile(TileData("a${a.id}", a.title, a.year.takeIf { it > 0 }?.toString() ?: "Album", a.cover.artKey) {
+                    FittedTileRow(artist.albums, key = { it.id }, tileWidth = 148.dp) { a ->
+                            TileData("a${a.id}", a.title, a.year.takeIf { it > 0 }?.toString() ?: "Album", a.cover.artKey) {
                                 app.navigate(Routes.album(a.id))
-                            }, 148.dp)
-                        }
-                    }
+                            }
+}
                     SectionHeader("Popular in your library")
                 }
             }

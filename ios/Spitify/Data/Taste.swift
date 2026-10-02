@@ -212,31 +212,6 @@ enum PlaylistGenerator {
         var out: [Mix] = []
         let forName = input.userName.flatMap { $0.isEmpty ? nil : $0 }
 
-        // Daily Mix 1-6: clusters of artists you love, refreshed daily.
-        var assigned = Set<String>()
-        var clusters: [[String]] = []
-        for seed in m.topArtists {
-            if clusters.count == 6 { break }
-            if assigned.contains(seed) { continue }
-            let members = [seed] + m.topArtists.filter { $0 != seed && !assigned.contains($0) && m.artistSimilarity(seed, $0) >= 0.35 }.prefix(4)
-            if songs.filter({ members.contains($0.artist) }).count < 4 && !clusters.isEmpty { continue }
-            assigned.formUnion(members)
-            clusters.append(Array(members))
-        }
-        for (i, members) in clusters.enumerated() {
-            var rnd = SeededRandom(daySeed * 31 + i)
-            let genres = Set(songs.filter { members.contains($0.artist) }.compactMap(\.genreKey))
-            let core = songs.filter { members.contains($0.artist) }.map { ($0, 0.7 * m.normSong($0.id) + 0.3 * m.predicted($0) + rnd.double() * 0.25) }.sorted { $0.1 > $1.1 }.map(\.0)
-            let related = songs.filter { !members.contains($0.artist) && $0.genreKey.map(genres.contains) == true }.map { ($0, m.predicted($0) + rnd.double() * 0.3) }.sorted { $0.1 > $1.1 }.map(\.0)
-            let mix = diversify(interleave(Array(core.prefix(30)), Array(related.prefix(20))), maxPerArtist: 50)
-            if mix.count < 4 { continue }
-            let others = Array(members.dropFirst().prefix(2))
-            out.append(Mix(id: "daily:\(i)", title: "Daily Mix \(out.filter { $0.id.hasPrefix("daily") }.count + 1)",
-                           description: ([members[0]] + others).joined(separator: ", ") + (members.count > 3 ? " and more" : ""),
-                           songs: mix, section: .madeForYou, style: .collage, accent: palette[i % palette.count],
-                           why: "Built around \(([members[0]] + others).joined(separator: ", ")) — the music you play together.", refresh: "Updated daily"))
-        }
-
         // Discover Weekly
         var rw = SeededRandom(weekSeed)
         let unheard = songs.filter { (m.completedPlays[$0.id] ?? 0) == 0 && !input.liked.contains($0.id) }

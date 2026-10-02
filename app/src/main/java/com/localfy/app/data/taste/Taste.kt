@@ -195,36 +195,7 @@ object PlaylistGenerator {
         val out = ArrayList<Mix>()
         val forName = input.userName?.takeIf { it.isNotBlank() }
 
-        // ---- Daily Mix 1-6: clusters of artists you love, favourites + discoveries, new every day.
-        val assigned = HashSet<String>()
-        val clusters = ArrayList<List<String>>()
-        for (seed in model.topArtists()) {
-            if (clusters.size == 6) break
-            if (seed in assigned) continue
-            val members = listOf(seed) + model.topArtists().filter { it != seed && it !in assigned && model.artistSimilarity(seed, it) >= 0.35 }.take(4)
-            if (songs.count { it.artist in members } < 4 && clusters.isNotEmpty()) continue
-            assigned += members
-            clusters += members
-        }
         val palette = listOf(0xFF1ED760, 0xFFE8115B, 0xFF509BF5, 0xFFF59B23, 0xFFAF2896, 0xFF27856A)
-        clusters.forEachIndexed { i, members ->
-            val rnd = Random(daySeed * 31 + i)
-            val genres = songs.filter { it.artist in members }.mapNotNull { it.genreKey() }.toSet()
-            val core = songs.filter { it.artist in members }
-                .sortedByDescending { 0.7 * model.normSong(it.id) + 0.3 * model.predicted(it) + rnd.nextDouble() * 0.25 }
-            val related = songs.filter { it.artist !in members && it.genreKey() in genres }
-                .sortedByDescending { model.predicted(it) + rnd.nextDouble() * 0.3 }
-            val mix = diversify(interleave(core.take(30), related.take(20)), maxPerArtist = 50)
-            if (mix.size < 4) return@forEachIndexed
-            val others = members.drop(1).take(2)
-            out += Mix(
-                "daily:$i", "Daily Mix ${i + 1}",
-                (listOf(members.first()) + others).joinToString(", ") + if (members.size > 3) " and more" else "",
-                mix, MixSection.MadeForYou, CoverStyle.Collage, palette[i % palette.size],
-                why = "Built around ${members.first()}${if (others.isNotEmpty()) ", " + others.joinToString(", ") else ""} — the music you play together.",
-                refresh = "Updated daily",
-            )
-        }
 
         // ---- Discover Weekly: songs you own but haven't really heard, that fit your taste. Mondays.
         val rndW = Random(weekSeed)

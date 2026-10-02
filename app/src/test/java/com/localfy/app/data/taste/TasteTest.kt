@@ -53,12 +53,10 @@ class TasteTest {
     fun generatesSpotifyStylePlaylists() {
         val mixes = PlaylistGenerator.generate(TasteModel(input()))
         val titles = mixes.map { it.title }
-        assertTrue(titles.contains("Daily Mix 1"))
+        assertFalse("no generic Daily Mixes", titles.any { it.startsWith("Daily Mix") })
         assertTrue(titles.contains("Discover Weekly"))
         assertTrue(titles.any { it.startsWith("daylist") })
         assertTrue(titles.contains("This Is Neon Harbor"))
-        val daily1 = mixes.first { it.title == "Daily Mix 1" }
-        assertTrue("Daily Mix 1 is built around the top artist", daily1.description.startsWith("Neon Harbor"))
         val discover = mixes.first { it.key == "discover" }
         val heard = input().listens.filter { it.completed }.map { it.songId }.toSet()
         assertFalse("Discover Weekly only has unheard songs", discover.songs.any { it.id in heard })
@@ -81,13 +79,13 @@ class TasteTest {
     fun hiddenArtistsNeverAppear() {
         val mixes = PlaylistGenerator.generate(TasteModel(input(hiddenArtists = setOf("Juniper Fields"))))
         assertTrue(mixes.flatMap { it.songs }.none { it.artist == "Juniper Fields" })
-        assertNotNull(mixes.firstOrNull { it.title == "Daily Mix 1" })
+        assertNotNull(mixes.firstOrNull { it.title == "This Is Neon Harbor" })
     }
 
     @Test
     fun coldStartUsesPickedArtists() {
         val m = TasteModel(TasteInput(all, emptyList(), emptySet(), seedArtists = setOf("Juniper Fields"), now = now))
         assertEquals("Juniper Fields", m.topArtists().first())
-        assertTrue(PlaylistGenerator.generate(m).any { it.title == "Daily Mix 1" })
+        assertTrue(PlaylistGenerator.generate(m).any { it.title == "This Is Juniper Fields" })
     }
 }

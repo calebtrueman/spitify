@@ -17,7 +17,7 @@ struct SettingsView: View {
             }
             Section("Playback") { PlaybackSettings().padding(.vertical, 6) }
             Section {
-                Toggle("Find lyrics online (LRCLIB)", isOn: $lyrics.onlineEnabled)
+                Toggle("Find lyrics online automatically", isOn: $lyrics.onlineEnabled)
             } header: { Text("Lyrics") } footer: { Text("Embedded lyrics and matching .lrc files (next to the song or in a “Lyrics” folder) are always used. Online lookup sends only artist, title, album and length.") }
             Section {
                 Toggle("Fill in missing song & book info", isOn: $app.autoFix)

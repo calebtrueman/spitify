@@ -141,12 +141,25 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
+    /** Swiping Spitify away from Recents stops playback and the service (like closing the app). */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val p = session?.player
-        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
+        app.player.saveNow()
+        session?.player?.pause()
+        // The app's own MediaController keeps the service bound, so stopSelf() alone leaves it (and its
+        // notification) alive. Releasing the session disconnects every controller and drops the notification.
+        shutdown()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     override fun onDestroy() {
+        shutdown()
+        super.onDestroy()
+    }
+
+    private fun shutdown() {
+        val s = session ?: return
+        session = null
         sendBroadcast(
             Intent(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
                 .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, AudioSessionHolder.id)
@@ -155,12 +168,8 @@ class PlaybackService : MediaLibraryService() {
         scope.cancel()
         crossfader?.release()
         effects?.release()
-        session?.run {
-            player.release()
-            release()
-        }
-        session = null
-        super.onDestroy()
+        s.player.release()
+        s.release()
     }
 
     private inner class SessionCallback : MediaLibrarySession.Callback {

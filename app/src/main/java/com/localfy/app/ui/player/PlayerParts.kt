@@ -254,7 +254,8 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
     LaunchedEffect(state.currentIndex, queue.size) {
         val target = state.currentIndex.coerceIn(0, queue.lastIndex)
         if (pager.currentPage != target) {
-            if ((pager.currentPage - target).absoluteValue > 2) pager.scrollToPage(target) else pager.animateScrollToPage(target)
+            if ((pager.currentPage - target).absoluteValue > 4) pager.scrollToPage(target)
+            else pager.animateScrollToPage(target, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow))
         }
     }
     LaunchedEffect(pager) {

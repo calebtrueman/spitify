@@ -8,6 +8,15 @@ enum HTTP {
         guard let (data, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return data
     }
+    /// Like [get], but throws when there's no connection (so callers can tell "offline" from "not found").
+    static func fetch(_ url: String) async throws -> Data? {
+        guard let u = URL(string: url) else { return nil }
+        var req = URLRequest(url: u, timeoutInterval: 12)
+        req.setValue("Spitify/1.0 (iOS music player)", forHTTPHeaderField: "User-Agent")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        return (resp as? HTTPURLResponse)?.statusCode == 200 ? data : nil
+    }
+    static func fetchJSON(_ url: String) async throws -> Any? { try await fetch(url).flatMap { try? JSONSerialization.jsonObject(with: $0) } }
     static func json(_ url: String) async -> Any? { await get(url).flatMap { try? JSONSerialization.jsonObject(with: $0) } }
     static func q(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? s }
 }

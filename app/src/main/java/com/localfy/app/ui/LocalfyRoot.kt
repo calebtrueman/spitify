@@ -9,6 +9,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -410,8 +412,19 @@ fun LocalfyRoot(activity: Activity) {
             }
 
             // Unfolding while the full player is open: hand over to the side pane.
-            LaunchedEffect(wide) { if (wide && playerExpanded) { playerExpanded = false; sheet = 0f; paneVisible = true } }
+            // Opening up to where the side pane fits: hand the full player over to the pane.
+            LaunchedEffect(paneFits) { if (paneFits && playerExpanded) { playerExpanded = false; sheet = 0f; paneVisible = true } }
             LaunchedEffect(paneFits) { if (!paneFits) theater = false }
+
+            // Wide but no room for the pane (e.g. inner screen in portrait, split-screen):
+            // the mini player opens the full player over everything.
+            AnimatedVisibility(
+                visible = wide && !paneFits && playerExpanded && player.hasMedia,
+                enter = slideInVertically(tween(340)) { it } + fadeIn(tween(200)),
+                exit = slideOutVertically(tween(260)) { it } + fadeOut(tween(200)),
+            ) {
+                DarkSurface { NowPlayingFull(onCollapse = { playerExpanded = false }) }
+            }
 
             // Inner screen: the dual-screen player spanning both halves.
             AnimatedVisibility(

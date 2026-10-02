@@ -152,24 +152,24 @@ fun HomeScreen() {
             when (filter) {
                 HomeFilter.Albums -> {
                     items(library.albums, key = { "ga${it.id}" }) { a ->
-                        MediaTile(TileData("ga${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }, 200.dp, Modifier.padding(4.dp))
+                        MediaTile(TileData("ga${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     return@LazyVerticalGrid
                 }
                 HomeFilter.Artists -> {
                     items(library.artists, key = { "gr${it.name}" }) { a ->
-                        MediaTile(TileData("gr${a.name}", a.name, songCount(a.songs.size), a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }, 200.dp, Modifier.padding(4.dp))
+                        MediaTile(TileData("gr${a.name}", a.name, songCount(a.songs.size), a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     return@LazyVerticalGrid
                 }
                 HomeFilter.Playlists -> {
                     val liked = smart[SmartCollection.Kind.Liked]?.songs.orEmpty()
-                    item(key = "gl") { MediaTile(TileData("gl", "Liked Songs", songCount(liked.size), liked.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.Liked)) }, 200.dp, Modifier.padding(4.dp)) }
+                    item(key = "gl") { MediaTile(TileData("gl", "Liked Songs", songCount(liked.size), liked.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.Liked)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp)) }
                     items(playlists, key = { "gp${it.id}" }) { p ->
-                        MediaTile(TileData("gp${p.id}", p.name, songCount(p.songs.size), p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }, 200.dp, Modifier.padding(4.dp))
+                        MediaTile(TileData("gp${p.id}", p.name, songCount(p.songs.size), p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     items(mixes, key = { "gm${it.key}" }) { m ->
-                        MediaTile(TileData("gm${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) }, 200.dp, Modifier.padding(4.dp))
+                        MediaTile(TileData("gm${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     return@LazyVerticalGrid
                 }
@@ -198,35 +198,6 @@ fun HomeScreen() {
                     BigPlayButton(false, { app.player.playSongs(library.songs, shuffle = true, source = "All songs") }, size = 50.dp)
                 }
             }
-            if (current != null) full("hero") { DarkSurface {
-                val position by app.player.positionMs.collectAsStateWithLifecycle()
-                Row(
-                    Modifier
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Brush.horizontalGradient(listOf(lerp(glow, Color.Black, 0.1f), lerp(glow, Color.Black, 0.55f))))
-                        .pressable(pressedScale = 0.98f, onClick = app.openPlayer)
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Artwork(current.artKey, Modifier.size(84.dp).shadow(12.dp, RoundedCornerShape(8.dp)), RoundedCornerShape(8.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(if (player.isPlaying) "NOW PLAYING" else "CONTINUE LISTENING", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
-                        Text(current.title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(current.artist, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f), maxLines = 1)
-                        Spacer(Modifier.height(8.dp))
-                        val p = if (player.durationMs > 0) (position / player.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-                        Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.25f))) {
-                            Box(Modifier.fillMaxWidth(p).height(3.dp).background(Color.White))
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    BigPlayButton(player.isPlaying, app.player::togglePlay, size = 50.dp, container = Color.White)
-                }
-            } }
-
             // Quick picks: liked songs, playlists, recent albums and mixes.
             val recentAlbums = smart[SmartCollection.Kind.RecentlyPlayed]?.songs.orEmpty()
                 .map { it.albumId }.distinct().mapNotNull { library.albumById[it] }
@@ -239,7 +210,7 @@ fun HomeScreen() {
                 library.albums.shuffled(java.util.Random(7)).take(8).forEach { a ->
                     add(TileData("qa${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) })
                 }
-            }.distinctBy { it.title }.take(quickColumns * if (wide) 2 else 4)
+            }.distinctBy { it.title }.take(if (wide) quickColumns * 2 else 6)
 
             full("quick") {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -261,7 +232,6 @@ fun HomeScreen() {
                         if (section == com.localfy.app.data.MixSection.MadeForYou && name.isNotBlank()) "Made for $name" else section.title,
                         inSection.map { m -> TileData("m${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) } },
                         tileWidth,
-                        eyebrow = if (section == com.localfy.app.data.MixSection.MadeForYou) "Learned from your listening" else null,
                     )
                 }
             }
@@ -269,14 +239,6 @@ fun HomeScreen() {
                 TileShelf("Jump back in", recentAlbums.take(12).map { a ->
                     TileData("j${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }
                 }, tileWidth)
-            }
-            full("repeat") {
-                val onRepeat = smart[SmartCollection.Kind.MostPlayed]?.songs.orEmpty()
-                TileShelf("On repeat", onRepeat.take(12).mapIndexed { i, s ->
-                    TileData("r${s.id}", s.title, "${stats[s.id]?.playCount ?: 0} plays • ${s.artist}", s.artKey) {
-                        app.player.playSongs(onRepeat, i, shuffle = false, source = SmartCollection.Kind.MostPlayed.title)
-                    }
-                }, tileWidth, action = "Show all") { app.navigate(Routes.smart(SmartCollection.Kind.MostPlayed)) }
             }
             full("added") {
                 val added = smart[SmartCollection.Kind.RecentlyAdded]?.songs.orEmpty()
@@ -290,32 +252,6 @@ fun HomeScreen() {
                 TileShelf("Your top artists", top.map { a ->
                     TileData("ar${a.name}", a.name, "Artist", a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }
                 }, tileWidth)
-            }
-            full("forgotten") {
-                val songs = smart[SmartCollection.Kind.Forgotten]?.songs.orEmpty()
-                TileShelf("Forgotten favourites", songs.take(12).mapIndexed { i, s ->
-                    TileData("f${s.id}", s.title, s.artist, s.artKey) { app.player.playSongs(songs, i, source = SmartCollection.Kind.Forgotten.title) }
-                }, tileWidth, eyebrow = "Loved once, not heard lately")
-            }
-            full("undiscovered") {
-                val songs = smart[SmartCollection.Kind.NeverPlayed]?.songs.orEmpty()
-                TileShelf("Undiscovered in your library", songs.take(12).mapIndexed { i, s ->
-                    TileData("u${s.id}", s.title, s.artist, s.artKey) { app.player.playSongs(songs, i, source = SmartCollection.Kind.NeverPlayed.title) }
-                }, tileWidth, action = "Show all") { app.navigate(Routes.smart(SmartCollection.Kind.NeverPlayed)) }
-            }
-            full("shuffle-all") {
-                Row(Modifier.fillMaxWidth().padding(28.dp), horizontalArrangement = Arrangement.Center) {
-                    Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary)
-                            .pressable { app.player.playSongs(library.songs, shuffle = true, source = "All songs") }
-                            .padding(horizontal = 22.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Rounded.Shuffle, null, tint = LocalPalette.current.onBrand)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Shuffle all ${library.songs.size} songs", color = LocalPalette.current.onBrand, style = MaterialTheme.typography.labelLarge)
-                    }
-                }
             }
         }
     }

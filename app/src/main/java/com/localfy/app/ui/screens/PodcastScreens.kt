@@ -84,6 +84,7 @@ import com.localfy.app.ui.components.EmptyState
 import com.localfy.app.ui.components.MediaTile
 import com.localfy.app.ui.components.Pill
 import com.localfy.app.ui.components.SectionHeader
+import com.localfy.app.ui.components.FittedTileRow
 import com.localfy.app.ui.components.TileData
 import com.localfy.app.ui.components.pressable
 import com.localfy.app.ui.player.rememberPlayerState
@@ -182,11 +183,9 @@ fun PodcastsScreen() {
         if (shows.isNotEmpty()) {
             item { SectionHeader("Your shows") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    items(shows, key = { it.id }) { s ->
-                        MediaTile(TileData("s${s.id}", s.podcast.title, s.podcast.author, podcastArt(s.podcast.artworkUrl, s.id)) { app.navigate(Routes.show(s.id)) }, 140.dp)
-                    }
-                }
+                FittedTileRow(shows, key = { it.id }, tileWidth = 140.dp) { s ->
+                        TileData("s${s.id}", s.podcast.title, s.podcast.author, podcastArt(s.podcast.artworkUrl, s.id)) { app.navigate(Routes.show(s.id)) }
+}
             }
             item { SectionHeader("New episodes") }
             items(newEpisodes, key = { "n${it.first.id}" }) { (e, s) -> EpisodeRow(e.toSong(s.podcast), e, showArt = true) }
@@ -198,11 +197,9 @@ fun PodcastsScreen() {
         if (local.isNotEmpty()) {
             item { SectionHeader("On this device", eyebrow = "Podcast files in your storage") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    items(local.groupBy { it.album }.entries.toList(), key = { it.key }) { (album, eps) ->
-                        MediaTile(TileData("l$album", album, "${eps.size} episodes", eps.first().artKey) { app.navigate(Routes.localShow(album)) }, 140.dp)
-                    }
-                }
+                FittedTileRow(local.groupBy { it.album }.entries.toList(), key = { it.key }, tileWidth = 140.dp) { (album, eps) ->
+                        TileData("l$album", album, "${eps.size} episodes", eps.first().artKey) { app.navigate(Routes.localShow(album)) }
+}
             }
         }
     }

@@ -47,7 +47,7 @@ final class WalkthroughTests: XCTestCase {
         if shuffle.waitForExistence(timeout: 3) { shuffle.tap() }
         sleep(2)
         shot(app, "12-home-playing")
-        app.buttons.matching(NSPredicate(format: "label CONTAINS 'NOW PLAYING'")).firstMatch.tap()
+        app.descendants(matching: .any)["miniPlayer"].firstMatch.tap()
         sleep(2)
         shot(app, "13-player")
         app.swipeUp(); sleep(1); shot(app, "14-player-cards")

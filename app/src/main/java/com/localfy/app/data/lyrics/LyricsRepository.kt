@@ -55,13 +55,24 @@ class LyricsRepository(
     private val _states = MutableStateFlow<Map<Long, LyricsState>>(emptyMap())
     val states: StateFlow<Map<Long, LyricsState>> = _states.asStateFlow()
 
-    private val _onlineEnabled = MutableStateFlow(prefs.getBoolean(KEY_ONLINE, false))
+    private val _onlineEnabled = MutableStateFlow(prefs.getBoolean(KEY_ONLINE, true))
     val onlineEnabled: StateFlow<Boolean> = _onlineEnabled.asStateFlow()
 
     private val _folder = MutableStateFlow(prefs.getString(KEY_FOLDER, null)?.let(Uri::parse))
     val folder: StateFlow<Uri?> = _folder.asStateFlow()
 
     @Volatile private var lrcIndex: Map<String, Uri>? = null
+    private val offlineMisses = java.util.Collections.synchronizedSet(HashSet<Long>())
+
+    init {
+        // When the internet comes back, forget offline misses so those songs get looked up again.
+        context.getSystemService(android.net.ConnectivityManager::class.java)?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                val ids = synchronized(offlineMisses) { offlineMisses.toList().also { offlineMisses.clear() } }
+                if (ids.isNotEmpty()) _states.update { it - ids.toSet() }
+            }
+        })
+    }
 
     fun setOnlineEnabled(enabled: Boolean) {
         _onlineEnabled.value = enabled
@@ -117,7 +128,10 @@ class LyricsRepository(
         tagReader.read(song.uri)?.let { return save(song, it, LyricsSource.Embedded) }
         readSidecar(song)?.let { return save(song, it, LyricsSource.LrcFile) }
         if (online) {
-            val fetched = runCatching { fetchLrclib(song) }.getOrNull()
+            val result = runCatching { fetchLrclib(song) }
+            // No connection: don't remember a miss, try again when we're back online.
+            if (result.isFailure) { offlineMisses += song.id; return LyricsState.NotFound(searchedOnline = false) }
+            val fetched = result.getOrNull()
             if (fetched != null) return save(song, fetched, LyricsSource.Lrclib)
             db.lyrics().put(LyricsEntity(song.id, null, null, LyricsSource.Lrclib.name, 0, System.currentTimeMillis(), notFound = true))
             return LyricsState.NotFound(searchedOnline = true)
@@ -213,6 +227,7 @@ class LyricsRepository(
             ?: o.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
     }
 
+    /** Returns null for "not found" (HTTP 404 etc.); throws on network errors. */
     private fun httpGet(url: String): String? {
         val conn = URL(url).openConnection() as HttpURLConnection
         return try {

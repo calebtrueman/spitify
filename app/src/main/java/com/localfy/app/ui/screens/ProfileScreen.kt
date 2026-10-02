@@ -51,6 +51,7 @@ import com.localfy.app.ui.Routes
 import com.localfy.app.ui.components.Avatar
 import com.localfy.app.ui.components.MediaTile
 import com.localfy.app.ui.components.SectionHeader
+import com.localfy.app.ui.components.FittedTileRow
 import com.localfy.app.ui.components.TileData
 import com.localfy.app.ui.components.formatLongDuration
 import com.localfy.app.ui.components.pressable
@@ -109,12 +110,10 @@ fun ProfileScreen() {
         if (topArtists.isNotEmpty()) {
             item { SectionHeader("Your top artists", eyebrow = "What Spitify has learned") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    items(topArtists, key = { it }) { name ->
-                        val a = library.artistByName[name] ?: return@items
-                        MediaTile(TileData(name, name, "Artist", a.cover.artKey, circle = true) { app.navigate(Routes.artist(name)) }, 120.dp)
-                    }
-                }
+                FittedTileRow(topArtists, key = { it }, tileWidth = 120.dp) { name ->
+                        val a = library.artistByName[name] ?: return@FittedTileRow null
+                        TileData(name, name, "Artist", a.cover.artKey, circle = true) { app.navigate(Routes.artist(name)) }
+}
             }
         }
         if (topGenres.isNotEmpty()) {

@@ -3,6 +3,8 @@ package com.localfy.app.ui.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -453,7 +455,20 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
                 EmptyState("Nothing playing", "Tap any song — it plays here while you keep browsing on the other half.")
                 return@Column
             }
-            AnimatedContent(tab, modifier = Modifier.weight(1f), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "pane-tab") { t ->
+            val state = rememberPlayerState()
+            // Starting something new on the left (a different queue) crossfades the whole player in,
+            // rather than the artwork pages rebuilding and snapping.
+            val queueKey = (state.source ?: "") + "|" + state.queue.firstOrNull()
+            AnimatedContent(
+                tab to queueKey,
+                modifier = Modifier.weight(1f),
+                transitionSpec = {
+                    if (initialState.first != targetState.first) fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+                    else (fadeIn(tween(320, delayMillis = 60)) + scaleIn(tween(360), initialScale = 0.94f)) togetherWith fadeOut(tween(160))
+                },
+                contentKey = { it },
+                label = "pane-tab",
+            ) { (t, _) ->
                 when (t) {
                     1 -> if (song.isPodcast) EpisodeNotes(song, Modifier.fillMaxSize()) else LyricsView(song, Modifier.fillMaxSize(), MaterialTheme.typography.headlineSmall)
                     2 -> QueueList(Modifier.fillMaxSize())

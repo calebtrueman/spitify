@@ -74,11 +74,6 @@ fun MixCover(mix: Mix, modifier: Modifier = Modifier) {
                 } else {
                     Artwork(mix.cover.artKey, Modifier.fillMaxSize())
                 }
-                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to lerp(accent, Color.Black, 0.25f).copy(alpha = 0.95f))))
-                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(accent).padding(horizontal = 8.dp, vertical = if (small) 3.dp else 6.dp)) {
-                    Text(mix.title, color = if (LocalPalette.current.isDark || true) Color.White else Color.Black, fontSize = titleSize * 0.8f, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                BrandMark(Modifier.align(Alignment.TopStart).padding(6.dp), small)
             }
             CoverStyle.Bold -> {
                 Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(accent, Color.White, 0.15f), accent, lerp(accent, Color.Black, 0.55f)))))
@@ -90,18 +85,10 @@ fun MixCover(mix: Mix, modifier: Modifier = Modifier) {
                     mix.title.removePrefix("daylist • ").let { if (mix.key == "daylist") "daylist" else it },
                     color = Color.White, fontSize = titleSize, lineHeight = titleSize * 1.05f, fontWeight = FontWeight.Black,
                     maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.align(Alignment.TopStart).padding(if (small) 8.dp else 14.dp).padding(top = if (small) 10.dp else 16.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(if (small) 8.dp else 14.dp),
                 )
-                BrandMark(Modifier.align(Alignment.TopStart).padding(6.dp), small)
             }
         }
-    }
-}
-
-@Composable
-private fun BrandMark(modifier: Modifier, small: Boolean) {
-    Box(modifier.size(if (small) 12.dp else 18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
-        Text("S", color = Color(0xFF1ED760), fontSize = if (small) 7.sp else 10.sp, fontWeight = FontWeight.Black)
     }
 }
 

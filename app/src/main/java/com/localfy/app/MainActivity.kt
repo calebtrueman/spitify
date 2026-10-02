@@ -91,6 +91,11 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleViewIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        app.player.connect() // no-op if already connected
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleViewIntent(intent)

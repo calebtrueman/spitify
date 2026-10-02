@@ -1,3 +1,4 @@
+import Network
 import Foundation
 import Observation
 
@@ -52,14 +53,29 @@ enum LRC {
     }
 }
 
-/// Embedded tags → matching .lrc next to the file (or in a "Lyrics" folder) → LRCLIB (opt-in). Misses are cached too.
+/// Embedded tags → matching .lrc next to the file (or in a "Lyrics" folder) → LRCLIB (on by default).
+/// Misses are cached, except ones caused by being offline: those are retried when the connection returns.
 @MainActor @Observable
 final class LyricsService {
     enum State: Equatable { case loading, missing(searchedOnline: Bool), found(Lyrics) }
     private(set) var states: [String: State] = [:]
-    var onlineEnabled = UserDefaults.standard.bool(forKey: "lyricsOnline") { didSet { UserDefaults.standard.set(onlineEnabled, forKey: "lyricsOnline") } }
+    var onlineEnabled = UserDefaults.standard.object(forKey: "lyricsOnline") as? Bool ?? true { didSet { UserDefaults.standard.set(onlineEnabled, forKey: "lyricsOnline") } }
     private var cache: [String: String] = Store.load([String: String].self, "lyricsCache") ?? [:]
     private var offsets: [String: Double] = Store.load([String: Double].self, "lyricsOffsets") ?? [:]
+    private var offlineMisses: Set<String> = []
+    private let monitor = NWPathMonitor()
+
+    init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard path.status == .satisfied else { return }
+            Task { @MainActor in
+                guard let self, !self.offlineMisses.isEmpty else { return }
+                for id in self.offlineMisses { self.states[id] = nil }
+                self.offlineMisses.removeAll()
+            }
+        }
+        monitor.start(queue: .global(qos: .utility))
+    }
 
     func request(_ song: Song, fileURL: URL?, force: Bool = false) {
         if !force, states[song.id] != nil { return }
@@ -73,7 +89,16 @@ final class LyricsService {
                 if let t = await TagReader.lyrics(url), !t.isEmpty { return save(song, t, "Embedded in file") }
                 if let t = sidecar(url), !t.isEmpty { return save(song, t, ".lrc file") }
             }
-            if force || onlineEnabled, let t = await lrclib(song) { return save(song, t, "LRCLIB") }
+            if force || onlineEnabled {
+                do {
+                    if let t = try await lrclib(song) { return save(song, t, "LRCLIB") }
+                } catch {
+                    // No connection: don't remember a miss, look again once we're back online.
+                    offlineMisses.insert(song.id)
+                    states[song.id] = .missing(searchedOnline: false)
+                    return
+                }
+            }
             cache[song.id] = ""
             Store.save(cache, "lyricsCache")
             states[song.id] = .missing(searchedOnline: force || onlineEnabled)
@@ -105,7 +130,7 @@ final class LyricsService {
         return nil
     }
 
-    private func lrclib(_ s: Song) async -> String? {
+    private func lrclib(_ s: Song) async throws -> String? {
         let secs = s.durationMs / 1000
         func pick(_ o: [String: Any]) -> String? {
             if o["instrumental"] as? Bool == true { return "[00:00.00]♪ Instrumental" }
@@ -113,8 +138,8 @@ final class LyricsService {
             if let t = o["plainLyrics"] as? String, !t.isEmpty { return t }
             return nil
         }
-        if let o = await HTTP.json("https://lrclib.net/api/get?artist_name=\(HTTP.q(s.artist))&track_name=\(HTTP.q(s.title))&album_name=\(HTTP.q(s.album))&duration=\(secs)") as? [String: Any], let t = pick(o) { return t }
-        guard let arr = await HTTP.json("https://lrclib.net/api/search?track_name=\(HTTP.q(s.title))&artist_name=\(HTTP.q(s.artist))") as? [[String: Any]] else { return nil }
+        if let o = try await HTTP.fetchJSON("https://lrclib.net/api/get?artist_name=\(HTTP.q(s.artist))&track_name=\(HTTP.q(s.title))&album_name=\(HTTP.q(s.album))&duration=\(secs)") as? [String: Any], let t = pick(o) { return t }
+        guard let arr = try await HTTP.fetchJSON("https://lrclib.net/api/search?track_name=\(HTTP.q(s.title))&artist_name=\(HTTP.q(s.artist))") as? [[String: Any]] else { return nil }
         return arr.filter { abs(($0["duration"] as? Double ?? 0) - Double(secs)) <= 5 }
             .sorted { abs(($0["duration"] as? Double ?? 0) - Double(secs)) < abs(($1["duration"] as? Double ?? 0) - Double(secs)) }
             .lazy.compactMap(pick).first

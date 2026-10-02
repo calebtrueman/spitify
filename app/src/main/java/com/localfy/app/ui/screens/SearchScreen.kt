@@ -58,6 +58,7 @@ import com.localfy.app.ui.art.fallbackColor
 import com.localfy.app.ui.components.EmptyState
 import com.localfy.app.ui.components.MediaTile
 import com.localfy.app.ui.components.SectionHeader
+import com.localfy.app.ui.components.FittedTileRow
 import com.localfy.app.ui.components.SongRow
 import com.localfy.app.ui.components.TileData
 import com.localfy.app.ui.components.songCount
@@ -155,27 +156,21 @@ fun SearchScreen() {
                 Column {
                     if (artists.isNotEmpty()) {
                         SectionHeader("Artists")
-                        LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                            items(artists, key = { it.name }) { a ->
-                                MediaTile(TileData(a.name, a.name, "Artist", a.cover.artKey, circle = true) { focus.clearFocus(); app.navigate(Routes.artist(a.name)) }, 120.dp)
-                            }
-                        }
+                        FittedTileRow(artists, key = { it.name }, tileWidth = 120.dp) { a ->
+                                TileData(a.name, a.name, "Artist", a.cover.artKey, circle = true) { focus.clearFocus(); app.navigate(Routes.artist(a.name)) }
+}
                     }
                     if (albums.isNotEmpty()) {
                         SectionHeader("Albums")
-                        LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                            items(albums, key = { it.id }) { a ->
-                                MediaTile(TileData("a${a.id}", a.title, a.artist, a.cover.artKey) { focus.clearFocus(); app.navigate(Routes.album(a.id)) }, 140.dp)
-                            }
-                        }
+                        FittedTileRow(albums, key = { it.id }, tileWidth = 140.dp) { a ->
+                                TileData("a${a.id}", a.title, a.artist, a.cover.artKey) { focus.clearFocus(); app.navigate(Routes.album(a.id)) }
+}
                     }
                     if (matchedPlaylists.isNotEmpty()) {
                         SectionHeader("Playlists")
-                        LazyRow(contentPadding = PaddingValues(horizontal = 12.dp)) {
-                            items(matchedPlaylists, key = { it.id }) { p ->
-                                MediaTile(TileData("p${p.id}", p.name, "Playlist", p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }, 140.dp)
-                            }
-                        }
+                        FittedTileRow(matchedPlaylists, key = { it.id }, tileWidth = 140.dp) { p ->
+                                TileData("p${p.id}", p.name, "Playlist", p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }
+}
                     }
                 }
             }

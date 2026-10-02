@@ -192,7 +192,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
             items(entries, key = { it.key }) { e ->
                 if (grid) {
                     Box(Modifier.padding(4.dp)) {
-                        MediaTile(TileData(e.key, e.title, e.subtitle, e.art, circle = e.shape == CircleShape, onClick = e.onClick), 160.dp, Modifier.fillMaxWidth())
+                        MediaTile(TileData(e.key, e.title, e.subtitle, e.art, circle = e.shape == CircleShape, onClick = e.onClick), androidx.compose.ui.unit.Dp.Unspecified, Modifier.fillMaxWidth())
                     }
                 } else {
                     Row(

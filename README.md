@@ -39,8 +39,8 @@ Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager �
 - Liked Songs, playlists, and a queue you can reorder by dragging.
 - Shuffle that reorders the real queue, so "Next up" shows what will actually play.
 - Sleep timer with fade-out, playback speed, skip silence, gapless playback, and 0–12 s **crossfade**.
-- **Synced lyrics** from file tags, `.lrc` files, or [LRCLIB](https://lrclib.net) (optional). They follow playback and you can tap a line to jump to it.
-- Lock screen, notification, Bluetooth controls and resume-on-reboot.
+- **Synced lyrics** from file tags, `.lrc` files, or [LRCLIB](https://lrclib.net), fetched automatically when you're online. They follow playback and you can tap a line to jump to it.
+- Lock screen, notification, Bluetooth controls and resume-on-reboot. Swiping Spitify away from Recents stops playback.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -51,7 +51,7 @@ It generates the playlists you'd expect:
 
 | Made for you | Your mixes | Throwbacks |
 |---|---|---|
-| Daily Mix 1–6 · Discover Weekly · Release Radar · **daylist** ("mellow synthwave thursday evening") | This Is *artist* · *artist* Radio · Chill / Energy / Focus · genre mixes | On Repeat · Repeat Rewind · Your Top Songs *year* · decade mixes |
+| Discover Weekly · Release Radar · **daylist** ("mellow synthwave thursday evening") | This Is *artist* · *artist* Radio · Chill / Energy / Focus · genre mixes | On Repeat · Repeat Rewind · Your Top Songs *year* · decade mixes |
 
 There's also song radio on any song, artist radio on artist pages, and **Don't recommend** for songs or artists. Each playlist has a generated cover and a line explaining why it was made. All of this is plain Kotlin on the device, with no network calls and no AI service.
 
@@ -166,7 +166,7 @@ Everything stays on the phone: your library, listening history, taste profile, n
 |---|---|
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
-| Synced lyrics (opt-in) | LRCLIB |
+| Synced lyrics | LRCLIB |
 | Podcast search | Apple Podcasts directory + the show's RSS feed |
 | Free audiobooks | LibriVox via the Internet Archive |
 

@@ -144,17 +144,23 @@ struct TileShelf: View {
     var width: CGFloat = 146
     var action: String? = nil
     var onAction: (() -> Void)? = nil
+    @State private var available: CGFloat = 0
     var body: some View {
         if !tiles.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 SectionHeader(title: title, eyebrow: eyebrow, action: action, onAction: onAction)
+                // Only whole tiles on screen: size them so N fit exactly, with the gap equal to the edge margin,
+                // and snap to tile edges so a half-cut tile never rests at the left or right.
+                let count = max(2, Int((available - 32 + 16) / (width + 16)))
+                let fitted = available > 0 ? (available - 32 - 16 * CGFloat(count - 1)) / CGFloat(count) : width
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 14) { ForEach(tiles) { MediaTile(tile: $0, width: width) } }
-                        .padding(.horizontal, 16)
+                    LazyHStack(alignment: .top, spacing: 16) { ForEach(tiles) { MediaTile(tile: $0, width: fitted) } }
                         .scrollTargetLayout()
                 }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
                 .scrollTargetBehavior(.viewAligned)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
         }
     }
 }
@@ -273,23 +279,11 @@ struct MixCover: View {
                             HStack(spacing: 0) { ArtworkView(arts[2], cornerRadius: 0); ArtworkView(arts[3], cornerRadius: 0) }
                         }
                     } else { ArtworkView(mix.cover, cornerRadius: 0) }
-                    if !compact {
-                        VStack(spacing: 0) {
-                            Spacer()
-                            Text(mix.title).font(.custom("FigtreeLight-ExtraBold", size: side / 11)).foregroundStyle(.white).lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, side / 22).background(accent)
-                        }
-                    }
                 } else {
                     LinearGradient(colors: [accent.mix(.white, 0.15), accent, accent.mix(.black, 0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     ArtworkView(mix.cover, cornerRadius: 6).frame(width: side * 0.38, height: side * 0.38).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing).padding(side * 0.08)
                     Text(mix.id == "daylist" ? "daylist" : mix.title).font(.custom("FigtreeLight-Black", size: side / 8.5)).foregroundStyle(.white).lineLimit(3)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(side * 0.09).padding(.top, side * 0.05)
-                }
-                if !compact {
-                    Text("S").font(.system(size: side / 18, weight: .black)).foregroundStyle(Color(hex: 0x1ED760))
-                        .frame(width: side / 9, height: side / 9).background(.black.opacity(0.55), in: Circle())
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(side * 0.04)
                 }
             }
             .frame(width: side, height: side)

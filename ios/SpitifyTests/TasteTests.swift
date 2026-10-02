@@ -48,11 +48,10 @@ final class TasteTests: XCTestCase {
     func testGeneratesSpotifyStylePlaylists() {
         let mixes = PlaylistGenerator.generate(TasteModel(input()))
         let titles = mixes.map(\.title)
-        XCTAssertTrue(titles.contains("Daily Mix 1"))
+        XCTAssertFalse(titles.contains { $0.hasPrefix("Daily Mix") })
         XCTAssertTrue(titles.contains("Discover Weekly"))
         XCTAssertTrue(titles.contains { $0.hasPrefix("daylist") })
         XCTAssertTrue(titles.contains("This Is Neon Harbor"))
-        XCTAssertTrue(mixes.first { $0.title == "Daily Mix 1" }!.description.hasPrefix("Neon Harbor"))
         let discover = mixes.first { $0.id == "discover" }!
         let heard = Set(input().listens.filter(\.completed).map(\.songId))
         XCTAssertFalse(discover.songs.contains { heard.contains($0.id) })
@@ -76,6 +75,6 @@ final class TasteTests: XCTestCase {
     func testColdStartUsesPickedArtists() {
         let m = TasteModel(TasteInput(songs: all, listens: [], liked: [], seedArtists: ["Juniper Fields"], now: now))
         XCTAssertEqual(m.topArtists.first, "Juniper Fields")
-        XCTAssertTrue(PlaylistGenerator.generate(m).contains { $0.title == "Daily Mix 1" })
+        XCTAssertTrue(PlaylistGenerator.generate(m).contains { $0.title == "This Is Juniper Fields" })
     }
 }

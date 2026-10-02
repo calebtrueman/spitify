@@ -83,14 +83,13 @@ struct HomeView: View {
         let _ = recentAlbums.prefix(3).forEach { a in quick.append(Tile(id: "q" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
         let _ = app.mixes.prefix(4).forEach { m in quick.append(Tile(id: "q" + m.id, title: m.title, subtitle: "", song: m.cover, mix: m) { router.go(.mix(m.id)) }) }
         let _ = lib.albums.prefix(8).forEach { a in quick.append(Tile(id: "qa" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
-        let picks = Array(quick.reduce(into: [Tile]()) { acc, t in if !acc.contains(where: { $0.title == t.title }) { acc.append(t) } }.prefix(8))
+        let picks = Array(quick.reduce(into: [Tile]()) { acc, t in if !acc.contains(where: { $0.title == t.title }) { acc.append(t) } }.prefix(6))
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) { ForEach(picks) { QuickTile(tile: $0) } }
             .padding(.horizontal, 16).padding(.top, 10)
 
         ForEach(Mix.Section.allCases, id: \.self) { section in
             let inSection = app.mixes.filter { $0.section == section }
             TileShelf(title: section == .madeForYou && !app.profile.name.isEmpty ? "Made for \(app.profile.name)" : section.rawValue,
-                      eyebrow: section == .madeForYou ? "Learned from your listening" : nil,
                       tiles: inSection.map { m in Tile(id: m.id, title: m.title, subtitle: m.description, song: m.cover, mix: m) { router.go(.mix(m.id)) } })
         }
         TileShelf(title: "Jump back in", tiles: recentAlbums.prefix(12).map { a in Tile(id: "j" + a.id, title: a.title, subtitle: a.artist, song: a.cover) { router.go(.album(a.id)) } })
@@ -98,33 +97,11 @@ struct HomeView: View {
                   action: "Show all") { router.go(.smart(.recentlyAdded)) }
         let topArtists = (app.model?.topArtists ?? lib.artists.map(\.name)).prefix(12).compactMap { lib.artistByName[$0] }
         TileShelf(title: "Your top artists", tiles: topArtists.map { a in Tile(id: "ar" + a.name, title: a.name, subtitle: "Artist", song: a.cover, circle: true) { router.go(.artist(a.name)) } })
-        HStack {
-            Spacer()
-            Button { app.player.play(lib.songs, shuffle: true, source: "All songs") } label: {
-                Label("Shuffle all \(lib.songs.count) songs", systemImage: "shuffle").text(.label).foregroundStyle(p.onAccent).padding(.horizontal, 22).padding(.vertical, 14).background(p.accent, in: Capsule())
-            }.buttonStyle(.pressable)
-            Spacer()
-        }.padding(.vertical, 28)
     }
 
     @ViewBuilder private var hero: some View {
-        if let s = app.player.current {
-            Button { router.playerOpen = true } label: {
-                HStack(spacing: 14) {
-                    ArtworkView(s, cornerRadius: 8).frame(width: 84, height: 84).shadow(radius: 8)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(app.player.isPlaying ? "NOW PLAYING" : "CONTINUE LISTENING").text(.labelS).foregroundStyle(.white.opacity(0.75))
-                        Text(s.title).text(.title).foregroundStyle(.white).lineLimit(1)
-                        Text(s.artist).text(.bodyS).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
-                        ProgressView(value: app.player.duration > 0 ? app.player.position / app.player.duration : 0).tint(.white).padding(.top, 6)
-                    }
-                    PlayButton(playing: app.player.isPlaying, size: 50, color: .white) { app.player.toggle() }
-                }
-                .padding(12)
-                .background(LinearGradient(colors: [glow.mix(.black, 0.1), glow.mix(.black, 0.55)], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.pressable(0.98)).padding(.horizontal, 16).padding(.vertical, 8)
-        } else if !app.library.library.isEmpty {
+        // While something is playing the mini player already shows it, so the hero is only the idle prompt.
+        if app.player.current == nil, !app.library.library.isEmpty {
             Button { app.player.play(app.library.library.songs, shuffle: true, source: "All songs") } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {

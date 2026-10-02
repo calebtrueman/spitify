@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -182,9 +183,9 @@ data class TileData(
 )
 
 @Composable
-fun MediaTile(tile: TileData, width: Dp, modifier: Modifier = Modifier) {
+fun MediaTile(tile: TileData, width: Dp, modifier: Modifier = Modifier, inset: Boolean = true) {
     val shape: Shape = if (tile.circle) CircleShape else RoundedCornerShape(8.dp)
-    Column(modifier.width(width).pressable(onLongClick = tile.onLongClick, onClick = tile.onClick).padding(4.dp)) {
+    Column(modifier.width(width).pressable(onLongClick = tile.onLongClick, onClick = tile.onClick).padding(if (inset) 4.dp else 0.dp)) {
         val coverModifier = Modifier.fillMaxWidth().aspectRatio(1f).shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
         if (tile.cover != null) tile.cover.invoke(coverModifier.clip(shape)) else Artwork(tile.art, coverModifier, shape)
         Spacer(Modifier.height(10.dp))
@@ -201,6 +202,10 @@ fun MediaTile(tile: TileData, width: Dp, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Horizontal shelf that only ever shows whole tiles: the tile width is fitted to the available
+ * width (so nothing is cut off at the edge or hinge), and flings snap a full tile at a time.
+ */
 @Composable
 fun TileShelf(
     title: String,
@@ -213,14 +218,28 @@ fun TileShelf(
     if (tiles.isEmpty()) return
     Column {
         SectionHeader(title, eyebrow = eyebrow, action = action, onAction = onAction)
+        FittedTileRow(tiles, key = { it.key }, tileWidth = tileWidth) { it }
+    }
+}
+
+/** A horizontal row of tiles sized so only whole tiles are ever visible, snapping one tile at a time. */
+@Composable
+fun <T> FittedTileRow(items: List<T>, key: (T) -> Any, tileWidth: Dp, tile: (T) -> TileData?) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Gap == edge padding, so the next tile starts exactly at the edge: never a sliver of a half tile.
+        val side = 16.dp
+        val gap = side
+        val usable = maxWidth - side * 2
+        val count = ((usable + gap) / (tileWidth + gap)).toInt().coerceAtLeast(2)
+        val fitted = (usable - gap * (count - 1)) / count
         val state = rememberLazyListState()
         LazyRow(
             state = state,
-            contentPadding = PaddingValues(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = side),
+            horizontalArrangement = Arrangement.spacedBy(gap),
             flingBehavior = rememberSnapFlingBehavior(state, SnapPosition.Start),
         ) {
-            items(tiles, key = { it.key }) { MediaTile(it, tileWidth) }
+            items(items, key = key) { item -> tile(item)?.let { MediaTile(it, fitted, inset = false) } }
         }
     }
 }

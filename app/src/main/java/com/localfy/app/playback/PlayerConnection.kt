@@ -111,7 +111,16 @@ class PlayerConnection(
         connecting = true
         scope.launch {
             val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-            val c = MediaController.Builder(context, token).buildAsync().await()
+            val c = MediaController.Builder(context, token)
+                .setListener(object : MediaController.Listener {
+                    // Service stopped (e.g. app swiped away): drop the stale controller so we reconnect next time.
+                    override fun onDisconnected(controller: MediaController) {
+                        this@PlayerConnection.controller = null
+                        ticker?.cancel()
+                        _state.value = _state.value.copy(isPlaying = false)
+                    }
+                })
+                .buildAsync().await()
             controller = c
             connecting = false
             c.addListener(listener)
@@ -473,6 +482,12 @@ class PlayerConnection(
     }
 
     // ---- Resume where you left off ----
+
+    /** Persist queue + resume point right away (e.g. before the service is torn down). */
+    fun saveNow() {
+        saveQueue()
+        lastSongId?.let { saveResume(it, controller?.currentPosition ?: lastPosition, lastDuration) }
+    }
 
     private fun saveQueue() {
         val c = controller ?: return
