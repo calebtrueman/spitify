@@ -30,6 +30,15 @@
       },
       "versions": [
         {
+          "version": "1.0.5",
+          "buildVersion": "6",
+          "date": "2026-10-02T04:39:16Z",
+          "localizedDescription": "- Fixes the app icon showing as a blank white square on Samsung phones\n\nIncludes everything from 1.0.4 (the crash-on-launch fix and built-in crash reports).",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.5/Spitify-1.0.5-unsigned.ipa",
+          "size": 1806507,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.4",
           "buildVersion": "5",
           "date": "2026-10-02T04:30:29Z",
