@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleDisplayName</key><string>Spitify</string>
+	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key><true/>
+	<key>UILaunchScreen</key><dict><key>UIColorName</key><string>LaunchBackground</string></dict>
+	<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
+	<key>UIBackgroundModes</key><array><string>audio</string></array>
+	<key>UIFileSharingEnabled</key><true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
+	<key>UISupportsDocumentBrowser</key><false/>
+	<key>NSAppleMusicUsageDescription</key><string>Spitify can play the songs already downloaded in your Music library.</string>
+	<key>NSPhotoLibraryUsageDescription</key><string>Choose a profile picture or custom artwork.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>figtree_400.ttf</string><string>figtree_500.ttf</string><string>figtree_600.ttf</string>
+		<string>figtree_700.ttf</string><string>figtree_800.ttf</string><string>figtree_900.ttf</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array><string>UIInterfaceOrientationPortrait</string></array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIUserInterfaceStyle</key><string>Dark</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key><string>Audio</string>
+			<key>CFBundleTypeRole</key><string>Viewer</string>
+			<key>LSHandlerRank</key><string>Alternate</string>
+			<key>LSItemContentTypes</key><array><string>public.audio</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,611 @@
+import SwiftUI
+
+struct MiniPlayer: View {
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    @State private var tint = Color(hex: 0x2A2A2E)
+    @State private var drag: CGFloat = 0
+
+    var body: some View {
+        if let s = app.player.current {
+            let progress = app.player.duration > 0 ? app.player.position / app.player.duration : 0
+            Button { router.playerOpen = true } label: {
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        ArtworkView(s, cornerRadius: 5).frame(width: 40, height: 40)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(s.title).text(.titleS).foregroundStyle(.white).lineLimit(1)
+                            Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
+                        }
+                        Spacer()
+                        if !s.isSpoken { LikeButton(song: s) }
+                        Button { Haptics.tap(); app.player.toggle() } label: {
+                            Image(systemName: app.player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                                .contentTransition(.symbolEffect(.replace)).frame(width: 40, height: 40)
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 7)
+                    GeometryReader { g in
+                        Capsule().fill(.white.opacity(0.2)).overlay(alignment: .leading) { Capsule().fill(.white).frame(width: g.size.width * progress) }
+                    }.frame(height: 2).padding(.horizontal, 8).padding(.bottom, 2)
+                }
+                .background(tint.mix(.black, 0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .offset(x: drag)
+            }
+            .buttonStyle(.pressable(0.98))
+            .accessibilityLabel("Now playing: \(s.title) by \(s.artist)")
+            .accessibilityIdentifier("miniPlayer")
+            .padding(.horizontal, 8).padding(.bottom, 4)
+            .artColor(s, into: $tint)
+            .gesture(DragGesture(minimumDistance: 20).onChanged { drag = $0.translation.width * 0.5 }.onEnded { v in
+                if v.translation.width < -80 { Haptics.soft(); app.player.next() } else if v.translation.width > 80 { Haptics.soft(); app.player.previous() }
+                withAnimation(.spring) { drag = 0 }
+            })
+            .simultaneousGesture(DragGesture(minimumDistance: 20).onEnded { v in if v.translation.height < -40 { router.playerOpen = true } })
+        }
+    }
+}
+
+struct NowPlayingView: View {
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.themeSettings) private var theme
+    @State private var tint = Color(hex: 0x2A2A2E)
+    @State private var sheet: Sheet?
+    @State private var dragDown: CGFloat = 0
+    enum Sheet: String, Identifiable { case lyrics, queue, sleep, playback; var id: String { rawValue } }
+
+    var body: some View {
+        let player = app.player
+        ZStack {
+            Color.clear
+            if let s = player.current {
+                // Measure once, outside the scroll view, so the player page always fits the screen exactly.
+                GeometryReader { outer in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            VStack(spacing: 0) {
+                                header(s)
+                                ArtPager(side: min(outer.size.width - 44, outer.size.height * 0.48)).frame(maxHeight: .infinity).padding(.vertical, 12)
+                                titleRow(s)
+                                SeekBar().padding(.top, 6)
+                                Transport().padding(.top, 2)
+                                Secondary(sheet: $sheet).padding(.top, 6).padding(.bottom, 10)
+                            }
+                            .padding(.horizontal, 22)
+                            .frame(width: outer.size.width, height: outer.size.height)
+                            cards(s).padding(.horizontal, 16).padding(.bottom, 40).frame(width: outer.size.width)
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+        }
+        .background { Backdrop(song: player.current, tint: tint) }
+        .offset(y: max(0, dragDown))
+        .gesture(DragGesture().onChanged { v in if v.translation.height > 0 && v.startLocation.y < 140 { dragDown = v.translation.height } }
+            .onEnded { v in if dragDown > 140 { dismiss() }; withAnimation(.spring) { dragDown = 0 } })
+        .artColor(player.current, into: $tint)
+        .preferredColorScheme(.dark)
+        .sheet(item: $sheet) { which in
+            Group {
+                switch which {
+                case .lyrics: LyricsSheet()
+                case .queue: QueueSheet()
+                case .sleep: SleepSheet()
+                case .playback: PlaybackSheet()
+                }
+            }
+            .presentationDetents(which == .sleep || which == .playback ? [.medium] : [.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(tint.mix(.black, 0.25))
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    private func header(_ s: Song) -> some View {
+        HStack {
+            Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 20, weight: .bold)).frame(width: 44, height: 44) }.accessibilityLabel("Close player")
+            Spacer()
+            VStack(spacing: 2) {
+                Text("PLAYING FROM").text(.labelS).foregroundStyle(.white.opacity(0.7))
+                Text(app.player.source ?? "Your library").text(.titleS).lineLimit(1)
+            }
+            Spacer()
+            SongMenu(song: s) { Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).frame(width: 44, height: 44) }
+        }
+        .foregroundStyle(.white)
+    }
+
+    private func titleRow(_ s: Song) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(s.title).text(.headlineS).foregroundStyle(.white).lineLimit(1)
+                Button { if !s.isSpoken { router.go(.artist(s.artist)) } } label: { Text(s.artist).text(.body).foregroundStyle(.white.opacity(0.72)).lineLimit(1) }
+            }
+            .id(s.id).transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
+            Spacer()
+            if !s.isSpoken { LikeButton(song: s) }
+        }
+        .animation(.spring(duration: 0.35), value: s.id)
+    }
+
+    @ViewBuilder private func cards(_ s: Song) -> some View {
+        VStack(spacing: 14) {
+            if s.isSpoken { NotesCard(song: s) } else { LyricsCard(song: s) { sheet = .lyrics } }
+            UpNextCard { sheet = .queue }
+            if !s.isSpoken { AboutArtistCard(song: s) }
+            CreditsCard(song: s)
+        }
+    }
+}
+
+/// Blurred artwork + tint gradient behind the player.
+struct Backdrop: View {
+    var song: Song?
+    var tint: Color
+    @Environment(\.themeSettings) private var theme
+    var body: some View {
+        ZStack {
+            Color.black
+            if theme.blur, let s = song {
+                GeometryReader { g in
+                    ArtworkView(s, cornerRadius: 0).frame(width: g.size.width, height: g.size.height).scaleEffect(1.6).blur(radius: 70).opacity(0.55)
+                }.id(s.albumKey).transition(.opacity)
+            }
+            LinearGradient(stops: [.init(color: tint.opacity(0.85), location: 0), .init(color: tint.mix(.black, 0.6).opacity(0.9), location: 0.55), .init(color: .black, location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .clipped()
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.8), value: song?.albumKey)
+    }
+}
+
+/// Artwork carousel over the real queue - swipe to skip. Breathes down while paused; vinyl style spins.
+struct ArtPager: View {
+    var side: CGFloat
+    @Environment(AppModel.self) private var app
+    @Environment(\.themeSettings) private var theme
+    @State private var selection = 0
+
+    var body: some View {
+        let player = app.player
+        let size = side * (theme.playerStyle == .minimal ? 0.72 : 1)
+        TabView(selection: $selection) {
+            ForEach(Array(player.queue.enumerated()), id: \.offset) { i, s in
+                cover(s, current: i == player.index).frame(width: size, height: size).tag(i)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(height: side + 24)
+        .onAppear { selection = max(0, player.index) }
+        .onChange(of: player.index) { _, i in withAnimation(.spring(duration: 0.4)) { selection = max(0, i) } }
+        .onChange(of: selection) { _, i in if i != player.index, player.queue.indices.contains(i) { Haptics.soft(); player.skip(to: i) } }
+    }
+
+    @ViewBuilder private func cover(_ s: Song, current: Bool) -> some View {
+        let breathe = current && !app.player.isPlaying && !theme.reduceMotion && theme.playerStyle != .vinyl
+        Group {
+            if theme.playerStyle == .vinyl {
+                TimelineView(.animation(paused: !(current && app.player.isPlaying) || theme.reduceMotion)) { ctx in
+                    Vinyl(song: s).rotationEffect(.degrees(current ? ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9) / 9 * 360 : 0))
+                }
+            } else {
+                ArtworkView(s, cornerRadius: 10).shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+            }
+        }
+        .scaleEffect(breathe ? 0.88 : 1)
+        .animation(.spring(response: 0.5, dampingFraction: 0.6), value: breathe)
+    }
+}
+
+struct Vinyl: View {
+    var song: Song
+    var body: some View {
+        ZStack {
+            Circle().fill(Color(hex: 0x0D0D0F))
+            ForEach(0..<24, id: \.self) { i in Circle().stroke(.white.opacity(0.035), lineWidth: 1).padding(CGFloat(i) * 5 + 4) }
+            AngularGradient(colors: [.clear, .white.opacity(0.08), .clear, .white.opacity(0.06), .clear], center: .center).clipShape(Circle())
+            ArtworkView(song, circle: true).padding(.horizontal).scaleEffect(0.4)
+            Circle().fill(Color(hex: 0x0D0D0F)).frame(width: 10, height: 10)
+        }
+        .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+    }
+}
+
+struct SeekBar: View {
+    @Environment(AppModel.self) private var app
+    @State private var dragging: Double?
+    var body: some View {
+        let p = app.player
+        let dur = max(1, p.duration)
+        let shown = dragging ?? min(1, p.position / dur)
+        VStack(spacing: 4) {
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.22)).frame(height: dragging == nil ? 4 : 7)
+                    Capsule().fill(.white).frame(width: g.size.width * shown, height: dragging == nil ? 4 : 7)
+                    Circle().fill(.white).frame(width: dragging == nil ? 12 : 18).offset(x: g.size.width * shown - (dragging == nil ? 6 : 9)).shadow(radius: 3)
+                }
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onChanged { v in dragging = min(1, max(0, v.location.x / g.size.width)) }
+                    .onEnded { _ in if let d = dragging { p.seek(d * dur) }; dragging = nil })
+                .animation(.spring(duration: 0.2), value: dragging == nil)
+            }.frame(height: 24)
+            HStack {
+                Text(Int64(shown * dur * 1000).formattedDuration)
+                Spacer()
+                Text("-" + Int64((1 - shown) * dur * 1000).formattedDuration)
+            }.text(.labelS).foregroundStyle(.white.opacity(0.7)).monospacedDigit()
+        }
+    }
+}
+
+struct Transport: View {
+    var large = true
+    @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var palette
+    var body: some View {
+        let p = app.player
+        let spoken = p.current?.isSpoken == true
+        HStack {
+            if spoken { toggle("gobackward.10", "Back 10 seconds", false) { p.skip(by: -10) } }
+            else { toggle("shuffle", "Shuffle", p.shuffle) { p.toggleShuffle() } }
+            Spacer()
+            Button { Haptics.tap(); p.previous() } label: { Image(systemName: "backward.end.fill").font(.system(size: large ? 32 : 26)) }.accessibilityLabel("Previous")
+            Spacer()
+            Button { Haptics.tap(); p.toggle() } label: {
+                Image(systemName: p.isPlaying ? "pause.fill" : "play.fill").font(.system(size: large ? 30 : 24, weight: .bold)).foregroundStyle(.black)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: large ? 72 : 58, height: large ? 72 : 58).background(.white, in: Circle()).shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+            }.buttonStyle(.pressable(0.9)).accessibilityLabel(p.isPlaying ? "Pause" : "Play")
+            Spacer()
+            Button { Haptics.tap(); p.next() } label: { Image(systemName: "forward.end.fill").font(.system(size: large ? 32 : 26)) }.accessibilityLabel("Next")
+            Spacer()
+            if spoken { toggle("goforward.30", "Forward 30 seconds", false) { p.skip(by: 30) } }
+            else { toggle(p.repeatMode == .one ? "repeat.1" : "repeat", "Repeat", p.repeatMode != .off) { p.cycleRepeat() } }
+        }
+        .foregroundStyle(.white)
+    }
+    private func toggle(_ icon: String, _ label: String, _ on: Bool, _ action: @escaping () -> Void) -> some View {
+        Button { Haptics.tap(); action() } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 21, weight: .semibold)).foregroundStyle(on ? palette.accent : .white.opacity(0.85))
+                Circle().fill(palette.accent).frame(width: 4, height: 4).opacity(on ? 1 : 0)
+            }.frame(width: 44, height: 50)
+        }
+        .accessibilityLabel(label)
+        .accessibilityValue(on ? "On" : "Off")
+    }
+}
+
+struct Secondary: View {
+    @Binding var sheet: NowPlayingView.Sheet?
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    @Environment(\.palette) private var palette
+    var body: some View {
+        let p = app.player
+        HStack {
+            item(p.sleep == nil ? "moon.zzz" : "moon.zzz.fill", "Sleep timer", p.sleep != nil) { sheet = .sleep }
+            Spacer()
+            item("slider.horizontal.3", "Playback settings", p.speed != 1 || p.crossfade > 0) { sheet = .playback }
+            Spacer()
+            item("slider.vertical.3", "Equaliser", p.eq.enabled) { router.playerOpen = false; router.tab = .library; router.paths[.library] = NavigationPath([Route.equalizer]) }
+            Spacer()
+            item(p.current?.isSpoken == true ? "text.alignleft" : "quote.bubble", p.current?.isSpoken == true ? "Notes" : "Lyrics", false) { sheet = .lyrics }
+            Spacer()
+            item("list.bullet", "Queue", false) { sheet = .queue }
+        }
+    }
+    private func item(_ icon: String, _ label: String, _ on: Bool, _ a: @escaping () -> Void) -> some View {
+        Button { Haptics.tap(); a() } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 19, weight: .semibold)).foregroundStyle(on ? palette.accent : .white.opacity(0.85))
+                Circle().fill(palette.accent).frame(width: 4, height: 4).opacity(on ? 1 : 0)
+            }.frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(label)
+        .accessibilityValue(on ? "On" : "")
+    }
+}
+
+// MARK: - Cards under the player
+
+struct Card<Content: View>: View {
+    var title: String
+    var action: String? = nil
+    var onAction: (() -> Void)? = nil
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(title).text(.title)
+                Spacer()
+                if let action, let onAction { Button(action, action: onAction).text(.label).padding(.horizontal, 12).padding(.vertical, 6).background(.white.opacity(0.14), in: Capsule()) }
+            }
+            content()
+        }
+        .foregroundStyle(.white)
+        .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+struct LyricsCard: View {
+    var song: Song
+    var open: () -> Void
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        Button(action: open) {
+            Card(title: "Lyrics") {
+                switch app.lyrics.states[song.id] {
+                case .found(let l)?:
+                    let active = l.synced ? max(0, LRC.activeIndex(l.lines, app.player.position + l.offset)) : 0
+                    ForEach(Array(l.lines.dropFirst(active).prefix(4).enumerated()), id: \.offset) { i, line in
+                        Text(line.text.isEmpty ? "♪" : line.text).text(.title).foregroundStyle(i == 0 && l.synced ? .white : .white.opacity(0.5)).lineLimit(2).multilineTextAlignment(.leading)
+                    }
+                case .missing(let online)?: Text(online ? "No lyrics found for this song." : "No lyrics on this iPhone — tap to search online.").text(.body).foregroundStyle(.white.opacity(0.8))
+                default: ProgressView().tint(.white)
+                }
+            }
+        }
+        .buttonStyle(.pressable(0.98))
+        .task(id: song.id) { app.lyrics.request(song, fileURL: app.library.fileURL(song)) }
+    }
+}
+
+struct NotesCard: View {
+    var song: Song
+    @Environment(AppModel.self) private var app
+    @State private var expanded = false
+    var body: some View {
+        let ep = app.shows.shows.flatMap(\.episodes).first { song.episodeId?.hasSuffix("/\($0.id)") == true }
+        let show = app.shows.shows.first { song.episodeId?.hasPrefix($0.id + "/") == true }
+        Card(title: song.isAudiobook ? "About this book" : "Episode notes", action: expanded ? "Less" : "More", onAction: { expanded.toggle() }) {
+            Text((ep?.summary.isEmpty == false ? ep?.summary : show?.summary) ?? "No notes.").text(.bodyS).foregroundStyle(.white.opacity(0.8)).lineLimit(expanded ? nil : 6)
+        }
+    }
+}
+
+struct UpNextCard: View {
+    var open: () -> Void
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        Card(title: "Next in queue", action: "Open queue", onAction: open) {
+            let next = app.player.upNext.prefix(4)
+            if next.isEmpty { Text("End of the queue.").text(.bodyS).foregroundStyle(.white.opacity(0.7)) }
+            ForEach(Array(next), id: \.0) { i, s in
+                Button { app.player.skip(to: i) } label: {
+                    HStack(spacing: 12) {
+                        ArtworkView(s, cornerRadius: 5).frame(width: 44, height: 44)
+                        VStack(alignment: .leading) { Text(s.title).text(.body).lineLimit(1); Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1) }
+                        Spacer()
+                        Text(s.durationMs.formattedDuration).text(.caption).foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct AboutArtistCard: View {
+    var song: Song
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    var body: some View {
+        if let a = app.library.library.artistByName[song.artist] {
+            let plays = a.songs.reduce(0) { $0 + app.library.playCount($1.id) }
+            Button { router.go(.artist(a.name)) } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    ArtworkView(a.cover, cornerRadius: 0).frame(height: 180).overlay(alignment: .topLeading) { Text("About the artist").text(.title).padding(20) }
+                        .overlay { LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom) }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(a.name).text(.title)
+                        Text("\(a.albums.count) album\(a.albums.count == 1 ? "" : "s") • \(songCount(a.songs.count))\(plays > 0 ? " • \(plays) plays by you" : "")").text(.bodyS).foregroundStyle(.white.opacity(0.7))
+                    }.padding(20)
+                }
+                .foregroundStyle(.white)
+                .background(.white.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }.buttonStyle(.pressable(0.98))
+        }
+    }
+}
+
+struct CreditsCard: View {
+    var song: Song
+    var body: some View {
+        Card(title: "Credits") {
+            ForEach(credits, id: \.0) { k, v in
+                VStack(alignment: .leading, spacing: 1) { Text(v).text(.body).lineLimit(2); Text(k).text(.caption).foregroundStyle(.white.opacity(0.6)) }
+            }
+        }
+    }
+    private var credits: [(String, String)] {
+        var c = [("Artist", song.artist), ("Album", song.album)]
+        if song.year > 0 { c.append(("Year", String(song.year))) }
+        if let g = song.genre { c.append(("Genre", g)) }
+        c.append(("Format", song.kind == .musicLibrary ? "Music library" : song.fileExtension.uppercased()))
+        if song.kind == .file { c.append(("File", "/\(song.location)")) }
+        return c
+    }
+}
+
+// MARK: - Sheets
+
+struct LyricsSheet: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        if let s = app.player.current {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading) { Text(s.title).text(.titleS); Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.7)) }
+                    Spacer()
+                    Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 17, weight: .bold)).frame(width: 36, height: 36).background(.white.opacity(0.15), in: Circle()) }
+                        .accessibilityLabel("Close lyrics")
+                }.padding(20)
+                if s.isSpoken { ScrollView { NotesCard(song: s).padding() } } else { LyricsView(song: s) }
+                VStack { SeekBar(); Transport(large: false) }.padding(.horizontal, 20).padding(.bottom, 12)
+            }
+            .foregroundStyle(.white)
+        }
+    }
+}
+
+struct LyricsView: View {
+    var song: Song
+    var lineFont: TextRole = .headlineS
+    @Environment(AppModel.self) private var app
+    @State private var userScrolledAt = Date.distantPast
+
+    var body: some View {
+        switch app.lyrics.states[song.id] {
+        case .found(let l)?:
+            if l.synced {
+                let active = LRC.activeIndex(l.lines, app.player.position + l.offset)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(Array(l.lines.enumerated()), id: \.offset) { i, line in
+                                Button { app.player.seek(max(0, line.time - l.offset)) } label: {
+                                    Text(line.text.isEmpty ? "♪" : line.text).text(lineFont).multilineTextAlignment(.leading)
+                                        .foregroundStyle(i == active ? .white : .white.opacity(i < active ? 0.55 : 0.32))
+                                        .scaleEffect(i == active ? 1 : 0.96, anchor: .leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .id(i)
+                                .animation(.easeOut(duration: 0.3), value: active)
+                            }
+                            footer(l)
+                        }.padding(.horizontal, 24).padding(.vertical, 120)
+                    }
+                    .simultaneousGesture(DragGesture().onChanged { _ in userScrolledAt = Date() })
+                    .onChange(of: active) { _, a in
+                        if a >= 0, Date().timeIntervalSince(userScrolledAt) > 3 { withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(a, anchor: UnitPoint(x: 0, y: 0.35)) } }
+                    }
+                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("These lyrics aren't time-synced.").text(.label).foregroundStyle(.white.opacity(0.6)).padding(.bottom, 8)
+                        ForEach(Array(l.lines.enumerated()), id: \.offset) { _, line in Text(line.text).text(lineFont).foregroundStyle(.white.opacity(0.9)) }
+                        Text("Source: \(l.source)").text(.caption).foregroundStyle(.white.opacity(0.5)).padding(.top, 20)
+                    }.padding(24)
+                }
+            }
+        case .missing(let online)?:
+            VStack(spacing: 14) {
+                Spacer()
+                Image(systemName: "quote.bubble").font(.system(size: 40)).foregroundStyle(.white.opacity(0.6))
+                Text(online ? "No lyrics found" : "No lyrics on this iPhone").text(.title)
+                Text(online ? "LRCLIB doesn't have this one. Drop a matching .lrc file next to the song." : "Spitify checked the file's tags and nearby .lrc files.")
+                    .text(.bodyS).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding(.horizontal, 30)
+                Button { app.lyrics.request(song, fileURL: app.library.fileURL(song), force: true) } label: {
+                    Label(online ? "Search again" : "Find lyrics online", systemImage: "icloud.and.arrow.down").text(.label).foregroundStyle(.black).padding(.horizontal, 18).padding(.vertical, 10).background(.white, in: Capsule())
+                }
+                Spacer()
+            }.frame(maxWidth: .infinity)
+        default: ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity).task { app.lyrics.request(song, fileURL: app.library.fileURL(song)) }
+        }
+    }
+
+    private func footer(_ l: Lyrics) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Source: \(l.source)").text(.caption).foregroundStyle(.white.opacity(0.6))
+            HStack {
+                Text("Timing").text(.caption).foregroundStyle(.white.opacity(0.6))
+                Button("−0.25s") { app.lyrics.setOffset(song, l.offset - 0.25) }
+                Text(String(format: "%+.2fs", l.offset)).text(.label)
+                Button("+0.25s") { app.lyrics.setOffset(song, l.offset + 0.25) }
+            }.text(.label)
+        }.padding(.top, 30)
+    }
+}
+
+struct QueueSheet: View {
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        let p = app.player
+        NavigationStack {
+            List {
+                if let cur = p.current {
+                    Section("Now playing") { row(cur, playing: true) }
+                }
+                Section {
+                    if p.upNext.isEmpty { Text("Nothing queued. Use “Play next” or “Add to queue” from any song's menu.").text(.bodyS).foregroundStyle(.white.opacity(0.6)) }
+                    ForEach(p.upNext, id: \.0) { i, s in row(s, playing: false).onTapGesture { p.skip(to: i) } }
+                        .onDelete { set in set.forEach { p.remove(at: p.index + 1 + $0) } }
+                        .onMove { from, to in if let f = from.first { p.move(from: p.index + 1 + f, to: p.index + 1 + (to > f ? to - 1 : to)) } }
+                } header: {
+                    HStack { Text(p.source.map { "Next from: \($0)" } ?? "Next up"); Spacer(); if !p.upNext.isEmpty { Button("Clear") { p.clearUpNext() } } }
+                }
+            }
+            .listStyle(.plain).scrollContentBackground(.hidden)
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Queue").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { DismissButton() } }
+        }
+    }
+    private func row(_ s: Song, playing: Bool) -> some View {
+        HStack(spacing: 12) {
+            ArtworkView(s, cornerRadius: 5).frame(width: 44, height: 44)
+            VStack(alignment: .leading) {
+                Text(s.title).text(.body).foregroundStyle(playing ? Color(hex: 0x1ED760) : .white).lineLimit(1)
+                Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            }
+        }.listRowBackground(Color.clear)
+    }
+}
+
+struct SleepSheet: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                if case .at(let end)? = app.player.sleep { Text("Stopping at \(end.formatted(date: .omitted, time: .shortened)) — the last 10 seconds fade out.").foregroundStyle(.white.opacity(0.7)) }
+                ForEach([5, 15, 30, 45, 60, 90], id: \.self) { m in Button("\(m) minutes") { app.player.setSleep(minutes: m); dismiss() } }
+                Button("End of track") { app.player.sleepAtEndOfTrack(); dismiss() }
+                if app.player.sleep != nil { Button("Turn off", role: .destructive) { app.player.setSleep(minutes: nil); dismiss() } }
+            }
+            .listRowBackground(Color.clear).scrollContentBackground(.hidden)
+            .navigationTitle("Sleep timer").navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+struct PlaybackSheet: View {
+    var body: some View { NavigationStack { ScrollView { PlaybackSettings().padding(20) }.navigationTitle("Playback").navigationBarTitleDisplayMode(.inline) } }
+}
+
+struct PlaybackSettings: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var p
+    var body: some View {
+        @Bindable var player = app.player
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Speed\(app.player.current?.isSpoken == true ? " (podcasts & books)" : "")").text(.titleS)
+            HStack(spacing: 8) {
+                ForEach([0.75, 1, 1.25, 1.5, 2] as [Float], id: \.self) { s in
+                    Pill(title: s == 1 ? "1×" : String(format: "%g×", s), selected: app.player.speed == s) { app.player.setSpeed(s) }
+                }
+            }
+            VStack(alignment: .leading) {
+                HStack { Text("Crossfade").text(.titleS); Spacer(); Text(player.crossfade == 0 ? "Off" : "\(Int(player.crossfade))s").text(.label).foregroundStyle(p.accent) }
+                Slider(value: $player.crossfade, in: 0...12, step: 1)
+                Toggle("Keep albums gapless", isOn: $player.keepAlbumsGapless).text(.body)
+                Text("Crossfade applies to songs in your Spitify folder. Podcasts and books never crossfade.").text(.caption).foregroundStyle(p.secondary)
+            }
+        }
+    }
+}
+
+struct DismissButton: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View { Button("Done") { dismiss() }.bold() }
+}

@@ -1,0 +1,39 @@
+name: iOS build
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate project
+        run: brew install xcodegen && cd ios && xcodegen generate
+      - name: Unit tests
+        run: |
+          cd ios
+          xcodebuild test -project Spitify.xcodeproj -scheme Spitify -only-testing:SpitifyTests \
+            -destination 'platform=iOS Simulator,name=iPhone 17' -quiet
+      - name: Build unsigned IPA
+        run: |
+          cd ios
+          xcodebuild archive -project Spitify.xcodeproj -scheme Spitify -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Spitify.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet
+          mkdir -p build/ipa/Payload
+          cp -R build/Spitify.xcarchive/Products/Applications/Spitify.app build/ipa/Payload/
+          (cd build/ipa && zip -qry ../Spitify.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spitify-unsigned-ipa
+          path: ios/build/Spitify.ipa
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release upload "${{ github.event.release.tag_name }}" ios/build/Spitify.ipa --clobber

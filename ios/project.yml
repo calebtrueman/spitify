@@ -1,0 +1,56 @@
+name: Spitify
+options:
+  bundleIdPrefix: com.calebtrueman
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Spitify:
+    type: application
+    platform: iOS
+    sources:
+      - path: Spitify
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.calebtrueman.spitify
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Spitify/Resources/Info.plist
+        ENABLE_PREVIEWS: YES
+  SpitifyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [SpitifyTests]
+    dependencies:
+      - target: Spitify
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  SpitifyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [SpitifyUITests]
+    dependencies:
+      - target: Spitify
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Spitify
+schemes:
+  Spitify:
+    build:
+      targets:
+        Spitify: all
+        SpitifyTests: [test]
+        SpitifyUITests: [test]
+    test:
+      targets: [SpitifyTests, SpitifyUITests]

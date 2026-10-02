@@ -3,7 +3,7 @@
 # Spitify
 
 **A Spotify-style player for the music, podcasts and audiobooks on your phone.**
-Built for the Samsung Galaxy Z Fold8. No account, no streaming service, no ads. Your recommendations are learned on the device.
+Built for the Samsung Galaxy Z Fold8, with an iPhone version too. No account, no streaming service, no ads. Your recommendations are learned on the device.
 
 Kotlin · Jetpack Compose · Media3 · FFmpeg · Room · Jetpack WindowManager · Android Auto
 
@@ -96,6 +96,12 @@ Spitify works in Android Auto, Android Automotive, Assistant and Bluetooth head 
 - **Look and feel:** 5 typefaces, 4 text sizes, artwork shape, and Now Playing style (artwork, spinning vinyl or minimal).
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** your name and photo, set up on first launch.
+
+## iPhone
+
+There's a SwiftUI version in [`ios/`](ios/) with the same recommendation engine, lyrics, crossfade, EQ, podcasts, audiobooks and metadata tools. It runs on iOS 17+. See [ios/README.md](ios/README.md) for building, and for installing without a paid developer account (SideStore / AltStore auto-refresh).
+
+<img src="docs/screenshots/ios-player.png" width="220" alt="Spitify on iPhone">
 
 ## Install
 

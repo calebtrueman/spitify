@@ -9,3 +9,9 @@ captures/
 *.apk
 *.aab
 .DS_Store
+
+# iOS
+ios/build/
+ios/Spitify.xcodeproj/
+ios/*.xcworkspace
+xcuserdata/
