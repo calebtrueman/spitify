@@ -92,7 +92,7 @@ struct MixedSearchView: View {
                 }
                 group.addTask { @MainActor in
                     do {
-                        let result = SpotifyPlaylists.playlistID(q).map { [SpotifyPlaylistResult(id: $0, name: "Open Spotify playlist", description: "", image: nil, owner: "Spotify")] }
+                        let result = SpotifyPlaylists.accepts(q) ? [SpotifyPlaylistResult(id: q, name: "Open Spotify playlist", description: "", image: nil, owner: "Spotify")] : nil
                         let found: [SpotifyPlaylistResult]
                         if let result { found = result } else { found = try await SpotifyPlaylists().search(q) }
                         guard !Task.isCancelled else { return }; playlists = found
@@ -174,7 +174,7 @@ struct MixedSearchView: View {
             rows.append(.init(id: "shared:" + playlist.key, title: playlist.name, creator: playlist.sourceName ?? app.social.state.profiles[playlist.owner]?.name ?? "Spitify", type: playlist.kind == "mix" ? "Shared Mix" : playlist.kind.capitalized, artwork: playlist.image, score: score, shared: playlist))
         }
         for playlist in playlists {
-            let score = SpotifyPlaylists.playlistID(query) != nil ? 1100 : score(playlist.name, playlist.owner)
+            let score = SpotifyPlaylists.accepts(query) ? 1100 : score(playlist.name, playlist.owner)
             guard let score else { continue }
             rows.append(.init(id: "spotify:" + playlist.id, title: playlist.name, creator: playlist.owner, type: "Playlist", artwork: playlist.image, score: score, spotify: playlist))
         }

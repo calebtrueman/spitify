@@ -17,10 +17,37 @@ struct SpotifyPlaylists {
         if text.hasPrefix("spotify:playlist:") { candidate = String(text.dropFirst(17)) }
         else if let url = URLComponents(string: text), url.scheme == "https", url.host == "open.spotify.com", url.user == nil, url.password == nil {
             let parts = url.path.split(separator: "/")
-            guard let index = parts.firstIndex(of: "playlist"), parts.count == index + 2 else { return nil }
+            let index = parts.count == 3 && parts[0].hasPrefix("intl-") ? 1 : 0
+            guard parts.count == index + 2, parts[index] == "playlist", url.port == nil || url.port == 443 else { return nil }
             candidate = String(parts[index + 1])
         } else { candidate = text }
         return candidate.count == 22 && candidate.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) } ? candidate : nil
+    }
+    static func shortLink(_ input: String) -> URL? {
+        guard let url = URLComponents(string: input.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme == "https", url.host == "spotify.link", url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443, !url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty else { return nil }
+        return url.url
+    }
+    static func accepts(_ input: String) -> Bool { playlistID(input) != nil || shortLink(input) != nil }
+    private func resolveID(_ input: String) async throws -> String {
+        if let id = Self.playlistID(input) { return id }
+        guard var url = Self.shortLink(input) else { throw MusicSourceError.message("Paste a public Spotify playlist link.") }
+        let resolver = URLSession(configuration: .ephemeral, delegate: SpotifyLinkRedirects(), delegateQueue: nil)
+        defer { resolver.invalidateAndCancel() }
+        for _ in 0..<5 {
+            try Task.checkCancellation()
+            var request = URLRequest(url: url, timeoutInterval: 15)
+            request.httpMethod = "GET"
+            let (_, response) = try await resolver.bytes(for: request)
+            guard let http = response as? HTTPURLResponse, (300..<400).contains(http.statusCode),
+                  let location = http.value(forHTTPHeaderField: "Location"),
+                  let next = URL(string: location, relativeTo: url)?.absoluteURL else { break }
+            if let id = Self.playlistID(next.absoluteString) { return id }
+            guard let safe = Self.shortLink(next.absoluteString) else { break }
+            url = safe
+        }
+        throw MusicSourceError.message("That short link did not open a public playlist. In Spotify, open the playlist and copy its link again.")
     }
     static func plain(_ value: String) -> String {
         value.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
@@ -51,7 +78,7 @@ struct SpotifyPlaylists {
         }
     }
     func load(_ input: String, owner: String) async throws -> SharedPlaylist {
-        guard let id = Self.playlistID(input) else { throw MusicSourceError.message("Paste a public Spotify playlist link.") }
+        let id = try await resolveID(input)
         do {
             let bytes = try await data(URL(string: Self.service + "/playlist/" + id)!)
             let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
@@ -97,5 +124,13 @@ struct SpotifyPlaylists {
         object["thumbnail"] = image
         // The embed does not prove the total. Keep the partial warning even for a short list.
         return try parse(object, id: id, owner: owner)
+    }
+}
+
+
+private final class SpotifyLinkRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }

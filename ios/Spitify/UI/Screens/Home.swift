@@ -25,6 +25,7 @@ struct HomeView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 topBar
+                ThemeScene()
                 Text(app.profile.name.isEmpty ? greeting : "\(greeting), \(app.profile.name)").text(.headlineL).foregroundStyle(p.text)
                     .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
                 if lib.isEmpty {
@@ -41,7 +42,7 @@ struct HomeView: View {
             .padding(.bottom, 24)
         }
         .background(alignment: .top) {
-            LinearGradient(colors: [glow.opacity(p.isDark ? 0.9 : 0.35), .clear], startPoint: .top, endPoint: .bottom).frame(height: 380).ignoresSafeArea()
+            LinearGradient(colors: [(theme.artThemeID == nil ? glow.opacity(p.isDark ? 0.9 : 0.35) : p.accent.opacity(0.10)), .clear], startPoint: .top, endPoint: .bottom).frame(height: 380).ignoresSafeArea()
         }
         .background(p.background)
         .artColor(app.player.current, into: $glow)

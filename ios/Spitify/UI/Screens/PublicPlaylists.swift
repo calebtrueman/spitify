@@ -32,8 +32,8 @@ struct PublicPlaylistSearch: View {
             loading = true
             do {
                 try await Task.sleep(for: .milliseconds(350))
-                if let id = SpotifyPlaylists.playlistID(text) {
-                    results = [.init(id: id, name: "Open Spotify playlist", description: "", image: nil, owner: "Spotify")]
+                if SpotifyPlaylists.accepts(text) {
+                    results = [.init(id: text, name: "Open Spotify playlist", description: "", image: nil, owner: "Spotify")]
                 } else {
                     let found = try await SpotifyPlaylists().search(text)
                     try Task.checkCancellation()
@@ -62,15 +62,20 @@ struct SpotifyPlaylistPreview: View {
     @Environment(\.palette) private var p
     @State private var playlist: SharedPlaylist?
     @State private var message: String?
+    @State private var attempt = 0
     var body: some View {
         Group {
             if let playlist { SharedPlaylistView(initial: playlist) }
             else if let message {
-                ContentUnavailableView("Couldn't open playlist", systemImage: "music.note.list", description: Text(message))
+                VStack(spacing: 16) {
+                    ContentUnavailableView("Couldn't open playlist", systemImage: "music.note.list", description: Text(message))
+                    Button("Try again") { attempt += 1 }.buttonStyle(.borderedProminent).padding(.bottom, 24)
+                }
             } else { ProgressView("Reading playlist…") }
         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(p.background)
-        .task(id: input) {
-            do { try app.social.prepare(); playlist = try await SpotifyPlaylists().load(input, owner: app.social.publicKey) }
+        .task(id: input + ":" + String(attempt)) {
+            message = nil
+            do { try app.social.prepare(); let loaded = try await SpotifyPlaylists().load(input, owner: app.social.publicKey); try Task.checkCancellation(); playlist = loaded }
             catch { if !Task.isCancelled { message = error.localizedDescription } }
         }
     }
@@ -224,5 +229,52 @@ struct SharedTrackCover: View {
         if let artwork = track.artwork { ArtworkView(key: "shared:" + track.id + ":" + artwork, remote: artwork) }
         else if let matched { ArtworkView(matched) }
         else { ArtworkView(key: "shared:" + track.id, remote: nil) }
+    }
+}
+
+
+struct SpotifyImportView: View {
+    @Environment(\.palette) private var p
+    @State private var input = ""
+    @State private var submitted: String?
+    @FocusState private var focused: Bool
+    private var valid: Bool { SpotifyPlaylists.accepts(input) }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Image(systemName: "link.circle.fill").font(.system(size: 52)).foregroundStyle(p.accent)
+                    .accessibilityHidden(true)
+                Text("Your playlists, here.").text(.headlineL).foregroundStyle(p.text)
+                Text("In Spotify, open a public playlist and choose Share → Copy link. Paste it below to see its cover and songs before saving it.")
+                    .text(.body).foregroundStyle(p.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Playlist link").text(.label).foregroundStyle(p.text)
+                    TextField("https://open.spotify.com/playlist/…", text: $input)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.go).focused($focused).onSubmit { open() }
+                        .padding(14).background(p.surface, in: RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("spotify-playlist-link")
+                    if !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !valid {
+                        Text("Use a Spotify playlist link, rather than a song or album link.")
+                            .text(.bodyS).foregroundStyle(p.secondary)
+                    }
+                    PasteButton(payloadType: String.self) { values in if let value = values.first { input = value } }
+                        .tint(p.accent).accessibilityLabel("Paste playlist link")
+                }
+                Button(action: open) {
+                    Text("Preview playlist").text(.label).frame(maxWidth: .infinity).padding(.vertical, 8)
+                }.buttonStyle(.borderedProminent).tint(p.accent).disabled(!valid)
+                NavigationLink { SpotifyCodeScanView() } label: { Label("Scan a Spotify code", systemImage: "barcode.viewfinder") }.text(.label)
+                Text("Only public playlists are available. Some songs may be missing. Nothing is saved until you choose Save playlist on the preview.")
+                    .text(.bodyS).foregroundStyle(p.secondary)
+            }.padding(20).frame(maxWidth: 560, alignment: .leading).frame(maxWidth: .infinity)
+        }.background(p.background).navigationTitle("Add from Spotify").navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: Binding(get: { submitted != nil }, set: { if !$0 { submitted = nil } })) {
+            if let submitted { SpotifyPlaylistPreview(input: submitted) }
+        }
+    }
+    private func open() {
+        guard valid else { return }
+        focused = false; submitted = input.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

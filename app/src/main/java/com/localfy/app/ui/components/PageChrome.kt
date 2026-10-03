@@ -21,6 +21,7 @@ import com.localfy.app.ui.theme.LocalfyColors
 @Composable
 fun PageHeader(title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
     Column(modifier.fillMaxWidth().statusBarsPadding()) {
+        com.localfy.app.ui.theme.ThemeScene(compact = true)
         if (onBack != null) Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
             Spacer(Modifier.weight(1f))

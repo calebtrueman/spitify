@@ -17,6 +17,7 @@ struct LibraryView: View {
         let lib = app.library
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                ThemeScene(compact: true)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) { ForEach(Filter.allCases, id: \.self) { f in Pill(title: f.rawValue, selected: filter == f) { filter = filter == f ? nil : f } } }.padding(.horizontal, 16)
                 }.padding(.vertical, 8)
@@ -29,6 +30,10 @@ struct LibraryView: View {
                 }.padding(.horizontal, 16).padding(.bottom, 6)
 
                 if filter == nil || filter == .playlists {
+                    NavigationLink { SpotifyImportView() } label: {
+                        Label("Add from Spotify", systemImage: "link").text(.label)
+                            .foregroundStyle(p.accent).padding(.horizontal, 16).padding(.vertical, 12)
+                    }.buttonStyle(.plain)
                     ForEach(app.social.playlists, id: \.key) { playlist in
                         NavigationLink { SharedPlaylistView(initial: playlist) } label: {
                             HStack(spacing: 12) {
@@ -67,7 +72,13 @@ struct LibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { ArtistReleasesView() } label: { Image(systemName: "bell") }.accessibilityLabel("New releases") }
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { FriendsView() } label: { Image(systemName: "person.2") }.accessibilityLabel("Friends") }
-            ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("Create playlist") }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Create playlist", systemImage: "plus") { creating = true }
+                    NavigationLink { SpotifyCodeScanView() } label: { Label("Scan Spotify code", systemImage: "barcode.viewfinder") }
+                    NavigationLink { SpotifyImportView() } label: { Label("Add from Spotify", systemImage: "link") }
+                } label: { Image(systemName: "plus") }.accessibilityLabel("Add to library")
+            }
         }
         .alert("Give your playlist a name", isPresented: $creating) {
             TextField("My playlist", text: $newName)

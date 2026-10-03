@@ -77,7 +77,7 @@ fun MixedSearchPanel(query: String) {
             launch { attempt { podcasts = actions.podcasts.search(query.trim()) } }
             launch { attempt { books = actions.podcasts.searchBooks(query.trim()) } }
             launch { attempt {
-                playlists = SpotifyPlaylists.playlistID(query)?.let { listOf(SpotifyPlaylistResult(it, "Open Spotify playlist", "", null, "Spotify")) } ?: SpotifyPlaylists.search(query.trim())
+                playlists = if (SpotifyPlaylists.accepts(query)) listOf(SpotifyPlaylistResult(query.trim(), "Open Spotify playlist", "", null, "Spotify")) else SpotifyPlaylists.search(query.trim())
             } }
         }
     }
@@ -123,7 +123,7 @@ fun MixedSearchPanel(query: String) {
         container.social.playlists.forEach { playlist -> score(playlist.name, playlist.sourceName.orEmpty())?.let {
             result += MixedResult("shared:${playlist.key}", playlist.name, playlist.sourceName ?: container.social.state.profiles[playlist.owner]?.name ?: "Spitify", if (playlist.kind == "mix") "Shared Mix" else playlist.kind.replaceFirstChar { c -> c.uppercase() }, it, playlist.image, route = Routes.sharedPlaylist(playlist.key))
         } }
-        playlists.forEach { playlist -> (if (SpotifyPlaylists.playlistID(query) != null) 1100 else score(playlist.name, playlist.owner))?.let {
+        playlists.forEach { playlist -> (if (SpotifyPlaylists.accepts(query)) 1100 else score(playlist.name, playlist.owner))?.let {
             result += MixedResult("spotify:${playlist.id}", playlist.name, playlist.owner, "Playlist", it, playlist.image, route = Routes.spotifyPlaylist(playlist.id))
         } }
         result.sortedWith(compareByDescending<MixedResult> { it.score }.thenBy { it.title.lowercase() }).take(100)

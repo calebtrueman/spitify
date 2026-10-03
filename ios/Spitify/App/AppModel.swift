@@ -13,6 +13,8 @@ let accentPresets: [(String, UInt32)] = [("Spitify green", 0x1ED760), ("Ocean", 
 
 struct ThemeSettings: Codable, Equatable {
     var mode: ThemeMode = .dark
+    var artThemeID: String?
+    var hideThemeArt: Bool?
     var backdrop: UInt32?
     var accentSource: AccentSource = .preset
     var accent: UInt32 = 0x1ED760

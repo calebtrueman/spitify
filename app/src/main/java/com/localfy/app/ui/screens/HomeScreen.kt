@@ -99,7 +99,8 @@ fun HomeScreen() {
     val mixes = if (showRecommendations) savedMixes else emptyList()
     val player = rememberPlayerState()
     val current = rememberCurrentSong()
-    val glow = rememberPlayerTint(current)
+    val artTheme = com.localfy.app.ui.theme.LocalThemeSettings.current.artThemeID
+    val glow = if (artTheme == null) rememberPlayerTint(current) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
     var filter by rememberSaveable { mutableStateOf(HomeFilter.All) }
     val gridState = rememberLazyGridState()
     val greeting = remember {
@@ -135,7 +136,7 @@ fun HomeScreen() {
                 .graphicsLayer {
                     alpha = if (gridState.firstVisibleItemIndex > 0) 0f else (1f - gridState.firstVisibleItemScrollOffset / 600f).coerceIn(0f, 1f)
                 }
-                .background(Brush.verticalGradient(listOf(lerp(glow, Color.Black, 0.2f).copy(alpha = if (LocalPalette.current.isDark) 0.9f else 0.35f), Color.Transparent))),
+                .background(Brush.verticalGradient(listOf(if (artTheme != null) glow else lerp(glow, Color.Black, 0.2f).copy(alpha = if (LocalPalette.current.isDark) 0.9f else 0.35f), Color.Transparent))),
         )
 
         LazyVerticalGrid(
@@ -153,6 +154,7 @@ fun HomeScreen() {
                             items(HomeFilter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = f }) }
                         }
                     }
+                    com.localfy.app.ui.theme.ThemeScene()
                     val name = app.profiles.profile.collectAsStateWithLifecycle().value.name
                     Text(if (name.isBlank()) greeting else "$greeting, $name", style = MaterialTheme.typography.headlineLarge, maxLines = 2, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 4.dp))
                 }

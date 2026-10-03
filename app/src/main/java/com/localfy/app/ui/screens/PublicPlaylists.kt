@@ -43,13 +43,15 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
     val app = context.applicationContext as LocalfyApp
     val actions = LocalApp.current
     val revision by app.social.revision.collectAsStateWithLifecycle()
+    var attempt by remember(input) { mutableStateOf(0) }
     var initial by remember(input) { mutableStateOf<SharedPlaylist?>(null) }
     var message by remember(input) { mutableStateOf<String?>(null) }
     var work by remember { mutableStateOf<Job?>(null) }
     var options by remember { mutableStateOf(false) }
     var showSharing by remember { mutableStateOf(false) }
     var showEditor by remember { mutableStateOf(false) }
-    LaunchedEffect(input, saved) {
+    LaunchedEffect(input, saved, attempt) {
+        message = null
         try { initial = if (saved) app.social.state.playlists[input] ?: error("This playlist is no longer saved.") else SpotifyPlaylists.load(input, app.social.publicKey) }
         catch (e: Exception) { if (e is CancellationException) throw e; message = e.message }
     }
@@ -84,7 +86,10 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
         Column(Modifier.fillMaxSize()) {
             PageHeader("Playlist", onBack = { actions.nav.popBackStack() })
             if (message == null) CircularProgressIndicator(Modifier.padding(16.dp))
-            else EmptyState("Couldn't load playlist", message.orEmpty())
+            else {
+                EmptyState("Couldn't load playlist", message.orEmpty())
+                Button(onClick = { attempt += 1 }, modifier = Modifier.padding(16.dp)) { Text("Try again") }
+            }
         }
         return
     }

@@ -285,6 +285,7 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
                         Spacer(Modifier.height(8.dp))
                     }
                 }
+                item(key = "theme-art") { com.localfy.app.ui.theme.ThemeScene(compact = true) }
                 if (song.isPodcast) item(key = "notes") { ShowNotesCard(song, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 else item(key = "lyrics") {
                     LyricsCard(song, lerp(tint, Color.Black, 0.1f), onExpand = { overlay = "lyrics" }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -476,6 +477,7 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
                 IconButton(onClick = onHide) { Icon(Icons.Rounded.VerticalSplit, "Hide player pane") }
             }
             if (song == null) {
+                com.localfy.app.ui.theme.ThemeScene()
                 EmptyState("Nothing playing", "Tap any song — it plays here while you keep browsing on the other half.")
                 return@Column
             }

@@ -18,7 +18,7 @@ struct MiniPlayer: View {
                             Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                         }
                         Spacer()
-                        if !s.isSpoken { PlaylistButton(song: s) }
+                        if !s.isSpoken { PlaylistButton(song: s).tint(.white) }
                         Button { Haptics.tap(); app.player.toggle() } label: {
                             Image(systemName: app.player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                                 .contentTransition(.symbolEffect(.replace)).frame(width: 44, height: 44).contentShape(Rectangle())
@@ -79,6 +79,7 @@ struct NowPlayingView: View {
                             }
                             .padding(.horizontal, 22)
                             .frame(width: outer.size.width).frame(minHeight: outer.size.height)
+                            ThemeScene(compact: true)
                             cards(s).padding(.horizontal, 16).padding(.bottom, 40).frame(width: outer.size.width)
                         }
                         .background(GeometryReader { geometry in
@@ -92,6 +93,7 @@ struct NowPlayingView: View {
             }
         }
         .background { if videoOpen && player.current?.isSpoken == false { MusicVideoBackdrop() } else { Backdrop(song: player.current, tint: tint) } }
+        .overlay { ThemeFrame() }
         .offset(y: max(0, dragDown))
         .simultaneousGesture(DragGesture(minimumDistance: 14).onChanged { value in
             if canCollapse == nil { canCollapse = scrollTop >= -2 && value.translation.height > abs(value.translation.width) * 1.3 }

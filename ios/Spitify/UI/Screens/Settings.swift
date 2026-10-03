@@ -101,6 +101,7 @@ struct AppearanceView: View {
                     PlayButton(playing: true, size: 46) {}
                 }
             }
+            Section("Art themes") { ArtThemeGallery() }
             Section { AppIconSettingsLink() }
             ForEach(["Everyday", "Kids"], id: \.self) { group in
                 Section(group == "Kids" ? "Made for little listeners" : "Ready-made looks") {

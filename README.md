@@ -67,7 +67,8 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - Swipe down over the full player to collapse it to the small player. Android also supports notification controls and resume-on-reboot; swiping it away from Recents stops playback.
 
 ### Friends, playlists and listening together
-- Search public Spotify playlists or paste a playlist link. Matching runs in the background when you open or save a playlist, and saved matches are reused. Playback starts with the first available song while the rest prepare. Spitify keeps the playlist name, cover, description and source link, then matches songs to its own files and online sources. Incomplete source lists and songs that cannot be matched are labelled.
+- Use **Your Library → Add from Spotify** to paste a public playlist link, preview its cover and songs, then save it. Regular links and Spotify short share links work. You can also find public playlists in Search. Matching runs in the background when you open or save a playlist, and saved matches are reused. Playback starts with the first available song while the rest prepare. Spitify keeps the playlist name, cover, description and source link, then matches songs to its own files and online sources. Incomplete source lists and songs that cannot be matched are labelled.
+- Use **Scan Spotify code** in Search or the Library menu to choose a photo or take a picture. The code is read on your phone; only its number goes to Spotify to find the item. Playlist codes open a playlist preview. Other supported codes open the matching Spotify link and a search in Spitify. Keep the bars level, clear and fully visible. This lookup uses Spotify’s unofficial web-player service and can stop working if that service changes.
 - Open **Your Library → Friends** to share a friend code and follow people. Sharing is off until you turn it on. Public profiles and playlists are optional; private shares are encrypted.
 - Share a song, album or playlist from its menu. Invite editors to add, remove, rename and reorder songs. Their changes wait for the owner's app to accept them.
 - **Shared Mix** takes turns between songs picked by each person and skips repeated recordings. It uses contributions you choose, rather than uploading listening history.
@@ -149,7 +150,7 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Equaliser:** an in-app **10-band** EQ with a curve you drag directly, 15 presets, bass boost, surround, loudness and a limiter.
 
 ### 🎨 Make it yours
-- **Ready-made looks:** six general themes and six colourful kids' themes, with matching background, accent and type choices.
+- **25 art themes:** Cats & kittens, Minecraft, Outer space, Black card, Floral, Nautical, Stellar & lunar, Canadian, European Union, Woodland, Desert, Arctic, Autumn, Rainy day, Sakura, Cyberpunk, Arcade, Candy shop, Coffeehouse, Reading room, Coral reef, Volcano, Lavender, Sunset and Steampunk. Each has custom pixel art, matching colours and quiet edge details. Browse them in **Settings → Appearance → Art themes**. Turn the art and borders off while keeping the colours. The original simple and kids' looks remain available.
 - **App icons:** 25 vinyl-record designs, including attitude labels, pictures and kids' choices.
 - **Theme:** Dark, Light, AMOLED or follow the system.
 - **Accent colour:** presets or the current album art on both apps; Android also offers Material You.

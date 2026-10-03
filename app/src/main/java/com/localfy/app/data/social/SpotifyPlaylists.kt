@@ -20,13 +20,36 @@ object SpotifyPlaylists {
             text.startsWith("spotify:playlist:") -> text.removePrefix("spotify:playlist:")
             text.startsWith("https://") -> {
                 val uri = URI(text); require(uri.host == "open.spotify.com" && uri.userInfo == null)
-                val parts = uri.path.split('/').filter(String::isNotEmpty); val index = parts.indexOf("playlist")
-                require(index >= 0 && parts.size == index + 2); parts[index + 1]
+                val parts = uri.path.split('/').filter(String::isNotEmpty)
+                val index = if (parts.size == 3 && parts[0].startsWith("intl-")) 1 else 0
+                require(parts.size == index + 2 && parts[index] == "playlist" && (uri.port == -1 || uri.port == 443)); parts[index + 1]
             }
             else -> text
         }
         candidate.takeIf { it.matches(Regex("[a-zA-Z0-9]{22}")) }
     }.getOrNull()
+    fun shortLink(input: String): URI? = runCatching {
+        URI(input.trim()).takeIf { it.scheme == "https" && it.host == "spotify.link" && it.userInfo == null &&
+            (it.port == -1 || it.port == 443) && !it.path.trim('/').isEmpty() }
+    }.getOrNull()
+    fun accepts(input: String) = playlistID(input) != null || shortLink(input) != null
+    private suspend fun resolveID(input: String): String = withContext(Dispatchers.IO) {
+        playlistID(input)?.let { return@withContext it }
+        var url = shortLink(input) ?: error("Paste a public Spotify playlist link.")
+        repeat(5) {
+            coroutineContext.ensureActive()
+            val connection = url.toURL().openConnection() as HttpURLConnection
+            try {
+                connection.instanceFollowRedirects = false
+                connection.connectTimeout = 15_000; connection.readTimeout = 15_000
+                if (connection.responseCode !in 300..399) error("That short link is unavailable. Copy the playlist link again in Spotify.")
+                val next = url.resolve(connection.getHeaderField("Location") ?: error("This link has no destination."))
+                playlistID(next.toString())?.let { return@withContext it }
+                url = shortLink(next.toString()) ?: error("That link does not open a Spotify playlist. Copy a playlist link instead.")
+            } finally { connection.disconnect() }
+        }
+        error("That link redirected too many times. Copy the playlist link again in Spotify.")
+    }
     fun plain(value: String) = value.replace(Regex("<[^>]+>"), "").replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replace("&lt;", "<").replace("&gt;", ">")
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
@@ -53,7 +76,7 @@ object SpotifyPlaylists {
         return obj.objects("results") { row -> SpotifyPlaylistResult(row.getString("id"), row.getString("name").take(200), plain(row.optString("description")), row.text("thumbnail")?.takeIf(SocialRules::publicURL), row.optString("owner", "Spotify")) }.filter { playlistID(it.id) != null }.take(50)
     }
     suspend fun load(input: String, owner: String): SharedPlaylist {
-        val id = playlistID(input) ?: error("Paste a public Spotify playlist link.")
+        val id = resolveID(input)
         return try {
             val obj = JSONObject(get("$SERVICE/playlist/$id"))
             check(obj.optBoolean("success")); parse(obj.getJSONObject("playlist"), id, owner)

@@ -60,5 +60,6 @@
 			<key>LSItemContentTypes</key><array><string>public.audio</string></array>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key><string>Take a picture of a Spotify code to open its playlist, song, or other item.</string>
 </dict>
 </plist>

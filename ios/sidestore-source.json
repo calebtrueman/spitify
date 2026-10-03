@@ -25,11 +25,21 @@
         "entitlements": [],
         "privacy": {
           "NSAppleMusicUsageDescription": "Spitify can play the songs already downloaded in your Music library.",
+          "NSCameraUsageDescription": "Take a picture of a Spotify code to open its playlist, song, or other item.",
           "NSPhotoLibraryUsageDescription": "Choose a profile picture or custom artwork.",
           "NSSiriUsageDescription": "Use Siri to play music and control Spitify."
         }
       },
       "versions": [
+        {
+          "version": "1.0.18",
+          "buildVersion": "22",
+          "date": "2026-10-03T14:47:34Z",
+          "localizedDescription": "25 new art themes for iPhone and Android, with custom pixel art, matching colours and quiet borders. Choose a look in Settings \u2192 Appearance \u2192 Art themes, or turn off the art while keeping its colours.\n\nAdd public Spotify playlists from Library \u2192 Add from Spotify. Preview the cover and songs before saving. Regular playlist links and Spotify short links are supported.\n\nScan Spotify picture codes from Search or the Library menu. Choose a photo or take a picture; the bars are read on your phone. Playlist codes open a playlist preview. Other supported items offer their Spotify link and a matching search in Spitify. Keep the bars clear, level and fully visible. Spotify lookup needs internet and uses an unofficial web-player service that can change.\n\nThe iPhone download is unsigned for SideStore/AltStore. The Android APK installs directly.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.18/Spitify-1.0.18-unsigned.ipa",
+          "size": 120102707,
+          "minOSVersion": "17.0"
+        },
         {
           "version": "1.0.17",
           "buildVersion": "21",

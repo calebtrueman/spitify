@@ -10,12 +10,13 @@ struct ThemePreset: Identifiable {
     var id: String { name }
     func applying(to current: ThemeSettings) -> ThemeSettings {
         var t = current
+        t.artThemeID = nil
         t.mode = light ? .light : .dark; t.backdrop = background; t.accentSource = .preset; t.accent = accent
         t.font = group == "Kids" ? .rounded : .figtree; t.artShape = group == "Kids" ? .soft : .rounded
         return t
     }
     func matches(_ t: ThemeSettings) -> Bool {
-        t.backdrop == background && t.accent == accent && t.accentSource == .preset && t.mode == (light ? .light : .dark)
+        t.artThemeID == nil && t.backdrop == background && t.accent == accent && t.accentSource == .preset && t.mode == (light ? .light : .dark)
     }
 }
 let themePresets: [ThemePreset] = [

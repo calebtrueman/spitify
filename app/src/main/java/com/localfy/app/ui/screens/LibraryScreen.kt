@@ -89,6 +89,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     var sort by rememberSaveable { mutableStateOf(Sort.Recent) }
     var grid by rememberSaveable { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
+    var addMenu by remember { mutableStateOf(false) }
 
     fun plays(ids: List<Long>) = ids.sumOf { stats[it]?.playCount ?: 0 }
     fun lastPlayed(ids: List<Long>) = ids.maxOfOrNull { stats[it]?.lastPlayed ?: 0 } ?: 0
@@ -141,8 +142,18 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
                 com.localfy.app.ui.components.PageHeader("Your Library") {
                     IconButton(onClick = { app.navigate("releases") }) { Icon(Icons.Rounded.NewReleases, "New releases") }
                     IconButton(onClick = { app.navigate(Routes.FRIENDS) }) { Icon(Icons.Rounded.PeopleAlt, "Friends") }
-                    IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
+                    Box {
+                        IconButton(onClick = { addMenu = true }) { Icon(Icons.Rounded.Add, "Add to library") }
+                        DropdownMenu(addMenu, { addMenu = false }) {
+                            DropdownMenuItem(text = { Text("Scan Spotify code") }, onClick = { addMenu = false; app.navigate("spotify-code") })
+                            DropdownMenuItem(text = { Text("Create playlist") }, onClick = { addMenu = false; onCreatePlaylist() })
+                            DropdownMenuItem(text = { Text("Add from Spotify") }, onClick = { addMenu = false; app.navigate("spotify-import") })
+                        }
+                    }
                 }
+                if (filter == null || filter == Filter.Playlists) androidx.compose.material3.TextButton(
+                    onClick = { app.navigate("spotify-import") }, modifier = Modifier.padding(horizontal = 8.dp)
+                ) { Text("Add from Spotify") }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(Filter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = if (filter == f) null else f }) }
                 }

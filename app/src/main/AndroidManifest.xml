@@ -195,5 +195,8 @@
             android:authorities="${applicationId}.art"
             android:exported="true"
             android:grantUriPermissions="true" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.codephotos" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/spotify_code_paths" />
+        </provider>
     </application>
 </manifest>

@@ -13,6 +13,7 @@ struct SearchView: View {
         let words = foldForSearch(query).split(separator: " ").map(String.init)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                ThemeScene(compact: true)
                 if words.isEmpty {
                     if !lib.albums.isEmpty { SectionHeader(title: "Your albums"); browse(lib.albums.map { ($0.title, $0.songs, Route.album($0.id)) }) }
                     if !lib.genres.isEmpty { SectionHeader(title: "Browse your genres") ; browse(lib.genres.map { ($0.name, $0.songs, Route.genre($0.name)) }) }
@@ -23,6 +24,7 @@ struct SearchView: View {
         }
         .background(p.background)
         .navigationTitle("Search")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { NavigationLink { SpotifyCodeScanView() } label: { Image(systemName: "barcode.viewfinder") }.accessibilityLabel("Scan Spotify code") } }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "What do you want to listen to?")
     }
 

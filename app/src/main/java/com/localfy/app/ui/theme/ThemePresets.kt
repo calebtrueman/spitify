@@ -1,11 +1,11 @@
 package com.localfy.app.ui.theme
 
 data class ThemePreset(val name: String, val group: String, val symbol: String, val background: Long, val accent: Long, val light: Boolean) {
-    fun apply(settings: ThemeSettings) = settings.copy(mode = if (light) ThemeMode.Light else ThemeMode.Dark,
+    fun apply(settings: ThemeSettings) = settings.copy(artThemeID = null, mode = if (light) ThemeMode.Light else ThemeMode.Dark,
         backdrop = background, accentSource = AccentSource.Preset, accent = accent,
         font = if (group == "Kids") AppFont.Nunito else AppFont.Figtree,
         artShape = if (group == "Kids") ArtShape.Soft else ArtShape.Rounded)
-    fun matches(settings: ThemeSettings) = settings.backdrop == background && settings.accent == accent &&
+    fun matches(settings: ThemeSettings) = settings.artThemeID == null && settings.backdrop == background && settings.accent == accent &&
         settings.accentSource == AccentSource.Preset && settings.mode == if (light) ThemeMode.Light else ThemeMode.Dark
 }
 val ThemePresets = listOf(

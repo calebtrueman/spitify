@@ -1,0 +1,106 @@
+{
+  "generator": "Codex built-in image generation",
+  "transparent_background": true,
+  "assets": [
+    {
+      "file": "art/cats.png",
+      "prompt": "Use case: stylized-concept. Asset type: transparent pixel-art theme illustration for a polished music app. Create a single wide, low horizontal vignette for the theme CATS & KITTENS: three charming tiny cats (cream, ginger, black) curled beside a wool ball, a small houseplant, and a few paw-print pixels. Sophisticated cozy indie-game pixel art, crisp square pixels, limited palette of warm cream, burnt sienna, dusty rose, sage and deep cocoa. Compose all artwork in a low gently asymmetrical cluster across the bottom half of a 3:1 wide canvas, with generous transparent air above and at both ends. Isolated decoration, no solid ground rectangle or panel. Readable silhouette at small app-header size, subtle dimensional shading, affectionate but not babyish. No text, letters, logos, UI, frames, watermarks, blurry paint or smooth vector edges. Truly transparent background. One cohesive finished asset."
+    },
+    {
+      "file": "art/minecraft.png",
+      "prompt": "Use case: stylized-concept. Create one finished 3:1 wide transparent pixel-art vignette for a tasteful music-app theme. Crisp square pixels, sophisticated detailed indie-game sprite art, restrained colours and small-size readable silhouettes. Low horizontal composition, generous transparent air above and at both ends. No text, letters, interface, logos, watermark, solid ground rectangle, blur or smooth vector edges. Artwork isolated on genuine transparent alpha. Theme MINECRAFT. An original small block-built landscape: stacked grassy dirt cubes, a blocky oak tree, a tiny crafting bench, a diamond-blue pickaxe leaning against stone and one red pixel flower. Fresh grass green, earth brown, sky-cyan accents. A cozy voxel-game world, no character, no logo, do not copy an existing screenshot."
+    },
+    {
+      "file": "art/outer-space.png",
+      "prompt": "Use case: stylized-concept. Create one finished 3:1 wide transparent pixel-art vignette for a tasteful music-app theme. Crisp square pixels, sophisticated detailed indie-game sprite art, restrained colours and small-size readable silhouettes. Low horizontal composition, generous transparent air above and at both ends. No text, letters, interface, logos, watermark, solid ground rectangle, blur or smooth vector edges. Artwork isolated on genuine transparent alpha. Theme OUTER SPACE. A compact charming cream-and-orange exploration rocket beside a richly banded ringed planet, a small satellite, teal orbit arcs and tiny amber stars. Deep cosmic violet, warm cream, coral orange and electric turquoise. Optimistic interplanetary expedition, not a moon landscape. No large background sky disk."
+    },
+    {
+      "file": "art/black-card.png",
+      "prompt": "Use case: stylized-concept. Create one finished 3:1 wide transparent pixel-art vignette for a tasteful music-app theme. Crisp square pixels, sophisticated detailed indie-game sprite art, restrained colours and small-size readable silhouettes. Low horizontal composition, generous transparent air above and at both ends. No text, letters, interface, logos, watermark, solid ground rectangle, blur or smooth vector edges. Artwork isolated on genuine transparent alpha. Theme BLACK CARD PROFESSIONAL. Exceptionally restrained luxury pixel art: a faceted onyx gemstone, a small brushed-gold geometric monolith, two fine art-deco gold stepped lines and minimal gold glints. Black graphite, muted champagne, smoked bronze. Understated private banking aesthetic. No currency signs, money, logos or literal card numbers; mostly transparent space, low elegant horizontal arrangement."
+    },
+    {
+      "file": "art/floral.png",
+      "prompt": "Use case: stylized-concept. Asset type: tasteful mobile music app decorative header. Create custom detailed crisp indie-game pixel art of a graceful low garland of cream daisies, pink peonies, sage fern leaves and a small glass bud vase; rose and sage palette. Wide 3:1 composition, low horizontal vignette, generous transparent air, centered objects, all edges fully contained. Beautiful carefully placed square pixels, restrained mature design. No text, lettering, watermark, UI or background rectangle. Real transparent background."
+    },
+    {
+      "file": "art/nautical.png",
+      "prompt": "Use case: stylized-concept. Asset type: tasteful mobile music app decorative header. Create custom detailed crisp indie-game pixel art of a tiny navy and ivory sailboat, coiled rope, brass compass, lighthouse and three low teal waves; navy cream and brass palette. Wide 3:1 composition, low horizontal vignette, generous transparent air, centered objects, all edges fully contained. Beautiful carefully placed square pixels, restrained mature design. No text, lettering, watermark, UI or background rectangle. Real transparent background."
+    },
+    {
+      "file": "art/lunar.png",
+      "prompt": "Use case: stylized-concept. Asset type: tasteful mobile music app decorative header. Create custom detailed crisp indie-game pixel art of a silver crescent moon, tiny sleepy moth, indigo clouds and a few constellations; silver lavender and midnight palette. Wide 3:1 composition, low horizontal vignette, generous transparent air, centered objects, all edges fully contained. Beautiful carefully placed square pixels, restrained mature design. No text, lettering, watermark, UI or background rectangle. Real transparent background."
+    },
+    {
+      "file": "art/canadian.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a little red canoe, maple leaves, pine trees and a snowy mountain, a tiny beaver beside the canoe; red cream forest green. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/european-union.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a ring of exactly twelve small golden five-pointed stars above a graceful European stone bridge with blue river ripples and olive branches; royal blue gold cream. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/forest.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a tiny mossy woodland with a fox curled beside red mushrooms, ferns and pine cones; emerald moss amber. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/desert.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a cactus garden, layered terracotta rocks, little lizard and a low warm sun; sand terracotta sage. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/arctic.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a tiny polar bear cub beside crystal ice floes and a pale mint aurora ribbon; icy blue white mint. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/autumn.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a pumpkin, amber maple leaves, acorns and a small squirrel by a wooden stump; burnt orange gold brown. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/rainy-day.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a yellow umbrella, blue rain boots and a puddle with concentric ripples, tiny raindrops; slate blue mustard. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/sakura.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a delicate cherry blossom branch, red footbridge, small stone lantern and falling petals; blush pink warm white burgundy. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/cyberpunk.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a small futuristic city roofline with magenta neon windows, teal antenna and tiny hovering vehicle; dark violet cyan magenta. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/arcade.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a tiny retro arcade cabinet, pixel joystick and floating game coins; cobalt coral yellow. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/candy-shop.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a striped candy jar, pastel wrapped sweets, lollipop and tiny mint ice cream; blush mint raspberry. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/coffeehouse.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a ceramic espresso cup with steam, coffee beans, croissant and tiny leafy plant; cream espresso caramel. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/library.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a cozy stack of old books, open book, warm reading lamp and tiny spectacles; burgundy parchment bronze. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/coral-reef.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a little sea turtle drifting above branching corals, shells and sea grass; deep teal peach coral. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/volcano.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a small dark volcanic island with bright lava rivulets and a few glowing embers; charcoal orange crimson. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/lavender.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a low bundle of lavender flowers with ribbon, a little white butterfly and ceramic vase; lavender sage cream. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/sunset.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a tiny palm island, low peach sunset disc and calm ocean ripples; plum peach gold. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    },
+    {
+      "file": "art/steampunk.png",
+      "prompt": "Use case: stylized-concept. Asset type: mobile music app header art. Custom detailed crisp indie-game pixel art of a brass pocket watch, copper gears, small airship and a curled wisp of steam; dark brown antique brass teal. Wide 3:1 low horizontal vignette with generous transparent air. Objects completely contained. Beautiful square pixels, tasteful and restrained. No text, letters, watermark, UI or rectangular backdrop. Truly transparent background."
+    }
+  ]
+}

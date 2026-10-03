@@ -1,5 +1,7 @@
 package com.localfy.app.ui.screens
 
+import androidx.compose.material.icons.rounded.QrCodeScanner
+
 import com.localfy.app.ui.theme.LocalfyColors
 import com.localfy.app.ui.theme.LocalPalette
 import androidx.compose.foundation.background
@@ -92,7 +94,9 @@ fun SearchScreen() {
     ) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
             Column {
-                com.localfy.app.ui.components.PageHeader("Search")
+                com.localfy.app.ui.components.PageHeader("Search") {
+                    androidx.compose.material3.IconButton(onClick = { app.navigate("spotify-code") }) { androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.QrCodeScanner, "Scan Spotify code") }
+                }
                 com.localfy.app.ui.components.MediaSearchField(query, { query = it }, "What do you want to listen to?")
             }
         }

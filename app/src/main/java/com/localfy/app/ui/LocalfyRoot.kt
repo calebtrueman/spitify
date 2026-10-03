@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -334,6 +335,9 @@ fun LocalfyRoot(activity: Activity) {
                             composable(Routes.CATALOG_ALBUM) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("album").orEmpty(), false) }
                             composable(Routes.CATALOG_SONG) { com.localfy.app.ui.screens.CatalogPage(it.arguments?.getString("track").orEmpty(), true) }
                             composable(Routes.ONLINE_ARTIST) { com.localfy.app.ui.screens.OnlineArtistScreen(it.arguments?.getString("artist").orEmpty()) }
+                            composable("spotify-code") { com.localfy.app.ui.screens.SpotifyCodeScanScreen() }
+                            composable("spotify-item/{kind}/{id}") { com.localfy.app.ui.screens.SpotifyScannedItemScreen(it.arguments?.getString("kind").orEmpty(), it.arguments?.getString("id").orEmpty()) }
+                            composable("spotify-import") { com.localfy.app.ui.screens.SpotifyImportScreen() }
                             composable(Routes.SPOTIFY_PLAYLIST) { com.localfy.app.ui.screens.PublicPlaylistScreen(it.arguments?.getString("id").orEmpty(), false) }
                             composable(Routes.SHARED_PLAYLIST) { com.localfy.app.ui.screens.PublicPlaylistScreen(it.arguments?.getString("key").orEmpty(), true) }
                             composable("rooms") { com.localfy.app.ui.screens.RoomsScreen() }
@@ -431,12 +435,15 @@ fun LocalfyRoot(activity: Activity) {
                 }
             }
 
+            com.localfy.app.ui.theme.ThemeFrame(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding())
+
             // Status/nav bar icons: dark icons on light screens, light icons whenever a dark,
             // art-backed surface fills the screen. Never white-on-white or black-on-black.
             val darkOverlay = (!wide && sheet > 0.5f) ||
                 (theater && paneFits && player.hasMedia) ||
                 (posture.kind == FoldPosture.Kind.Tabletop && player.hasMedia && !tabletopDismissed)
             val lightBars = !palette.isDark && !darkOverlay
+            if (lightBars) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(palette.background))
             val view = LocalView.current
             SideEffect {
                 WindowCompat.getInsetsController(activity.window, view).apply {

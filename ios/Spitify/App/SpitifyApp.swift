@@ -53,6 +53,7 @@ struct RootView: View {
             tab(.books, "Books", "book.fill") { BooksView() }
             tab(.library, "Your Library", "books.vertical.fill") { LibraryView() }
         }
+        .overlay { ThemeFrame() }
         .tint(p.text)
         .fullScreenCover(isPresented: $router.playerOpen) { NowPlayingView() }
         .sheet(item: Binding(get: { router.sharing }, set: { router.sharing = $0 })) { playlist in NavigationStack { PlaylistSharingView(playlist: playlist) }.environment(app) }
@@ -89,6 +90,7 @@ struct RootView: View {
         VStack(spacing: 0) {
             NavigationStack(path: router.path(t)) {
                 content()
+                    .toolbarColorScheme(p.isDark ? .dark : .light, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0).toolbar(.visible, for: .navigationBar) }
             }
             .background(HomeTabTapObserver(router: router).frame(width: 0, height: 0))

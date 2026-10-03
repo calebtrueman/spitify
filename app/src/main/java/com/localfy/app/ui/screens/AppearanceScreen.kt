@@ -126,6 +126,8 @@ fun AppearanceScreen() {
             }
         }
 
+        item { SectionHeader("Art themes") }
+        item { com.localfy.app.ui.theme.ArtThemeGallery(repo) }
         item { com.localfy.app.ui.components.AppIconSettingsRow() }
 
         listOf("Everyday", "Kids").forEach { group ->
