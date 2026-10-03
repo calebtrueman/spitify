@@ -14,8 +14,14 @@ struct PodcastsView: View {
     @State private var query = ""
     @State private var results: [ShowSearchResult]?
     @State private var searching = false
+    @State private var searchRequest = UUID()
+    @State private var searchFailed = false
     @State private var addingRSS = false
     @State private var rss = ""
+    @State private var rssBusy = false
+    @State private var rssFailed = false
+    @State private var openingShows: Set<String> = []
+    @State private var failedShows: Set<String> = []
     private let popular = ["News", "Comedy", "True crime", "Technology", "History", "Science", "Business", "Sports"]
 
     var body: some View {
@@ -26,8 +32,14 @@ struct PodcastsView: View {
         let fresh = all.filter { app.shows.resume[$0.1.resumeKey]?.played != true }.sorted { $0.1.dateAdded > $1.1.dateAdded }.prefix(30)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
+                if rssBusy { ProgressView("Adding show…").frame(maxWidth: .infinity).padding() }
+                if rssFailed {
+                    SpokenSearchFailure(message: "Couldn't follow this show. Check the RSS link and try again.", retryTitle: "Edit RSS link") { addingRSS = true }
+                }
                 if searching { ProgressView().frame(maxWidth: .infinity).padding() }
-                if let results {
+                if searchFailed {
+                    SpokenSearchFailure { search(query) }
+                } else if let results {
                     SectionHeader(title: "Results for “\(query)”")
                     if results.isEmpty && !searching { EmptyState(title: "No shows found", message: "Try another name, or add the show's RSS link.", icon: "magnifyingglass") }
                     ForEach(results) { r in resultRow(r, following: shows.contains { $0.feedURL == r.feedURL }) }
@@ -49,26 +61,46 @@ struct PodcastsView: View {
         .navigationTitle("Podcasts")
         .searchable(text: $query, prompt: "Search all podcasts")
         .onSubmit(of: .search) { search(query) }
-        .onChange(of: query) { _, q in if q.isEmpty { results = nil } }
+        .onChange(of: query) { _, q in if q.isEmpty { searchRequest = UUID(); results = nil; searching = false; searchFailed = false } }
         .refreshable { await app.shows.refreshAll() }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { addingRSS = true } label: { Image(systemName: "dot.radiowaves.up.forward") } } }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { addingRSS = true } label: { Image(systemName: "dot.radiowaves.up.forward") }.accessibilityLabel("Add a show by RSS") } }
         .alert("Add a show by RSS", isPresented: $addingRSS) {
             TextField("https://example.com/feed.xml", text: $rss).textInputAutocapitalization(.never).keyboardType(.URL)
-            Button("Follow") { Task { if let s = await app.shows.subscribe(feedURL: rss.trimmingCharacters(in: .whitespaces)) { router.go(.show(s.id)) }; rss = "" } }
+            Button("Follow") {
+                guard !rssBusy else { return }
+                let link = rss.trimmingCharacters(in: .whitespacesAndNewlines)
+                rssBusy = true; rssFailed = false
+                Task {
+                    if let s = await app.shows.subscribe(feedURL: link) { rss = ""; router.go(.show(s.id)) }
+                    else { rssFailed = true }
+                    rssBusy = false
+                }
+            }.disabled(rssBusy || rss.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("Cancel", role: .cancel) {}
         }
     }
 
     private func search(_ t: String) {
-        query = t; searching = true
-        Task { results = await app.shows.searchPodcasts(t); searching = false }
+        let term = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return }
+        let request = UUID(); searchRequest = request
+        query = term; searching = true; searchFailed = false; results = nil
+        Task {
+            do {
+                let found = try await app.shows.searchPodcasts(term)
+                guard searchRequest == request else { return }
+                results = found; searching = false
+            } catch {
+                guard searchRequest == request else { return }
+                searching = false; searchFailed = true
+            }
+        }
     }
 
     private func resultRow(_ r: ShowSearchResult, following: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
         HStack(spacing: 12) {
-            Button {
-                Task { if let s = await app.shows.subscribe(feedURL: r.feedURL, art: r.artworkURL, follow: false) { router.go(.show(s.id)) } }
-            } label: {
+            Button { openShow(r, follow: false) } label: {
                 HStack(spacing: 12) {
                     ArtworkView(key: r.feedURL, remote: r.artworkURL, cornerRadius: 8).frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 2) {
@@ -78,13 +110,36 @@ struct PodcastsView: View {
                     Spacer()
                 }.contentShape(Rectangle())
             }.buttonStyle(.pressable(0.98))
-            Button {
-                Task { if let s = await app.shows.subscribe(feedURL: r.feedURL, art: r.artworkURL) { router.go(.show(s.id)) } }
-            } label: {
+            if openingShows.contains(r.id) { ProgressView().accessibilityLabel("Opening show") }
+            Button { openShow(r, follow: true) } label: {
                 Text(following ? "Following" : "Follow").text(.label).foregroundStyle(following ? p.text : p.onAccent)
-                    .padding(.horizontal, 14).padding(.vertical, 7).background(following ? p.tint : p.accent, in: Capsule())
+                    .padding(.horizontal, 14).padding(.vertical, 7).background(following ? p.tint : p.accent, in: Capsule()).frame(minHeight: 44)
             }.buttonStyle(.plain)
-        }.padding(.horizontal, 16).padding(.vertical, 6)
+        }.disabled(openingShows.contains(r.id)).padding(.horizontal, 16).padding(.vertical, 6)
+            if failedShows.contains(r.id) { Text("Couldn't open this show. Tap to try again.").text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
+        }
+    }
+
+    private func openShow(_ result: ShowSearchResult, follow: Bool) {
+        guard openingShows.insert(result.id).inserted else { return }
+        failedShows.remove(result.id)
+        Task {
+            if let show = await app.shows.subscribe(feedURL: result.feedURL, art: result.artworkURL, follow: follow) { router.go(.show(show.id)) }
+            else { failedShows.insert(result.id) }
+            openingShows.remove(result.id)
+        }
+    }
+}
+
+private struct SpokenSearchFailure: View {
+    var message = "Couldn't search. Check your connection and try again."
+    var retryTitle = "Try again"
+    var retry: () -> Void
+    var body: some View {
+        VStack(spacing: 8) {
+            Text(message).multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Button(retryTitle, action: retry).frame(minHeight: 44)
+        }.frame(maxWidth: .infinity).padding(16)
     }
 }
 
@@ -119,19 +174,19 @@ struct EpisodeRow: View {
                     Spacer()
                     if let show, let episode {
                         if episode.localFile != nil {
-                            Button { app.shows.deleteDownload(episode, in: show) } label: { Image(systemName: "arrow.down.circle.fill").foregroundStyle(p.accent) }.frame(width: 40, height: 40)
+                            Button { app.shows.deleteDownload(episode, in: show) } label: { Image(systemName: "arrow.down.circle.fill").foregroundStyle(p.accent).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Remove download")
                         } else if app.shows.downloads[episode.id] != nil {
-                            ProgressView().frame(width: 40, height: 40)
+                            ProgressView().frame(width: 44, height: 44)
                         } else {
-                            Button { app.shows.download(episode, in: show) } label: { Image(systemName: "arrow.down.circle").foregroundStyle(p.secondary) }.frame(width: 40, height: 40)
+                            Button { app.shows.download(episode, in: show) } label: { Image(systemName: "arrow.down.circle").foregroundStyle(p.secondary).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Download episode")
                         }
                     }
                     Button { app.shows.setPlayed(song.resumeKey, r?.played != true, dur) } label: {
-                        Image(systemName: r?.played == true ? "checkmark.circle.fill" : "circle").foregroundStyle(r?.played == true ? p.accent : p.secondary)
-                    }.frame(width: 40, height: 40)
+                        Image(systemName: r?.played == true ? "checkmark.circle.fill" : "circle").foregroundStyle(r?.played == true ? p.accent : p.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.accessibilityLabel(r?.played == true ? "Mark unplayed" : "Mark played")
                     Button { if isCurrent { app.player.toggle() } else { play() } } label: {
-                        Image(systemName: isCurrent && app.player.isPlaying ? "pause.fill" : "play.fill").foregroundStyle(p.background).frame(width: 38, height: 38).background(p.text, in: Circle())
-                    }
+                        Image(systemName: isCurrent && app.player.isPlaying ? "pause.fill" : "play.fill").foregroundStyle(p.background).frame(width: 38, height: 38).background(p.text, in: Circle()).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.accessibilityLabel(isCurrent && app.player.isPlaying ? "Pause episode" : "Play episode")
                 }.font(.system(size: 21))
                 if let r, !r.played, r.positionMs > 0, dur > 0 { ProgressView(value: Double(r.positionMs) / Double(dur)).tint(p.accent) }
             }
@@ -177,7 +232,7 @@ struct ShowView: View {
                     if !show.summary.isEmpty {
                         Text(show.summary).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 3).padding(16).onTapGesture { withAnimation { expanded.toggle() } }
                     }
-                    HStack(spacing: 8) { ForEach(Array(["All", "Unplayed", "Downloaded"].enumerated()), id: \.offset) { i, t in Pill(title: t, selected: filter == i) { filter = i } } }.padding(.horizontal, 16)
+                    ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(Array(["All", "Unplayed", "Downloaded"].enumerated()), id: \.offset) { i, t in Pill(title: t, selected: filter == i) { filter = i } } }.padding(.horizontal, 16) }
                     Text("\(songs.count) episodes").text(.labelS).foregroundStyle(p.secondary).padding(16)
                     LazyVStack(spacing: 0) { ForEach(songs) { s in EpisodeRow(show: show, song: s, showArt: false); Divider().opacity(0.3) } }
                 }.padding(.bottom, 24)
@@ -185,7 +240,7 @@ struct ShowView: View {
             .background(LinearGradient(colors: [p.isDark ? color : color.mix(.white, 0.55), p.background], startPoint: .top, endPoint: .center).ignoresSafeArea())
             .artColor(key: show.id, remote: show.artworkURL, into: $color)
             .navigationBarTitleDisplayMode(.inline)
-        }
+        } else { EmptyState(title: "Show not found", message: "Find this show again in Podcasts.", icon: "dot.radiowaves.left.and.right") }
     }
 }
 
@@ -231,6 +286,8 @@ struct BooksView: View {
     @State private var query = ""
     @State private var results: [BookSearchResult]?
     @State private var searching = false
+    @State private var searchRequest = UUID()
+    @State private var searchFailed = false
     private let classics = ["Sherlock Holmes", "Jane Austen", "Mark Twain", "Dickens", "Tolkien", "Shakespeare", "Poe", "Jules Verne", "Dracula"]
 
     var body: some View {
@@ -239,7 +296,9 @@ struct BooksView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if searching { ProgressView().frame(maxWidth: .infinity).padding() }
-                if let results {
+                if searchFailed {
+                    SpokenSearchFailure { search(query) }
+                } else if let results {
                     SectionHeader(title: "LibriVox results", eyebrow: "Free public-domain recordings")
                     if results.isEmpty && !searching { EmptyState(title: "No books found", message: "Try a title or an author's name.", icon: "book") }
                     ForEach(results) { r in BookResultRow(r: r) }
@@ -272,10 +331,25 @@ struct BooksView: View {
         .navigationTitle("Audiobooks")
         .searchable(text: $query, prompt: "Search 20,000+ free books")
         .onSubmit(of: .search) { search(query) }
-        .onChange(of: query) { _, q in if q.isEmpty { results = nil } }
+        .onChange(of: query) { _, q in if q.isEmpty { searchRequest = UUID(); results = nil; searching = false; searchFailed = false } }
     }
 
-    private func search(_ t: String) { query = t; searching = true; Task { results = await app.shows.searchBooks(t); searching = false } }
+    private func search(_ t: String) {
+        let term = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return }
+        let request = UUID(); searchRequest = request
+        query = term; searching = true; searchFailed = false; results = nil
+        Task {
+            do {
+                let found = try await app.shows.searchBooks(term)
+                guard searchRequest == request else { return }
+                results = found; searching = false
+            } catch {
+                guard searchRequest == request else { return }
+                searching = false; searchFailed = true
+            }
+        }
+    }
 }
 
 struct BookResultRow: View {
@@ -284,12 +358,17 @@ struct BookResultRow: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @State private var busy = false
+    @State private var failed = false
     var body: some View {
         let owned = app.shows.shows.first { $0.feedURL == "archive:\(r.id)" }
         Button {
             if let owned { router.go(.book(owned.id)); return }
-            busy = true
-            Task { if let s = await app.shows.addBook(r) { router.go(.book(s.id)) }; busy = false }
+            busy = true; failed = false
+            Task {
+                if let s = await app.shows.addBook(r) { router.go(.book(s.id)) }
+                else { failed = true }
+                busy = false
+            }
         } label: {
             HStack(spacing: 12) {
                 ArtworkView(key: r.id, remote: r.coverURL, cornerRadius: 6).frame(width: 56, height: 78)
@@ -297,6 +376,7 @@ struct BookResultRow: View {
                     Text(r.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).multilineTextAlignment(.leading)
                     Text(r.author).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
                     Text([r.seconds > 0 ? (r.seconds * 1000).formattedLong : nil, r.language.isEmpty ? nil : r.language].compactMap { $0 }.joined(separator: " · ")).text(.labelS).foregroundStyle(p.tertiary)
+                    if failed { Text("Couldn't add this book. Tap to try again.").text(.caption).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer()
                 if busy { ProgressView() } else {
@@ -304,7 +384,7 @@ struct BookResultRow: View {
                         .padding(.horizontal, 14).padding(.vertical, 7).background(owned != nil ? p.tint : p.accent, in: Capsule())
                 }
             }.padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
-        }.buttonStyle(.pressable(0.98))
+        }.buttonStyle(.pressable(0.98)).disabled(busy)
     }
 }
 
@@ -324,7 +404,7 @@ struct ContinueBookRow: View {
                     ProgressView(value: pr.fraction).tint(p.accent)
                 }
                 PlayButton(playing: false, size: 44) { app.player.playBook(book.chapters, from: pr.index, title: book.title) }
-            }.padding(.horizontal, 16).padding(.vertical, 8)
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 8).contentShape(Rectangle())
         }.buttonStyle(.pressable(0.98))
     }
 }
@@ -358,9 +438,9 @@ struct BookView: View {
                                 .padding(.horizontal, 24).padding(.vertical, 12).background(p.accent, in: Capsule())
                         }.buttonStyle(.pressable)
                         if let show = book.show, show.episodes.contains(where: { $0.localFile == nil }) {
-                            Button { show.episodes.filter { $0.localFile == nil }.forEach { app.shows.download($0, in: show) } } label: { Image(systemName: "arrow.down.circle").font(.system(size: 26)).foregroundStyle(p.text) }
+                            Button { show.episodes.filter { $0.localFile == nil }.forEach { app.shows.download($0, in: show) } } label: { Image(systemName: "arrow.down.circle").font(.system(size: 26)).foregroundStyle(p.text).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Download whole book")
                         }
-                        if book.show == nil { Button { router.editing = (book.chapters, true) } label: { Image(systemName: "pencil.circle").font(.system(size: 26)).foregroundStyle(p.text) } }
+                        if book.show == nil { Button { router.editing = (book.chapters, true) } label: { Image(systemName: "pencil.circle").font(.system(size: 26)).foregroundStyle(p.text).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Edit book info and cover") }
                     }
                     if let s = book.show?.summary, !s.isEmpty {
                         Text(s).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 4).padding(20).onTapGesture { withAnimation { expanded.toggle() } }

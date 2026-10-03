@@ -79,10 +79,14 @@ struct MixedSearchView: View {
                     if !Task.isCancelled { pending -= 1 }
                 }
                 group.addTask { @MainActor in
-                    let result = await app.shows.searchPodcasts(q); guard !Task.isCancelled else { return }; podcasts = result; pending -= 1
+                    do { let result = try await app.shows.searchPodcasts(q); guard !Task.isCancelled else { return }; podcasts = result }
+                    catch { if !Task.isCancelled { failed.insert("podcasts") } }
+                    if !Task.isCancelled { pending -= 1 }
                 }
                 group.addTask { @MainActor in
-                    let result = await app.shows.searchBooks(q); guard !Task.isCancelled else { return }; books = result; pending -= 1
+                    do { let result = try await app.shows.searchBooks(q); guard !Task.isCancelled else { return }; books = result }
+                    catch { if !Task.isCancelled { failed.insert("books") } }
+                    if !Task.isCancelled { pending -= 1 }
                 }
                 group.addTask { @MainActor in
                     do {
@@ -107,7 +111,7 @@ struct MixedSearchView: View {
             }
             Spacer(minLength: 0)
             if opening == result.id { ProgressView() }
-        }.padding(.vertical, 5).contentShape(Rectangle()).accessibilityIdentifier("search:" + result.id)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()).accessibilityIdentifier("search:" + result.id)
     }
 
     private var results: [MixedResult] {
@@ -221,7 +225,7 @@ struct OnlineArtistView: View {
                 Text("Albums & singles").font(.headline)
                 ForEach(result.albums) { album in
                     Button { router.go(.catalogAlbum(album)) } label: {
-                        HStack { PlaylistCover(url: album.artwork).frame(width: 56, height: 56); VStack(alignment: .leading) { Text(album.title); SearchSubtitle(type: "Album", creator: album.artist, explicit: album.explicit == true) }; Spacer() }
+                        HStack { PlaylistCover(url: album.artwork).frame(width: 56, height: 56); VStack(alignment: .leading) { Text(album.title); SearchSubtitle(type: "Album", creator: album.artist, explicit: album.explicit == true) }; Spacer() }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }
             }.padding(16)

@@ -71,8 +71,31 @@ struct AppearanceView: View {
                     PlayButton(playing: true, size: 46) {}
                 }
             }
+            Section { AppIconSettingsLink() }
+            ForEach(["Everyday", "Kids"], id: \.self) { group in
+                Section(group == "Kids" ? "Made for little listeners" : "Ready-made looks") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(themePresets.filter { $0.group == group }) { preset in
+                                Button { app.theme = preset.applying(to: app.theme) } label: {
+                                    VStack(spacing: 8) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 12).fill(Color(hex: preset.background))
+                                            Text(preset.symbol).font(.system(size: 32)).foregroundStyle(Color(hex: preset.accent))
+                                        }.frame(width: 104, height: 72)
+                                        Text(preset.name).text(.label).foregroundStyle(p.text)
+                                    }.padding(8)
+                                        .background(p.tint, in: RoundedRectangle(cornerRadius: 16))
+                                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(preset.matches(app.theme) ? p.accent : .clear, lineWidth: 2))
+                                        .contentShape(Rectangle())
+                                }.buttonStyle(.plain).accessibilityAddTraits(preset.matches(app.theme) ? .isSelected : [])
+                            }
+                        }.padding(.vertical, 4)
+                    }
+                }
+            }
             Section("Theme") {
-                Picker("Theme", selection: $app.theme.mode) { ForEach(ThemeMode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented)
+                Picker("Theme", selection: Binding(get: { app.theme.mode }, set: { app.theme.mode = $0; app.theme.backdrop = nil })) { ForEach(ThemeMode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.menu)
             }
             Section("Accent colour") {
                 Picker("Source", selection: $app.theme.accentSource) { ForEach(AccentSource.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented)
@@ -153,8 +176,8 @@ struct EqualizerView: View {
                 SectionHeader(title: "Sound")
                 VStack(spacing: 14) {
                     slider("Bass boost", value: $player.eq.bass, range: 0...1, label: "\(Int(player.eq.bass * 100))%")
-                    slider("Loudness", value: $player.eq.loudness, range: 0...10, label: String(format: "+%.1f dB", player.eq.loudness))
-                    Toggle(isOn: $player.eq.limiter) { VStack(alignment: .leading) { Text("Clipping protection").text(.body); Text("A limiter so boosted bands never distort").text(.caption).foregroundStyle(p.secondary) } }
+                    Label("Clipping protection is always on", systemImage: "checkmark.shield.fill").text(.body)
+                    Text("Boosted bands get extra headroom so they cannot turn the whole song up unexpectedly.").text(.caption).foregroundStyle(p.secondary)
                 }.padding(.horizontal, 16)
             }.padding(.bottom, 30)
         }

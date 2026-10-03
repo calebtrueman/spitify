@@ -184,5 +184,26 @@ final class StreamingTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: ListeningCache.file(key).path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: ListeningCache.directory.appendingPathComponent(key + ".partial").path))
     }
+    @MainActor func testMislabeledOpusRangesStreamAndCacheTheSameAudio() async throws {
+        guard let base = ProcessInfo.processInfo.environment["SPITIFY_STREAM_TEST_BASE"] else { throw XCTSkip("Needs the local slow audio fixture server") }
+        var item = track(UUID().uuidString); item.audioExtension = "flac"
+        let url = URL(string: base + "/stream.ogg?ranges=1")!
+        let loader = MusicResourceLoader(track: item, sourceURL: { _ in url }, alternate: { _ in
+            XCTFail("Supported Opus bytes must not be replaced by another source"); return nil
+        })
+        let player = AVPlayer(playerItem: AVPlayerItem(asset: loader.asset())); player.volume = 0
+        player.playImmediately(atRate: 1)
+        let deadline = Date().addingTimeInterval(25)
+        while player.currentTime().seconds < 0.15 && player.currentItem?.status != .failed && Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNil(player.currentItem?.error)
+        XCTAssertGreaterThan(player.currentTime().seconds, 0.1)
+        let cached = ListeningCache.file(ListeningCache.key(item))
+        while !FileManager.default.fileExists(atPath: cached.path) && Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
+        player.pause(); player.replaceCurrentItem(with: nil); loader.stop(); await barrier()
+        defer { try? FileManager.default.removeItem(at: cached) }
+        let file = try AVAudioFile(forReading: cached)
+        XCTAssertEqual(file.fileFormat.streamDescription.pointee.mFormatID, kAudioFormatOpus)
+        XCTAssertEqual(Double(file.length) / file.processingFormat.sampleRate, 30, accuracy: 0.1)
+    }
     private func barrier() async { await withCheckedContinuation { continuation in ListeningCache.queue.async { continuation.resume() } } }
 }

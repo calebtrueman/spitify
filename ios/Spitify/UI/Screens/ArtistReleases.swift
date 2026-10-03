@@ -19,7 +19,8 @@ struct ArtistReleasesView: View {
                         HStack(spacing: 12) {
                             PlaylistCover(url: notice.album.artwork).frame(width: 56, height: 56)
                             VStack(alignment: .leading) { Text(notice.album.title).foregroundStyle(.primary); SearchSubtitle(type: "Album", creator: notice.artist.name, explicit: notice.album.explicit == true) }
-                        }
+                            Spacer(minLength: 0)
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }
             }
@@ -32,11 +33,31 @@ struct ArtistReleasesView: View {
 
 struct ArtistLandingView: View {
     var name: String
+    @Environment(AppModel.self) private var app
     @State private var artist: OnlineArtist?
+    @State private var loading = true
+    @State private var failed = false
+    @State private var retry = 0
     var body: some View {
-        Group { if let artist { OnlineArtistView(artist: artist) } else { ArtistView(name: name) } }
-            .task(id: name) {
-                if let found = try? await MonochromeClient().searchAll(name) { artist = found.artists.first { SearchMatch.fold($0.name) == SearchMatch.fold(name) } }
+        Group {
+            if let artist { OnlineArtistView(artist: artist) }
+            else if app.library.library.artistByName[name] != nil { ArtistView(name: name) }
+            else if loading { ProgressView("Finding artist…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else {
+                VStack {
+                    EmptyState(title: failed ? "Couldn't load artist" : "No artist page found", message: failed ? "Check your connection and try again." : "Try searching for the artist by name.", icon: "person")
+                    Button("Try again") { retry += 1 }.buttonStyle(.bordered)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .task(id: "\(name):\(retry)") {
+            artist = nil; loading = true; failed = false
+            do {
+                let found = try await MonochromeClient().searchAll(name)
+                guard !Task.isCancelled else { return }
+                artist = found.artists.first { SearchMatch.fold($0.name) == SearchMatch.fold(name) }
+            } catch { guard !Task.isCancelled else { return }; failed = true }
+            loading = false
+        }
     }
 }

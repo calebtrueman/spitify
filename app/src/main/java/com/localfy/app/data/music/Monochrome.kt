@@ -1,5 +1,6 @@
 package com.localfy.app.data.music
 
+import com.localfy.app.data.ArtistCredits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -14,9 +15,11 @@ data class OnlineTrack(
     val releaseId: String, val durationMs: Long, val track: Int, val disc: Int,
     val artwork: String?, val playable: Boolean, val albumArtist: String? = null,
     val audioURL: String? = null, val audioExtension: String = "flac", val fallbackTried: Boolean = false, val attemptedSources: List<String> = emptyList(), val retryCount: Int = 0, val retryAtMillis: Long = 0, val explicit: Boolean? = null,
+    val artistNames: List<String>? = null,
 ) {
+    val primaryArtist: String get() = ArtistCredits.names(artist, artistNames, albumArtist).firstOrNull() ?: artist
     fun json(): String = JSONObject().apply {
-        put("trackId", id); put("title", title); put("artistNames", org.json.JSONArray(listOf(artist)))
+        put("trackId", id); put("title", title); put("artistNames", org.json.JSONArray(artistNames ?: listOf(artist))); put("separateArtistNames", artistNames != null)
         put("albumTitle", album); put("releaseId", releaseId); put("duration", durationMs)
         put("explicit", explicit)
         put("retryCount", retryCount); put("retryAtMillis", retryAtMillis); put("attemptedSources", org.json.JSONArray(attemptedSources)); put("audioURL", audioURL); put("audioExtension", audioExtension); put("fallbackTried", fallbackTried); put("albumArtist", albumArtist); put("trackNumber", track); put("discNumber", disc); put("artwork", artwork); put("playable", playable)
@@ -103,24 +106,29 @@ object Monochrome {
         val id = item.optString("trackId", item.optString("id"))
         if (!validId(id) || !item.has("title")) return null
         val artist = artist(item).let { if (it == "Unknown artist" && album != null) artist(album) else it }
+        val names = artistNames(item).ifEmpty { album?.let(::artistNames).orEmpty() }
+        // Old saved entries flattened the whole credit into one array item.
+        val structuredNames = names.takeUnless { names.size == 1 && item.has("audioExtension") && !item.optBoolean("separateArtistNames", false) }
         return OnlineTrack(id, item.getString("title"), artist, album?.optString("title") ?: item.optString("albumTitle"),
             item.optString("releaseId", album?.optString("releaseId") ?: ""), item.optLong("duration"),
             item.optInt("trackNumber", 0), item.optInt("discNumber", 1),
             item.optString("artwork", album?.optString("artwork") ?: "").takeIf { it.startsWith("https://") },
             item.optBoolean("playable", true),
             item.optString("albumArtist").takeIf { it.isNotBlank() && it != "null" }
-                ?: album?.let { artist(it) }?.takeIf { it != "Unknown artist" },
+                ?: album?.let { artistNames(it).firstOrNull() },
             item.optString("audioURL").takeIf { AudioFallback.validAudioURL(it) },
-            item.optString("audioExtension").takeIf { it in listOf("m4a", "mp3") } ?: "flac", item.optBoolean("fallbackTried", false),
-            item.optJSONArray("attemptedSources")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), item.optInt("retryCount", 0), item.optLong("retryAtMillis", 0), item.flag("explicit"))
+            item.optString("audioExtension").takeIf { it in listOf("m4a", "mp3", "opus", "ogg", "aac", "wav", "aiff") } ?: "flac", item.optBoolean("fallbackTried", false),
+            item.optJSONArray("attemptedSources")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), item.optInt("retryCount", 0), item.optLong("retryAtMillis", 0), item.flag("explicit"), structuredNames?.takeIf { it.isNotEmpty() })
     }
 
-    private fun artist(item: JSONObject): String {
+    private fun artistNames(item: JSONObject): List<String> {
         val names = item.optJSONArray("artistNames")
-        if (names != null && names.length() > 0) return (0 until names.length()).joinToString(", ") { names.getString(it) }
-        val artists = item.optJSONArray("artists") ?: return "Unknown artist"
-        return (0 until artists.length()).joinToString(", ") { artists.getJSONObject(it).optString("name", "Unknown artist") }.ifEmpty { "Unknown artist" }
+        if (names != null && names.length() > 0) return (0 until names.length()).map { names.optString(it).trim() }.filter { it.isNotEmpty() }
+        val artists = item.optJSONArray("artists") ?: return emptyList()
+        return (0 until artists.length()).map { artists.getJSONObject(it).let { artist -> artist.optString("name", artist.optString("displayName")).trim() } }.filter { it.isNotEmpty() }
     }
+    private fun artist(item: JSONObject): String = artistNames(item).joinToString(", ").ifEmpty { "Unknown artist" }
+
 }
 
 data class FlacInfo(val sampleRate: Int, val bits: Int, val durationMs: Long) {

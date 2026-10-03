@@ -48,7 +48,9 @@ fun MusicVideoBackdrop() {
     val song = rememberCurrentSong()
     val playback = rememberPlayerState()
     val latestPlayback by rememberUpdatedState(playback)
-    val syncScript by rememberUpdatedState("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying},${playback.speed});")
+    val reduceMotion = com.localfy.app.ui.theme.LocalThemeSettings.current.reduceMotion || !android.animation.ValueAnimator.areAnimatorsEnabled()
+    val latestReduceMotion by rememberUpdatedState(reduceMotion)
+    val syncScript by rememberUpdatedState("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying},${playback.speed},${latestReduceMotion});")
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var visible by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
@@ -67,13 +69,13 @@ fun MusicVideoBackdrop() {
         if (!visible) return@LaunchedEffect
         app.player.positionMs.collect { position ->
             val state = latestPlayback
-            view.evaluateJavascript("if(window.spitifySync) spitifySync(${position / 1000.0},${state.isPlaying},${state.speed});", null)
+            view.evaluateJavascript("if(window.spitifySync) spitifySync(${position / 1000.0},${state.isPlaying},${state.speed},${latestReduceMotion});", null)
         }
     }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) visible = true
-            if (event == Lifecycle.Event.ON_PAUSE) { visible = false; webView?.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1);", null) }
+            if (event == Lifecycle.Event.ON_PAUSE) { visible = false; webView?.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1,${latestReduceMotion});", null) }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
@@ -110,7 +112,8 @@ fun MusicVideoBackdrop() {
                         webChromeClient = object : WebChromeClient() {
                             override fun onConsoleMessage(event: ConsoleMessage): Boolean {
                                 when (event.message()) {
-                                    "SPITIFY_VIDEO_READY" -> loading = false
+                                    "SPITIFY_VIDEO_READY" -> if (video?.id == clip.id) loading = false
+                                    "SPITIFY_VIDEO_WAITING" -> if (video?.id == clip.id) loading = true
                                     "SPITIFY_VIDEO_ERROR" -> if (video?.id == clip.id) tryNextVideo()
                                 }
                                 return true
@@ -120,11 +123,11 @@ fun MusicVideoBackdrop() {
                         webView = this
                     }
                 }, modifier = Modifier.fillMaxSize().then(Modifier.graphicsLayer { alpha = if (loading) 0f else 1f }), onReset = null, onRelease = { view ->
-                    view.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1);", null)
+                    view.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1,${latestReduceMotion});", null)
                     view.webChromeClient = null; view.webViewClient = WebViewClient()
                     VideoWebCache.store(view, clip.id)
                     if (webView === view) webView = null
-                }, update = { view -> view.evaluateJavascript("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying && visible},${playback.speed});", null) })
+                }, update = { view -> view.evaluateJavascript("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying && visible},${playback.speed},${latestReduceMotion});", null) })
             }
         }
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
@@ -133,17 +136,15 @@ fun MusicVideoBackdrop() {
 
 @SuppressLint("SetJavaScriptEnabled", "StaticFieldLeak")
 internal object VideoWebCache {
-    private var cached: Pair<String, WebView>? = null
+    private val cache = VideoSurfaceCache<WebView> { it.stopLoading(); it.destroy() }
     fun prepare(context: android.content.Context, id: String) {
-        if (cached?.first != id) store(make(context, id), id)
+        cache.prepare(id) { make(context, id) }
     }
     fun take(context: android.content.Context, id: String): WebView {
-        cached?.takeIf { it.first == id }?.let { cached = null; return it.second }
-        return make(context, id)
+        return cache.take(id) { make(context, id) }
     }
     fun store(view: WebView, id: String) {
-        cached?.second?.takeIf { it !== view }?.let { it.stopLoading(); it.destroy() }
-        cached = id to view
+        cache.store(view, id)
     }
     private fun make(context: android.content.Context, id: String): WebView = WebView(context.applicationContext).apply {
         settings.javaScriptEnabled = true; settings.mediaPlaybackRequiresUserGesture = false

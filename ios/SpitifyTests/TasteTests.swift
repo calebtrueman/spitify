@@ -73,4 +73,15 @@ final class TasteTests: XCTestCase {
         XCTAssertEqual(m.topArtists.first, "Juniper Fields")
         XCTAssertTrue(PlaylistGenerator.generate(m).contains { $0.title == "This Is Juniper Fields" })
     }
+    func testGuestCreditSharesTheMainArtistTasteAndCanBeHidden() {
+        var duet = song("Neon Harbor, Mira Sol", "Synthwave")
+        duet.artistNames = ["Neon Harbor", "Mira Sol"]
+        let model = TasteModel(TasteInput(songs: [synth[0], duet], listens: [listen(duet, daysAgo: 0)], liked: [], now: now))
+        XCTAssertEqual(model.topArtists.first, "Neon Harbor")
+        XCTAssertFalse(model.topArtists.contains(duet.artist))
+        XCTAssertTrue(PlaylistGenerator.artistRadio(model, "Mira Sol").contains { $0.id == duet.id })
+        let hidden = TasteModel(TasteInput(songs: [duet], listens: [], liked: [], hiddenArtists: ["Mira Sol"], now: now))
+        XCTAssertTrue(hidden.hidden(duet))
+    }
+
 }

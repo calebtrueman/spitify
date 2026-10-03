@@ -38,6 +38,7 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
             album = incoming.album.ifBlank { previous.album },
             releaseId = incoming.releaseId.ifBlank { previous.releaseId },
             albumArtist = incoming.albumArtist ?: previous.albumArtist,
+            artistNames = incoming.artistNames ?: previous.artistNames,
             artwork = incoming.artwork ?: previous.artwork,
         )
         if (tracks[track.id] != track) {
@@ -58,10 +59,10 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
     private fun publish() { _saved.value = savedIds.mapNotNull(tracks::get).map(::song) }
     fun song(track: OnlineTrack) = Song(
         id = streamId(track.id), title = track.title, artist = track.artist, album = track.album,
-        albumId = streamId("album:" + track.releaseId), albumArtist = track.albumArtist ?: track.artist,
+        albumId = streamId("album:" + track.releaseId), albumArtist = track.albumArtist ?: track.primaryArtist,
         durationMs = track.durationMs, track = track.track, disc = track.disc, year = 0, genre = null,
         folder = "", dateAddedSec = prefs.getLong("added:${track.id}", 0), sizeBytes = 0, mimeType = null,
-        sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork, explicit = track.explicit,
+        sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork, explicit = track.explicit, artistNames = track.artistNames,
     )
     internal fun lastSource(track: OnlineTrack): OnlineTrack = prefs.getString("source:${track.id}", null)?.let {
         runCatching { Monochrome.parseTrack(JSONObject(it)) }.getOrNull()
@@ -117,7 +118,7 @@ internal class MusicStreamDataSource(private val context: Context,
                 .setUpstreamDataSourceFactory(upstreamFactory).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR).createDataSource()
             try {
                 val length = openSource(cached, dataSpec.buildUpon().setUri(url).setKey(url).build())
-                if (dataSpec.position == 0L && (length < 0 || length >= 12)) {
+                if (dataSpec.position == 0L) {
                     val first = ByteArray(12)
                     var count = 0
                     while (count < first.size) {
@@ -125,7 +126,7 @@ internal class MusicStreamDataSource(private val context: Context,
                         if (n < 0) break
                         count += n
                     }
-                    if (count >= 12 && !audioHeader(first)) {
+                    if (count < 12 || !audioHeader(first)) {
                         close(); ListeningCache.get(context).removeResource(url)
                         throw IOException("The source did not return audio")
                     }
@@ -154,9 +155,5 @@ internal class MusicStreamDataSource(private val context: Context,
     override fun getUri(): Uri? = source?.uri
     override fun getResponseHeaders(): Map<String, List<String>> = source?.responseHeaders ?: emptyMap()
     override fun close() { try { source?.close() } finally { source = null; prefix = ByteArray(0); prefixOffset = 0 } }
-    private fun audioHeader(bytes: ByteArray): Boolean =
-        bytes.copyOfRange(0, 4).toString(Charsets.US_ASCII) in listOf("fLaC", "RIFF") ||
-        bytes.copyOfRange(0, 3).toString(Charsets.US_ASCII) == "ID3" ||
-        bytes.copyOfRange(4, 8).toString(Charsets.US_ASCII) == "ftyp" ||
-        ((bytes[0].toInt() and 255) == 255 && (bytes[1].toInt() and 224) == 224)
+    private fun audioHeader(bytes: ByteArray): Boolean = AudioContainer.detect(bytes) != null
 }

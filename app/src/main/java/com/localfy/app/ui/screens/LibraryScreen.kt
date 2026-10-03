@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.NewReleases
+import androidx.compose.material.icons.rounded.PeopleAlt
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -135,11 +138,19 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     ) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
             Column(Modifier.statusBarsPadding()) {
-                Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Your Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                    androidx.compose.material3.TextButton(onClick = { app.navigate("releases") }) { Text("New releases") }
-                    androidx.compose.material3.TextButton(onClick = { app.navigate(Routes.FRIENDS) }) { Text("Friends") }
-                    IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val compact = maxWidth < 480.dp
+                    Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Your Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                        if (compact) {
+                            IconButton(onClick = { app.navigate("releases") }) { Icon(Icons.Rounded.NewReleases, "New releases") }
+                            IconButton(onClick = { app.navigate(Routes.FRIENDS) }) { Icon(Icons.Rounded.PeopleAlt, "Friends") }
+                        } else {
+                            androidx.compose.material3.TextButton(onClick = { app.navigate("releases") }) { Text("New releases") }
+                            androidx.compose.material3.TextButton(onClick = { app.navigate(Routes.FRIENDS) }) { Text("Friends") }
+                        }
+                        IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
+                    }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(Filter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = if (filter == f) null else f }) }
@@ -190,6 +201,9 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
         }
 
         if (filter == Filter.Songs) {
+            if (songs.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }, key = "empty-songs") {
+                com.localfy.app.ui.components.EmptyState("No songs yet", "Find music in Search, then add it to your library. You can also import your own files.")
+            }
             items(songs.size, key = { "s${songs[it].id}" }) { i ->
                 val s = songs[i]
                 SongRow(
@@ -199,6 +213,9 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
                 )
             }
         } else {
+            if (filter != null && filter != Filter.Playlists && entries.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }, key = "empty-library") {
+                com.localfy.app.ui.components.EmptyState("No ${filter!!.label.lowercase()} yet", "Add music to your library to see it here.")
+            }
             items(entries, key = { it.key }) { e ->
                 if (grid) {
                     Box(Modifier.padding(4.dp)) {

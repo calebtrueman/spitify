@@ -6,6 +6,7 @@ object AlbumGrouping {
 
     fun merge(source: List<Song>): List<Song> {
         val songs = source.map { if (it.album.isBlank()) it.copy(album = "Unknown album") else it }
+        val known = songs.flatMap { it.artistNames ?: listOf(albumArtist(it.albumArtist), albumArtist(it.artist)) }.filterNot { ',' in it }
         val creditsByAlbum = songs.groupBy { it.album.trim().lowercase() }
             .mapValues { (_, tracks) -> tracks.map { albumArtist(it.albumArtist) }.distinct().sortedByDescending { it.length } }
         val normalized = songs.map { song ->
@@ -13,7 +14,9 @@ object AlbumGrouping {
             // A comma can belong to an artist's name. Only remove a guest when this same
             // album also contains a track credited to that exact main artist.
             val main = creditsByAlbum[song.album.trim().lowercase()]?.firstOrNull { credit.startsWith("$it, ", ignoreCase = true) } ?: credit
-            song.copy(albumArtist = main)
+            val names = ArtistCredits.names(song.artist, song.artistNames, main, known)
+            val primary = names.firstOrNull() ?: song.artist
+            song.copy(albumArtist = if (main.isBlank() || main.equals(song.artist, true)) primary else main, artistNames = names)
         }
         val groups = normalized.groupBy { it.album.trim().lowercase() + "\u0000" + it.albumArtist.lowercase() }
         val mapped = mutableMapOf<Long, Song>()

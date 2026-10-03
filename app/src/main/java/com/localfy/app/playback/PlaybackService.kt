@@ -58,6 +58,7 @@ class PlaybackService : MediaLibraryService() {
     private val app get() = application as com.localfy.app.LocalfyApp
     private lateinit var player: ExoPlayer
     private var crossfader: Crossfader? = null
+    private var volume: PlaybackVolume? = null
     private var effects: AudioEffectsEngine? = null
 
     @OptIn(UnstableApi::class)
@@ -73,12 +74,14 @@ class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
+        volume = PlaybackVolume(player)
         effects = AudioEffectsEngine(this)
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) = publishAudioSession(audioSessionId)
 
             // Unsupported/corrupt file or dropped stream: move on instead of stalling the queue.
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                app.player.markUnplayable(player.currentMediaItem?.mediaId?.toLongOrNull())
                 if (player.hasNextMediaItem()) {
                     player.seekToNextMediaItem()
                     player.prepare()
@@ -87,7 +90,7 @@ class PlaybackService : MediaLibraryService() {
             }
         })
         publishAudioSession(player.audioSessionId)
-        crossfader = Crossfader(this, player, attributes, ::resolve).also { it.start() }
+        crossfader = Crossfader(this, player, attributes, ::resolve, checkNotNull(volume)) { app.player.sleepTimer.value != SleepTimer.EndOfTrack }.also { it.start() }
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -100,6 +103,7 @@ class PlaybackService : MediaLibraryService() {
             .setSessionActivity(openApp)
             .setBitmapLoader(CacheBitmapLoader(artLoader))
             .build()
+        AudioSessionHolder.platformToken = session?.platformToken
 
         // Started by a car/Bluetooth/Assistant with the phone UI closed: bring the rest of the app up
         // so play counts, resume positions and the saved queue keep working.
@@ -205,6 +209,8 @@ class PlaybackService : MediaLibraryService() {
         scope.cancel()
         app.appScope.launch { app.lockScreenArt.restore() }
         crossfader?.release()
+        volume?.release()
+        AudioSessionHolder.platformToken = null
         effects?.release()
         s.player.release()
         s.release()
@@ -217,7 +223,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(SessionCommand(CMD_SHUFFLE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_BACK, Bundle.EMPTY))
                 .add(SessionCommand(CMD_FORWARD, Bundle.EMPTY))
-                .apply { if (controller.packageName == packageName) add(SessionCommand(CMD_SKIP_SILENCE, Bundle.EMPTY)) }
+                .apply { if (controller.packageName == packageName) { add(SessionCommand(CMD_SKIP_SILENCE, Bundle.EMPTY)); add(SessionCommand(CMD_SLEEP_GAIN, Bundle.EMPTY)) } }
                 .build()
             val st = app.player.state.value
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
@@ -234,6 +240,7 @@ class PlaybackService : MediaLibraryService() {
             args: Bundle,
         ): ListenableFuture<SessionResult> {
             when (customCommand.customAction) {
+                CMD_SLEEP_GAIN -> volume?.setSleep(args.getFloat(EXTRA_GAIN, 1f))
                 CMD_SKIP_SILENCE -> player.skipSilenceEnabled = args.getBoolean(EXTRA_ENABLED)
                 CMD_SHUFFLE -> app.player.toggleShuffle()
                 CMD_BACK -> player.seekTo((player.currentPosition - 10_000).coerceAtLeast(0))
@@ -350,6 +357,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     companion object {
+        const val CMD_SLEEP_GAIN = "spitify.sleep_gain"
+        const val EXTRA_GAIN = "gain"
         const val CMD_SKIP_SILENCE = "localfy.skip_silence"
         const val CMD_LIKE = "spitify.like"
         const val CMD_SHUFFLE = "spitify.shuffle"
@@ -360,15 +369,23 @@ class PlaybackService : MediaLibraryService() {
 }
 
 /**
- * Player with every format we can decode: platform codecs first, then the bundled FFmpeg decoders
- * (ALAC, AC-3/E-AC-3, DTS, TrueHD, plus fallbacks) and our AIFF extractor on top of Media3's own.
+ * Prefer the bundled decoders for consistent sample formats across phone and Bluetooth hardware.
+ * Platform codecs remain available for formats the bundled decoders do not handle.
  */
 @OptIn(UnstableApi::class)
-fun buildPlayer(context: android.content.Context): ExoPlayer.Builder =
+fun buildPlayer(context: android.content.Context, extraAudioProcessors: Array<androidx.media3.common.audio.AudioProcessor> = emptyArray()): ExoPlayer.Builder =
     ExoPlayer.Builder(
         context,
-        androidx.media3.exoplayer.DefaultRenderersFactory(context)
-            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
+            override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParameters: Boolean): androidx.media3.exoplayer.audio.AudioSink =
+                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(false)
+                    .setAudioProcessors(arrayOf<androidx.media3.common.audio.AudioProcessor>(VolumeNormalizer {
+                        context.getSharedPreferences(PlayerPrefs.FILE, android.content.Context.MODE_PRIVATE).getBoolean(PlayerPrefs.NORMALIZE_AUDIO, true)
+                    }) + extraAudioProcessors)
+                    .build()
+        }
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             .setEnableDecoderFallback(true),
         androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalfyExtractors)
             .setDataSourceFactory(com.localfy.app.data.music.ListeningCache.factory(context)),
@@ -376,5 +393,6 @@ fun buildPlayer(context: android.content.Context): ExoPlayer.Builder =
 
 /** Same-process handoff of the ExoPlayer audio session so the UI can open the system equaliser. */
 object AudioSessionHolder {
+    @Volatile var platformToken: android.media.session.MediaSession.Token? = null
     @Volatile var id: Int = C.AUDIO_SESSION_ID_UNSET
 }

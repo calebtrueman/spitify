@@ -16,13 +16,15 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.14"
-    CURRENT_PROJECT_VERSION: "18"
+    MARKETING_VERSION: "1.0.15"
+    CURRENT_PROJECT_VERSION: "19"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
     SPITIFY_CARPLAY_ENTITLEMENTS: ""
-    CODE_SIGN_ENTITLEMENTS: "$(SPITIFY_CARPLAY_ENTITLEMENTS)"
+    # Override with Spitify/Siri.entitlements for a Siri-enabled signing profile.
+    SPITIFY_APP_ENTITLEMENTS: "$(SPITIFY_CARPLAY_ENTITLEMENTS)"
+    CODE_SIGN_ENTITLEMENTS: "$(SPITIFY_APP_ENTITLEMENTS)"
 targets:
   Spitify:
     type: application
@@ -30,6 +32,8 @@ targets:
     sources:
       - path: Spitify
       - path: ../licenses
+        buildPhase: resources
+      - path: ../shared/icons/icon-catalog.json
         buildPhase: resources
       - path: ../shared/video/music-video.html
         buildPhase: resources
@@ -45,6 +49,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.calebtrueman.spitify
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "Vinyl_no_landlords Vinyl_skip_fees Vinyl_no_ads Vinyl_your_music Vinyl_green Vinyl_moon Vinyl_sun Vinyl_mountain Vinyl_ocean Vinyl_flower Vinyl_lightning Vinyl_cassette Vinyl_fire Vinyl_aurora Vinyl_rocket Vinyl_dino Vinyl_race Vinyl_butterfly Vinyl_unicorn Vinyl_cat Vinyl_robot Vinyl_rainbow Vinyl_soccer Vinyl_frog"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Spitify/Resources/Info.plist

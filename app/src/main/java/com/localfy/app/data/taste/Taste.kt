@@ -84,16 +84,16 @@ class TasteModel(val input: TasteInput) {
             }
         }
         // Cold start: artists picked during setup count as a few listens each.
-        if (input.seedArtists.isNotEmpty()) input.songs.filter { it.artist in input.seedArtists }.forEach { songScore.merge(it.id, 0.8, Double::plus) }
+        if (input.seedArtists.isNotEmpty()) input.songs.filter { it.creditedArtists.any { name -> name in input.seedArtists } }.forEach { songScore.merge(it.id, 0.8, Double::plus) }
 
         for ((id, sc) in songScore) {
             val s = byId[id] ?: continue
-            artistScore.merge(s.artist, sc, Double::plus)
+            artistScore.merge(s.primaryArtist, sc, Double::plus)
             s.genreKey()?.let { genreScore.merge(it, sc, Double::plus) }
             s.decade()?.let { decadeScore.merge(it, sc, Double::plus) }
         }
         // Many songs by one artist shouldn't drown everyone else out.
-        artistScore.replaceAll { a, v -> v / sqrt(input.songs.count { it.artist == a }.coerceAtLeast(1).toDouble()).coerceAtLeast(1.0) * 1.5 }
+        artistScore.replaceAll { a, v -> v / sqrt(input.songs.count { it.primaryArtist == a }.coerceAtLeast(1).toDouble()).coerceAtLeast(1.0) * 1.5 }
 
         // Sessions: listens less than 30 minutes apart; nearby positive listens are related.
         val positive = input.listens.filter { !it.skipped && it.songId in byId }.sortedBy { it.at }
@@ -105,7 +105,7 @@ class TasteModel(val input: TasteInput) {
                 val w = 1.0 / (j - i)
                 co.getOrPut(a) { HashMap() }.merge(b, w, Double::plus)
                 co.getOrPut(b) { HashMap() }.merge(a, w, Double::plus)
-                val aa = byId[a]!!.artist; val ba = byId[b]!!.artist
+                val aa = byId[a]!!.primaryArtist; val ba = byId[b]!!.primaryArtist
                 if (aa != ba) {
                     artistCo.getOrPut(aa) { HashMap() }.merge(ba, w, Double::plus)
                     artistCo.getOrPut(ba) { HashMap() }.merge(aa, w, Double::plus)
@@ -133,22 +133,22 @@ class TasteModel(val input: TasteInput) {
     /** How alike two songs are (0..~1.5): shared artist/album/genre/era plus learned co-listening. */
     fun similarity(a: Song, b: Song): Double {
         var s = 0.0
-        if (a.artist == b.artist) s += 0.45
+        if (a.primaryArtist == b.primaryArtist) s += 0.45
         if (a.albumId == b.albumId) s += 0.2
         val ga = a.genreKey(); val gb = b.genreKey()
         if (ga != null && ga == gb) s += 0.25 else if (ga != null && gb != null && ga.split(' ').any { it.length > 2 && it in gb }) s += 0.12
         if (a.decade() != null && a.decade() == b.decade()) s += 0.08
         val c = co[a.id]?.get(b.id) ?: 0.0
         s += 0.6 * c / (c + 1)
-        val ac = artistCo[a.artist]?.get(b.artist) ?: 0.0
+        val ac = artistCo[a.primaryArtist]?.get(b.primaryArtist) ?: 0.0
         s += 0.3 * ac / (ac + 1)
         return s
     }
 
     fun artistSimilarity(a: String, b: String): Double {
         if (a == b) return 1.0
-        val ga = input.songs.filter { it.artist == a }.mapNotNull { it.genreKey() }.toSet()
-        val gb = input.songs.filter { it.artist == b }.mapNotNull { it.genreKey() }.toSet()
+        val ga = input.songs.filter { it.primaryArtist == a }.mapNotNull { it.genreKey() }.toSet()
+        val gb = input.songs.filter { it.primaryArtist == b }.mapNotNull { it.genreKey() }.toSet()
         val jaccard = if (ga.isEmpty() || gb.isEmpty()) 0.0 else ga.intersect(gb).size / ga.union(gb).size.toDouble()
         val c = artistCo[a]?.get(b) ?: 0.0
         return 0.6 * jaccard + 0.6 * c / (c + 1)
@@ -159,15 +159,15 @@ class TasteModel(val input: TasteInput) {
     /** Predicted enjoyment for a song you may not have heard: taste for its artist/genre/era + resemblance to favourites. */
     fun predicted(s: Song): Double {
         val resemblance = favourites.maxOfOrNull { f -> similarity(s, f) * normSong(f.id).coerceAtLeast(0.0) } ?: 0.0
-        return 0.5 * normArtist(s.artist) + 0.3 * normGenre(s.genreKey()) + 0.1 * normDecade(s.decade()) + 0.6 * resemblance
+        return 0.5 * normArtist(s.primaryArtist) + 0.3 * normGenre(s.genreKey()) + 0.1 * normDecade(s.decade()) + 0.6 * resemblance
     }
 
-    fun hidden(s: Song) = s.id in input.hiddenSongs || s.artist in input.hiddenArtists
+    fun hidden(s: Song) = s.id in input.hiddenSongs || s.artist in input.hiddenArtists || s.creditedArtists.any { it in input.hiddenArtists }
 
     /** Top artists by affinity; falls back to library size when there's no history yet. */
     fun topArtists(): List<String> {
         val ranked = artistScore.entries.filter { it.value > 0 && it.key !in input.hiddenArtists }.sortedByDescending { it.value }.map { it.key }
-        val rest = input.songs.groupBy { it.artist }.entries.sortedByDescending { it.value.size }.map { it.key }.filter { it !in ranked && it !in input.hiddenArtists }
+        val rest = input.songs.groupBy { it.primaryArtist }.entries.sortedByDescending { it.value.size }.map { it.key }.filter { it !in ranked && it !in input.hiddenArtists }
         return (ranked + rest).filterNot { it.startsWith("Unknown", true) }
     }
 }
@@ -220,7 +220,7 @@ object PlaylistGenerator {
 
         // ---- This Is <artist> + <artist> Radio for your top artists.
         model.topArtists().take(3).forEachIndexed { i, artist ->
-            val theirs = songs.filter { it.artist == artist }
+            val theirs = songs.filter { artist in it.creditedArtists }
             if (theirs.size >= 5) out += Mix(
                 "thisis:$artist", "This Is $artist", "The essential tracks, ranked by how much you play them.",
                 theirs.sortedByDescending { model.normSong(it.id) * 2 + model.predicted(it) }, MixSection.YourMixes, CoverStyle.Collage, palette[(i + 2) % palette.size],
@@ -284,10 +284,11 @@ object PlaylistGenerator {
 
     fun artistRadio(model: TasteModel, artist: String, songs: List<Song> = model.input.songs.filter { it.playable }): List<Song> {
         val related = model.topArtists().filter { it != artist }.sortedByDescending { model.artistSimilarity(artist, it) }.take(6)
-        val pool = songs.filter { it.artist == artist || it.artist in related }
+        val available = songs.filter { it.playable && !model.hidden(it) }
+        val pool = available.filter { artist !in it.creditedArtists && it.primaryArtist in related }
         return interleave(
-            songs.filter { it.artist == artist }.sortedByDescending { model.normSong(it.id) + model.predicted(it) }.take(20),
-            pool.filter { it.artist != artist }.sortedByDescending { model.predicted(it) + model.artistSimilarity(artist, it.artist) }.take(30),
+            available.filter { artist in it.creditedArtists }.sortedByDescending { model.normSong(it.id) + model.predicted(it) }.take(20),
+            pool.sortedByDescending { model.predicted(it) + model.artistSimilarity(artist, it.primaryArtist) }.take(30),
         )
     }
 
@@ -305,11 +306,11 @@ object PlaylistGenerator {
     private fun diversify(list: List<Song>, maxPerArtist: Int = 3, maxPerAlbum: Int = Int.MAX_VALUE): List<Song> {
         val perArtist = HashMap<String, Int>(); val perAlbum = HashMap<Long, Int>()
         val kept = list.filter { s ->
-            val a = perArtist.merge(s.artist, 1, Int::plus)!!; val b = perAlbum.merge(s.albumId, 1, Int::plus)!!
+            val a = perArtist.merge(s.primaryArtist, 1, Int::plus)!!; val b = perAlbum.merge(s.albumId, 1, Int::plus)!!
             a <= maxPerArtist && b <= maxPerAlbum
         }.toMutableList()
-        for (i in 1 until kept.size) if (kept[i].artist == kept[i - 1].artist) {
-            val swap = (i + 1 until kept.size).firstOrNull { kept[it].artist != kept[i - 1].artist } ?: continue
+        for (i in 1 until kept.size) if (kept[i].primaryArtist == kept[i - 1].primaryArtist) {
+            val swap = (i + 1 until kept.size).firstOrNull { kept[it].primaryArtist != kept[i - 1].primaryArtist } ?: continue
             val t = kept[i]; kept[i] = kept[swap]; kept[swap] = t
         }
         return kept

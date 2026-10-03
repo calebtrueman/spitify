@@ -16,8 +16,8 @@ android {
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        versionCode = 18
-        versionName = "1.0.14"
+        versionCode = 19
+        versionName = "1.0.15"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -42,6 +42,7 @@ android {
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/src/test/resources")
     sourceSets.getByName("main").assets.srcDir("$rootDir/shared/video")
+    sourceSets.getByName("main").assets.srcDir("$rootDir/shared/icons")
     sourceSets.getByName("main").assets.srcDir("$rootDir/licenses")
 }
 

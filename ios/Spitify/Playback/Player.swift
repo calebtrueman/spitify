@@ -14,6 +14,7 @@ final class Player {
     private(set) var queue: [Song] = []
     private(set) var index = -1
     private(set) var manualQueueIndices: Set<Int> = []
+    private(set) var automaticQueueIndices: Set<Int> = []
     private(set) var queueVersion = UUID()
     private(set) var isPlaying = false
     private(set) var position: Double = 0
@@ -24,9 +25,24 @@ final class Player {
     private(set) var sleep: SleepTimer?
     private(set) var message: String?
     private(set) var audioOutput = "Audio output unavailable"
+    var autoplay = UserDefaults.standard.object(forKey: "autoplay") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(autoplay, forKey: "autoplay")
+            if autoplay { refreshAutoplay() } else { removeAutomaticSongs() }
+        }
+    }
+    var normalizeVolume = UserDefaults.standard.object(forKey: "normalizeVolume") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(normalizeVolume, forKey: "normalizeVolume")
+            engine.normalizeVolume = normalizeVolume; stream.normalizeVolume = normalizeVolume
+        }
+    }
     private var roomSpeed: Float?
     var speed: Float { roomSpeed ?? (current?.isSpoken == true ? speedSpoken : speedMusic) }
-    func setRoomPlayback(speed: Float?) { roomSpeed = speed; engine.setRate(self.speed); stream.setRate(self.speed) }
+    func setRoomPlayback(speed: Float?) {
+        roomSpeed = speed; engine.setRate(self.speed); stream.setRate(self.speed)
+        if speed != nil { removeAutomaticSongs() } else { refreshAutoplay() }
+    }
     var lockScreenArt = UserDefaults.standard.object(forKey: "lockScreenArt") as? Bool ?? true {
         didSet { UserDefaults.standard.set(lockScreenArt, forKey: "lockScreenArt"); updateNowPlaying() }
     }
@@ -48,7 +64,8 @@ final class Player {
     var current: Song? { queue.indices.contains(index) ? queue[index] : nil }
     var upNext: [(Int, Song)] { index < 0 ? [] : Array(queue.enumerated().dropFirst(index + 1)) }
     var manuallyQueued: [(Int, Song)] { upNext.filter { manualQueueIndices.contains($0.0) } }
-    var nextFromSource: [(Int, Song)] { upNext.filter { !manualQueueIndices.contains($0.0) } }
+    var nextFromSource: [(Int, Song)] { upNext.filter { !manualQueueIndices.contains($0.0) && !automaticQueueIndices.contains($0.0) } }
+    var automaticallyQueued: [(Int, Song)] { upNext.filter { automaticQueueIndices.contains($0.0) } }
     var hasMedia: Bool { current != nil }
 
     private let engine = EngineBackend()
@@ -62,16 +79,23 @@ final class Player {
     private var listenStarted = Date()
     private var sinceSave = 0.0
     private var fading = false
+    private var failedSongIDs: Set<String> = []
+    private var continuationTask: Task<Void, Never>?
+    private var continuationSeed: String?
+    private var autoplayCleared = false
+    private var handlingRouteChange = false
+    private var resumeAfterInterruption = false
 
     weak var library: LibraryStore?
     weak var shows: ShowsStore?
 
     init() {
+        engine.normalizeVolume = normalizeVolume; stream.normalizeVolume = normalizeVolume
         engine.apply(eq)
         engine.onFinished = { [weak self] in self?.trackEnded() }
         stream.onFinished = { [weak self] in self?.trackEnded() }
         stream.onError = { [weak self] in
-            self?.pause(); self?.flash("Couldn’t play this song. Check your connection and try again.")
+            self?.skipFailedTrack()
         }
         configureSession()
         updateAudioOutput()
@@ -91,6 +115,8 @@ final class Player {
         let usable = songs.filter(\.playable)
         guard !usable.isEmpty else { flash("This format isn't supported on iPhone"); return }
         queueVersion = UUID()
+        continuationTask?.cancel(); continuationSeed = nil; autoplayCleared = false; failedSongIDs = []
+        automaticQueueIndices = []
         let wanted = songs.indices.contains(start) ? songs[start] : usable[0]
         let startIdx = usable.firstIndex(of: wanted) ?? 0
         let doShuffle = wantShuffle ?? shuffle
@@ -158,12 +184,14 @@ final class Player {
     func next() {
         guard !queue.isEmpty else { return }
         endListen(auto: false)
+        refreshAutoplay()
         if index + 1 < queue.count { index += 1 } else if repeatMode == .all { index = 0 } else { pause(); seek(0); return }
         startCurrent(at: 0, play: true)
     }
 
     /// Spotify behaviour: restart if more than 3 s in, else go back.
     func previous() {
+        guard current != nil else { return }
         if position > 3 || index == 0 { seek(0); return }
         endListen(auto: false)
         index -= 1
@@ -205,6 +233,7 @@ final class Player {
 
     private func insertManual(_ songs: [Song], at insertion: Int) {
         guard !songs.isEmpty else { return }
+        automaticQueueIndices = Set(automaticQueueIndices.map { $0 >= insertion ? $0 + songs.count : $0 })
         manualQueueIndices = Set(manualQueueIndices.map { $0 >= insertion ? $0 + songs.count : $0 })
         manualQueueIndices.formUnion(insertion..<(insertion + songs.count))
         queue.insert(contentsOf: songs, at: insertion)
@@ -212,7 +241,10 @@ final class Player {
     }
 
     func appendFromSource(_ songs: [Song]) {
-        queue.append(contentsOf: songs.filter(\.playable))
+        let insertion = automaticQueueIndices.filter { $0 > index }.min() ?? queue.count
+        let usable = songs.filter(\.playable)
+        automaticQueueIndices = Set(automaticQueueIndices.map { $0 >= insertion ? $0 + usable.count : $0 })
+        queue.insert(contentsOf: usable, at: insertion)
         saveQueue()
     }
 
@@ -220,6 +252,7 @@ final class Player {
         guard queue.indices.contains(i), i != index else { return }
         let wasManual = manualQueueIndices.contains(i)
         let song = queue.remove(at: i)
+        automaticQueueIndices = Set(automaticQueueIndices.filter { $0 != i }.map { $0 > i ? $0 - 1 : $0 })
         manualQueueIndices = Set(manualQueueIndices.filter { $0 != i }.map { $0 > i ? $0 - 1 : $0 })
         if i < index { index -= 1 }
         if !wasManual, let original = unshuffled?.firstIndex(of: song) { unshuffled?.remove(at: original) }
@@ -228,6 +261,12 @@ final class Player {
     func move(from: Int, to: Int) {
         guard queue.indices.contains(from), queue.indices.contains(to), from != index else { return }
         let song = queue.remove(at: from); queue.insert(song, at: to)
+        automaticQueueIndices = Set(automaticQueueIndices.map { i in
+            if i == from { return to }
+            if from < to && i > from && i <= to { return i - 1 }
+            if from > to && i >= to && i < from { return i + 1 }
+            return i
+        })
         manualQueueIndices = Set(manualQueueIndices.map { i in
             if i == from { return to }
             if from < to && i > from && i <= to { return i - 1 }
@@ -239,6 +278,8 @@ final class Player {
     }
     func clearUpNext() {
         queueVersion = UUID()
+        continuationTask?.cancel(); autoplayCleared = true
+        automaticQueueIndices = automaticQueueIndices.filter { $0 <= index }
         if index + 1 < queue.count { queue.removeSubrange((index + 1)...) }
         manualQueueIndices = manualQueueIndices.filter { $0 <= index }
         unshuffled = nil
@@ -248,11 +289,13 @@ final class Player {
     /// Shuffle changes the album/library order but keeps manually added songs first.
     func toggleShuffle() {
         guard let cur = current else { setShuffle(!shuffle); return }
+        removeAutomaticSongs()
         let currentWasManual = manualQueueIndices.contains(index)
+        let currentWasAutomatic = automaticQueueIndices.contains(index)
         let manual = manuallyQueued.map(\.1)
-        let background = queue.enumerated().filter { $0.offset != index && !manualQueueIndices.contains($0.offset) }.map(\.element)
+        let background = queue.enumerated().filter { $0.offset != index && !manualQueueIndices.contains($0.offset) && !automaticQueueIndices.contains($0.offset) }.map(\.element)
         if !shuffle {
-            unshuffled = queue.enumerated().filter { !manualQueueIndices.contains($0.offset) }.map(\.element)
+            unshuffled = queue.enumerated().filter { !manualQueueIndices.contains($0.offset) && !automaticQueueIndices.contains($0.offset) }.map(\.element)
             queue = [cur] + manual + background.shuffled()
             index = 0
         } else {
@@ -269,18 +312,27 @@ final class Player {
             index = before.count
             unshuffled = nil
         }
+        automaticQueueIndices = currentWasAutomatic ? [index] : []
         manualQueueIndices = Set((index + 1)..<(index + 1 + manual.count))
         if currentWasManual { manualQueueIndices.insert(index) }
         setShuffle(!shuffle)
+        refreshAutoplay()
         saveQueue()
     }
 
     func cycleRepeat() {
         repeatMode = RepeatMode(rawValue: (repeatMode.rawValue + 1) % 3)!
         UserDefaults.standard.set(repeatMode.rawValue, forKey: "repeat")
+        if repeatMode == .off { refreshAutoplay() } else { removeAutomaticSongs() }
+    }
+
+    func setRepeat(_ mode: RepeatMode) {
+        repeatMode = mode; UserDefaults.standard.set(mode.rawValue, forKey: "repeat")
+        if mode == .off { refreshAutoplay() } else { removeAutomaticSongs() }
     }
 
     func setSpeed(_ r: Float) {
+        guard r.isFinite, (0.5...3).contains(r) else { return }
         if current?.isSpoken == true { speedSpoken = r; UserDefaults.standard.set(r, forKey: "speedSpoken") } else { speedMusic = r; UserDefaults.standard.set(r, forKey: "speedMusic") }
         engine.setRate(r); stream.setRate(r)
         updateNowPlaying()
@@ -304,7 +356,12 @@ final class Player {
 
     private func startCurrent(at seconds: Double, play: Bool) {
         guard let song = current else { return }
-        guard let url = url(for: song) else { stop(); flash("This song is no longer available."); return }
+        guard let url = url(for: song) else {
+            // A standalone Player without a library is also used by queue editors and tests.
+            if library != nil || song.kind == .remote { skipFailedTrack() }
+            else { stop(); flash("This song is no longer available.") }
+            return
+        }
         // Publish the selected song before loading audio; never leave the previous title visible during a load.
         needsLoad = false
         position = seconds; duration = Double(song.durationMs) / 1000; isPlaying = play
@@ -329,9 +386,7 @@ final class Player {
             }
         } catch {
             engine.stop(); stream.stop(); isPlaying = false
-            flash("Can't play “\(song.title)” — skipping")
-            if index + 1 < queue.count { index += 1; startCurrent(at: 0, play: play) }
-            else { updateNowPlaying() }
+            skipFailedTrack()
             return
         }
         engine.setRate(speed); stream.setRate(speed)
@@ -341,18 +396,92 @@ final class Player {
         startTicker()
         updateNowPlaying()
         saveQueue()
+        refreshAutoplay()
     }
 
-    private func trackEnded() {
+    func trackEnded() {
         if fading { return }
         markFinished()
         endListen(auto: true)
         if sleep == .endOfTrack { sleep = nil; pause(); seek(0); return }
         if roomSpeed != nil { pause(); return }
         if repeatMode == .one { startCurrent(at: 0, play: true); return }
+        refreshAutoplay()
         if index + 1 < queue.count { index += 1; startCurrent(at: 0, play: true) }
         else if repeatMode == .all && !queue.isEmpty { index = 0; startCurrent(at: 0, play: true) }
         else { artworkSessionActive = false; artworkIdleTask?.cancel(); isPlaying = false; position = 0; if !usingStream { engine.seek(0) } else { stream.seek(0) }; updateNowPlaying() }
+    }
+
+    private func removeAutomaticSongs() {
+        continuationTask?.cancel(); continuationSeed = nil
+        for i in automaticQueueIndices.filter({ $0 > index }).sorted(by: >) { remove(at: i) }
+    }
+
+    func refreshAutoplay() {
+        guard autoplay, !autoplayCleared, repeatMode == .off, roomSpeed == nil,
+              sleep != .endOfTrack, let song = current, !song.isSpoken, library != nil else { return }
+        let hiddenSongs = library?.hiddenSongs ?? [], hiddenArtists = library?.hiddenArtists ?? []
+        for i in automaticQueueIndices.filter({ $0 > index }).sorted(by: >) {
+            let s = queue[i]
+            if hiddenSongs.contains(s.id) || hiddenArtists.contains(s.artist) || s.creditedArtists.contains(where: hiddenArtists.contains) || failedSongIDs.contains(s.id) { remove(at: i) }
+        }
+        guard upNext.count < 5 else { return }
+        let available = library?.library.songs ?? []
+        let model = TasteModel(TasteInput(songs: available, listens: library?.listens ?? [], liked: Set(library?.liked.keys.map { $0 } ?? []),
+                                         hiddenSongs: hiddenSongs, hiddenArtists: hiddenArtists))
+        let ranked = PlaylistGenerator.songRadio(model, seed: song)
+        appendAutomatic(PlaybackContinuation.songs(seed: song, candidates: ranked + available + queue,
+            history: Array(queue.prefix(index + 1)), upcoming: upNext.map(\.1), hiddenSongs: hiddenSongs,
+            hiddenArtists: hiddenArtists, failed: failedSongIDs, count: 5 - upNext.count))
+        // Fetch artist songs early for a streamed selection, even when the local library is empty.
+        guard MusicStreams.shared.track(song) != nil, continuationSeed != song.id else { return }
+        continuationTask?.cancel(); continuationSeed = song.id
+        let version = queueVersion
+        continuationTask = Task { [weak self] in
+            guard let tracks = try? await MonochromeClient().search(song.primaryArtist), !Task.isCancelled,
+                  let self, self.queueVersion == version, self.current?.id == song.id,
+                  self.autoplay, !self.autoplayCleared, self.repeatMode == .off else { return }
+            let candidates = tracks.filter { $0.playable }.map { MusicStreams.shared.register($0) }
+            let suggestions = PlaybackContinuation.songs(seed: song, candidates: candidates,
+                history: Array(self.queue.prefix(self.index + 1)), upcoming: self.upNext.map(\.1),
+                hiddenSongs: self.library?.hiddenSongs ?? [], hiddenArtists: self.library?.hiddenArtists ?? [],
+                failed: self.failedSongIDs, count: max(0, 8 - self.upNext.count))
+            // Replace a last-resort repeat with new music as soon as it becomes available.
+            if !suggestions.isEmpty {
+                for i in self.automaticQueueIndices.filter({ $0 > self.index && self.queue[$0].id == song.id }).sorted(by: >) { self.remove(at: i) }
+                self.appendAutomatic(suggestions)
+            }
+        }
+    }
+
+    private func appendAutomatic(_ songs: [Song]) {
+        guard !songs.isEmpty else { return }
+        if index > 100, automaticQueueIndices.contains(index), repeatMode == .off {
+            let removed = index - 100
+            queue.removeFirst(removed); index -= removed
+            automaticQueueIndices = Set(automaticQueueIndices.filter { $0 >= removed }.map { $0 - removed })
+            manualQueueIndices = Set(manualQueueIndices.filter { $0 >= removed }.map { $0 - removed })
+            unshuffled = nil
+        }
+        automaticQueueIndices.formUnion(queue.count..<(queue.count + songs.count))
+        queue.append(contentsOf: songs)
+        saveQueue()
+    }
+
+    private func skipFailedTrack() {
+        guard let song = current else { return }
+        failedSongIDs.insert(song.id)
+        engine.stop(); stream.stop(); isPlaying = false
+        flash("Couldn’t play “\(song.title)”. Trying the next song.")
+        refreshAutoplay()
+        let nextIndex = queue.indices.first { $0 > index && !failedSongIDs.contains(queue[$0].id) }
+            ?? (repeatMode == .all ? queue.indices.first { !failedSongIDs.contains(queue[$0].id) } : nil)
+        guard let nextIndex else { needsLoad = true; updateNowPlaying(); return }
+        let version = queueVersion
+        Task { [weak self] in
+            guard let self, self.queueVersion == version, self.current?.id == song.id else { return }
+            self.index = nextIndex; self.startCurrent(at: 0, play: true)
+        }
     }
 
     private func startTicker() {
@@ -372,7 +501,7 @@ final class Player {
         guard isPlaying, playing else { return }
         listenedMs += Int64(250 * Double(speed))
         sinceSave += 0.25
-        if sinceSave >= 5 { sinceSave = 0; saveProgress(); saveQueue() }
+        if sinceSave >= 5 { sinceSave = 0; saveProgress(); saveQueue(); refreshAutoplay() }
 
         // Sleep timer: fade out over the last 10 s.
         if case .at(let end)? = sleep {
@@ -425,6 +554,7 @@ final class Player {
 
     private func saveQueue() {
         let d = UserDefaults.standard
+        d.set(Array(automaticQueueIndices), forKey: "queueAutomaticIndices")
         d.set(Array(manualQueueIndices), forKey: "queueManualIndices")
         d.set(unshuffled?.map(\.id), forKey: "queueUnshuffled")
         d.set(queue.map(\.id), forKey: "queue"); d.set(index, forKey: "queueIndex"); d.set(position, forKey: "queuePosition"); d.set(source, forKey: "queueSource")
@@ -435,13 +565,16 @@ final class Player {
         guard queue.isEmpty else { return }
         let d = UserDefaults.standard
         let savedManual = Set(d.array(forKey: "queueManualIndices") as? [Int] ?? [])
+        let savedAutomatic = Set(d.array(forKey: "queueAutomaticIndices") as? [Int] ?? [])
         let restored = (d.stringArray(forKey: "queue") ?? []).enumerated().compactMap { i, id in lookup(id).map { (i, $0) } }
         let songs = restored.map(\.1)
         guard !songs.isEmpty else { return }
         queue = songs
+        automaticQueueIndices = Set(restored.enumerated().compactMap { i, pair in savedAutomatic.contains(pair.0) ? i : nil })
         manualQueueIndices = Set(restored.enumerated().compactMap { i, pair in savedManual.contains(pair.0) ? i : nil })
         unshuffled = d.stringArray(forKey: "queueUnshuffled")?.compactMap(lookup)
-        index = min(max(0, d.integer(forKey: "queueIndex")), songs.count - 1)
+        let savedIndex = d.integer(forKey: "queueIndex")
+        index = restored.firstIndex(where: { $0.0 >= savedIndex }) ?? songs.count - 1
         source = d.string(forKey: "queueSource")
         position = max(0, d.double(forKey: "queuePosition"))
         duration = Double(current?.durationMs ?? 0) / 1000
@@ -464,8 +597,14 @@ final class Player {
         NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             guard let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
             MainActor.assumeIsolated {
-                if type == .began { self?.pause() }
-                else if let o = n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt, AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) { self?.resume() }
+                guard let self else { return }
+                if type == .began { self.resumeAfterInterruption = self.isPlaying; self.pause() }
+                else {
+                    let shouldResume = self.resumeAfterInterruption
+                    self.resumeAfterInterruption = false
+                    if shouldResume, let o = n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt,
+                       AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) { self.resume() }
+                }
             }
         }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
@@ -478,7 +617,13 @@ final class Player {
             }
         }
         NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine.engine, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.isPlaying == true { self?.engine.startEngine(); self?.engine.play() } }
+            MainActor.assumeIsolated {
+                guard let self, !self.usingStream, !self.needsLoad, self.current != nil, !self.handlingRouteChange else { return }
+                self.handlingRouteChange = true
+                defer { self.handlingRouteChange = false }
+                self.engine.recoverAfterRouteChange(at: self.position, play: self.isPlaying)
+                self.updateAudioOutput()
+            }
         }
     }
 

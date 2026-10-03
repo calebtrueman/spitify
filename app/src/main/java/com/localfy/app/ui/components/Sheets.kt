@@ -127,13 +127,15 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
                     )
                 }
             } else {
-                MenuItem(Icons.Rounded.Album, "Go to album") { onDismiss(); onNavigated(); app.navigate(streamTrack?.let { Routes.catalogAlbum(com.localfy.app.data.music.OnlineAlbum(it.releaseId, it.album, it.artist, it.artwork)) } ?: Routes.album(song.albumId)) }
-                MenuItem(Icons.Rounded.PersonOutline, "Go to artist") { onDismiss(); onNavigated(); app.navigate(Routes.artist(song.artist)) }
+                MenuItem(Icons.Rounded.Album, "Go to album") { onDismiss(); onNavigated(); app.navigate(streamTrack?.let { Routes.catalogAlbum(com.localfy.app.data.music.OnlineAlbum(it.releaseId, it.album, it.albumArtist ?: it.primaryArtist, it.artwork)) } ?: Routes.album(song.albumId)) }
+                song.creditedArtists.forEach { name ->
+                    MenuItem(Icons.Rounded.PersonOutline, if (song.creditedArtists.size == 1) "Go to artist" else "Go to $name") { onDismiss(); onNavigated(); app.navigate(Routes.artist(name)) }
+                }
             }
             if (streamTrack == null && (!song.isPodcast || song.isAudiobook && song.episodeId == null)) MenuItem(Icons.Rounded.Edit, "Edit info & artwork") { onDismiss(); onNavigated(); app.editMetadata(listOf(app.rawFor(song)), false) }
             if (!song.isPodcast) {
                 MenuItem(Icons.Rounded.Block, "Don't recommend this song") { app.taste.hideSong(song.id); onDismiss() }
-                MenuItem(Icons.Rounded.PersonOff, "Don't recommend ${song.artist}") { app.taste.hideArtist(song.artist); onDismiss() }
+                MenuItem(Icons.Rounded.PersonOff, "Don't recommend ${song.primaryArtist}") { app.taste.hideArtist(song.primaryArtist); onDismiss() }
             }
             MenuItem(Icons.Rounded.Info, "Song info") { info = true }
         }

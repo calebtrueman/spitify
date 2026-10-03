@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,7 +47,7 @@ fun RoomsScreen(invite: String? = null) {
                 Text("Everyone streams their own copy. An unavailable song may leave one person silent. Rooms need the host's app to stay connected.")
                 TextButton(onClick = { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, SocialLink("room", room.host, room.id).url), "Invite to Room")) }) { Text("Invite someone") }
                 Text("${room.members.size} guests")
-                if (app.rooms.isHost) Row { Text("Let guests control playback", Modifier.weight(1f)); Switch(room.allowControls, { perform { app.rooms.setControls(it) } }) }
+                if (app.rooms.isHost) Row { Text("Let guests control playback", Modifier.weight(1f)); Switch(room.allowControls, { perform { app.rooms.setControls(it) } }, modifier = Modifier.semantics { contentDescription = "Let guests control playback" }) }
                 if (app.rooms.isHost || room.allowControls) Row {
                     Button(onClick = { perform { app.rooms.control(playing = !room.playing) } }) { Text(if (room.playing) "Pause" else "Play") }
                     TextButton(onClick = { perform { app.rooms.control(next = true) } }) { Text("Next") }

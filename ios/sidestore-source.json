@@ -25,10 +25,20 @@
         "entitlements": [],
         "privacy": {
           "NSAppleMusicUsageDescription": "Spitify can play the songs already downloaded in your Music library.",
-          "NSPhotoLibraryUsageDescription": "Choose a profile picture or custom artwork."
+          "NSPhotoLibraryUsageDescription": "Choose a profile picture or custom artwork.",
+          "NSSiriUsageDescription": "Use Siri to play music and control Spitify."
         }
       },
       "versions": [
+        {
+          "version": "1.0.15",
+          "buildVersion": "19",
+          "date": "2026-10-03T02:51:03Z",
+          "localizedDescription": "Volume normalization is on by default. Fix playback after output changes, read real audio formats, keep queues going, and keep download progress visible. Separate featured artists and make rows easier to tap. Improve layouts, text, buttons, contrast, search, and retry messages throughout the main screens. Add 12 themes, 25 vinyl app icons, realistic record artwork, and a saved artwork-style button. Videos use short muted loops, fill the screen, hide embedded controls, and hold their frame on pause. Keep prepared clips safe when songs change. Add more Siri shortcuts; full Siri music requests require a Siri-enabled signing profile. Physical Bluetooth switching and spoken Siri still need a device check.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.15/Spitify-1.0.15-unsigned.ipa",
+          "size": 88539495,
+          "minOSVersion": "17.0"
+        },
         {
           "version": "1.0.14",
           "buildVersion": "18",

@@ -21,7 +21,7 @@ struct MiniPlayer: View {
                         if !s.isSpoken { PlaylistButton(song: s) }
                         Button { Haptics.tap(); app.player.toggle() } label: {
                             Image(systemName: app.player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
-                                .contentTransition(.symbolEffect(.replace)).frame(width: 40, height: 40)
+                                .contentTransition(.symbolEffect(.replace)).frame(width: 44, height: 44).contentShape(Rectangle())
                         }
                     }
                     .padding(.horizontal, 8).padding(.vertical, 7)
@@ -71,14 +71,14 @@ struct NowPlayingView: View {
                             VStack(spacing: 0) {
                                 header(s)
                                 if videoOpen && !s.isSpoken { Color.clear.frame(maxHeight: .infinity).padding(.vertical, 12) }
-                                else { ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * 0.48))).frame(maxHeight: .infinity).padding(.vertical, 12) }
+                                else { ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * (outer.size.width < 350 ? 0.30 : 0.38)))).frame(maxHeight: .infinity).padding(.vertical, 12) }
                                 titleRow(s)
                                 SeekBar().padding(.top, 6)
                                 Transport().padding(.top, 2)
                                 Secondary(sheet: $sheet).padding(.top, 6).padding(.bottom, 10)
                             }
                             .padding(.horizontal, 22)
-                            .frame(width: outer.size.width, height: outer.size.height)
+                            .frame(width: outer.size.width).frame(minHeight: outer.size.height)
                             cards(s).padding(.horizontal, 16).padding(.bottom, 40).frame(width: outer.size.width)
                         }
                         .background(GeometryReader { geometry in
@@ -134,18 +134,22 @@ struct NowPlayingView: View {
     }
 
     private func titleRow(_ s: Song) -> some View {
-        HStack(alignment: .center) {
+        VStack(alignment: .leading, spacing: 6) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(s.title).text(.headlineS).foregroundStyle(.white).lineLimit(1)
-                Button { if !s.isSpoken { router.go(.artist(s.artist)) } } label: { Text(s.artist).text(.body).foregroundStyle(.white.opacity(0.72)).lineLimit(1) }
+                Text(s.title).text(.headlineS).foregroundStyle(.white).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Button { if !s.isSpoken { router.go(.artist(s.primaryArtist)) } } label: { Text(s.artist).text(.body).foregroundStyle(.white.opacity(0.78)).lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).frame(minHeight: 44, alignment: .top).contentShape(Rectangle()) }
             }
             .id(s.id).transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
-            Spacer()
             if !s.isSpoken {
-                Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "photo" : "video").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Show album art" : "Watch music video")
-                PlaylistButton(song: s)
+                HStack(spacing: 8) {
+                    ArtworkStyleButton(videoEnabled: videoOpen)
+                    Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "photo" : "video").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Show album art" : "Watch music video")
+                    Spacer()
+                    PlaylistButton(song: s)
+                }
             }
         }
+        .foregroundStyle(.white)
         .animation(.spring(duration: 0.35), value: s.id)
     }
 
@@ -186,6 +190,7 @@ struct ArtPager: View {
     var side: CGFloat
     @Environment(AppModel.self) private var app
     @Environment(\.themeSettings) private var theme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var selection = 0
 
     var body: some View {
@@ -208,11 +213,11 @@ struct ArtPager: View {
     }
 
     @ViewBuilder private func cover(_ s: Song, current: Bool) -> some View {
-        let breathe = current && !app.player.isPlaying && !theme.reduceMotion && theme.playerStyle != .vinyl
+        let breathe = current && !app.player.isPlaying && !theme.reduceMotion && !systemReduceMotion && theme.playerStyle != .vinyl
         Group {
             if theme.playerStyle == .vinyl {
-                TimelineView(.animation(paused: !(current && app.player.isPlaying) || theme.reduceMotion)) { ctx in
-                    Vinyl(song: s).rotationEffect(.degrees(current ? ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9) / 9 * 360 : 0))
+                TimelineView(.animation(paused: !(current && app.player.isPlaying) || theme.reduceMotion || systemReduceMotion)) { ctx in
+                    Vinyl(song: s, rotation: current ? ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9) / 9 * 360 : 0)
                 }
             } else {
                 ArtworkView(s, cornerRadius: 10).shadow(color: .black.opacity(0.5), radius: 24, y: 12)
@@ -239,6 +244,7 @@ struct ScrubbableVinyl: View {
     let song: Song
     @Environment(AppModel.self) private var app
     @Environment(\.themeSettings) private var theme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var anchor = Date()
     @State private var rotation = 0.0
     @State private var dragging = false
@@ -248,13 +254,15 @@ struct ScrubbableVinyl: View {
     @State private var start = 0.0
     @State private var lastSeek = Date.distantPast
 
+    private var reducedMotion: Bool { theme.reduceMotion || systemReduceMotion }
+
     private func angle(at date: Date) -> Double {
-        rotation + (app.player.isPlaying && !theme.reduceMotion && !dragging ? date.timeIntervalSince(anchor) * 40 : 0)
+        rotation + (app.player.isPlaying && !reducedMotion && !dragging ? date.timeIntervalSince(anchor) * 40 : 0)
     }
     var body: some View {
         GeometryReader { geo in
-            TimelineView(.animation(paused: !app.player.isPlaying || theme.reduceMotion || dragging)) { context in
-                Vinyl(song: song).rotationEffect(.degrees(angle(at: context.date)))
+            TimelineView(.animation(paused: !app.player.isPlaying || reducedMotion || dragging)) { context in
+                Vinyl(song: song, rotation: angle(at: context.date))
             }
             .contentShape(Circle())
             .highPriorityGesture(DragGesture(minimumDistance: 2).updating($touching) { _, active, _ in active = true }.onChanged { value in
@@ -279,10 +287,16 @@ struct ScrubbableVinyl: View {
                 anchor = Date(); dragging = false
             })
         }
-        .accessibilityLabel("Record. Turn clockwise to move forward, or counterclockwise to rewind.")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Record. \(song.album) by \(song.primaryArtist).")
+        .accessibilityHint("Turn clockwise to move forward, or counterclockwise to rewind.")
         .accessibilityAdjustableAction { direction in app.player.skip(by: direction == .increment ? 10 : -10) }
         .onChange(of: app.player.isPlaying) { old, _ in
-            if old && !dragging && !theme.reduceMotion { rotation += Date().timeIntervalSince(anchor) * 40 }
+            if old && !dragging && !reducedMotion { rotation += Date().timeIntervalSince(anchor) * 40 }
+            anchor = Date()
+        }
+        .onChange(of: reducedMotion) { old, _ in
+            if !old && app.player.isPlaying && !dragging { rotation += Date().timeIntervalSince(anchor) * 40 }
             anchor = Date()
         }
         .onChange(of: touching) { _, active in
@@ -292,18 +306,75 @@ struct ScrubbableVinyl: View {
     }
 }
 
+/// The light stays in place while the printed label turns under it.
 struct Vinyl: View {
     var song: Song
+    var rotation = 0.0
     var body: some View {
-        ZStack {
-            Circle().fill(Color(hex: 0x0D0D0F))
-            ForEach(0..<24, id: \.self) { i in Circle().stroke(.white.opacity(0.035), lineWidth: 1).padding(CGFloat(i) * 5 + 4) }
-            AngularGradient(colors: [.clear, .white.opacity(0.08), .clear, .white.opacity(0.06), .clear], center: .center).clipShape(Circle())
-            ArtworkView(song, circle: true).padding(.horizontal).scaleEffect(0.4)
-            Circle().fill(Color(hex: 0x0D0D0F)).frame(width: 10, height: 10)
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, geometry.size.height)
+            let label = side * 0.45
+            ZStack {
+                Circle().fill(RadialGradient(colors: [Color(hex: 0x252526), Color(hex: 0x080809), Color(hex: 0x171719)], center: .center, startRadius: 0, endRadius: side / 2))
+                Canvas { context, size in
+                    let radius = min(size.width, size.height) / 2
+                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                    for index in 0..<74 {
+                        let r = radius * (0.96 - Double(index) * 0.0066)
+                        let path = Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+                        context.stroke(path, with: .color(index % 5 == 0 ? .black.opacity(0.55) : .white.opacity(index % 3 == 0 ? 0.09 : 0.045)), lineWidth: index % 5 == 0 ? 0.8 : 0.5)
+                    }
+                }
+                AngularGradient(stops: [
+                    .init(color: .clear, location: 0), .init(color: .white.opacity(0.025), location: 0.10),
+                    .init(color: .white.opacity(0.18), location: 0.17), .init(color: .clear, location: 0.24),
+                    .init(color: .clear, location: 0.55), .init(color: .white.opacity(0.12), location: 0.66),
+                    .init(color: .clear, location: 0.74), .init(color: .clear, location: 1)
+                ], center: .center).clipShape(Circle())
+                Circle().stroke(.black.opacity(0.65), lineWidth: 2).frame(width: label + side * 0.04, height: label + side * 0.04)
+                ZStack {
+                    Circle().fill(Color(hex: 0xE9DFC5))
+                    ArtworkView(song, circle: true).saturation(0.87).contrast(0.96).padding(side * 0.006)
+                    Circle().fill(Color(hex: 0xE7CE9B).opacity(0.12))
+                    Image(uiImage: VinylPaper.image).resizable(resizingMode: .tile).blendMode(.softLight).opacity(0.32).clipShape(Circle())
+                    Circle().stroke(.black.opacity(0.20), lineWidth: 0.8).padding(side * 0.009)
+                    Circle().stroke(.white.opacity(0.23), lineWidth: 0.7).frame(width: label * 0.38, height: label * 0.38)
+                    Circle().stroke(.black.opacity(0.24), lineWidth: 1.1).frame(width: label * 0.36, height: label * 0.36)
+                }
+                .frame(width: label, height: label).compositingGroup().rotationEffect(.degrees(rotation))
+                .shadow(color: .black.opacity(0.55), radius: 1.5, y: 1)
+                Circle().fill(Color.black.opacity(0.16)).frame(width: side * 0.055, height: side * 0.055)
+                Circle().fill(Color(hex: 0x08090A)).frame(width: side * 0.023, height: side * 0.023)
+                    .overlay(Circle().stroke(.white.opacity(0.30), lineWidth: 0.7))
+                Circle().stroke(.white.opacity(0.15), lineWidth: 0.8).padding(1)
+                Circle().stroke(.black.opacity(0.8), lineWidth: 1.4).padding(3)
+            }
+            .frame(width: side, height: side)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+        .shadow(color: .black.opacity(0.55), radius: 24, y: 12)
+        .accessibilityHidden(true)
     }
+}
+
+/// A small, repeatable paper texture built once, then shared by every album label.
+private enum VinylPaper {
+    static let image: UIImage = {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96), format: format).image { renderer in
+            let context = renderer.cgContext
+            var seed: UInt64 = 0x51F17
+            func next() -> CGFloat {
+                seed = seed &* 6364136223846793005 &+ 1
+                return CGFloat((seed >> 32) & 0xffff) / 65535
+            }
+            for _ in 0..<1300 {
+                let x = next() * 96, y = next() * 96
+                context.setFillColor((next() > 0.5 ? UIColor.white : UIColor.black).withAlphaComponent(0.13 + next() * 0.22).cgColor)
+                context.fill(CGRect(x: x, y: y, width: 0.35 + next() * 0.8, height: 0.35 + next() * 0.6))
+            }
+        }
+    }()
 }
 
 struct SeekBar: View {
@@ -346,7 +417,7 @@ struct Transport: View {
             if spoken { toggle("gobackward.10", "Back 10 seconds", false) { p.skip(by: -10) } }
             else { toggle("shuffle", "Shuffle", p.shuffle) { p.toggleShuffle() } }
             Spacer()
-            Button { Haptics.tap(); p.previous() } label: { Image(systemName: "backward.end.fill").font(.system(size: large ? 32 : 26)) }.accessibilityLabel("Previous")
+            Button { Haptics.tap(); p.previous() } label: { Image(systemName: "backward.end.fill").font(.system(size: large ? 32 : 26)).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Previous")
             Spacer()
             Button { Haptics.tap(); p.toggle() } label: {
                 Image(systemName: p.isPlaying ? "pause.fill" : "play.fill").font(.system(size: large ? 30 : 24, weight: .bold)).foregroundStyle(.black)
@@ -354,7 +425,7 @@ struct Transport: View {
                     .frame(width: large ? 72 : 58, height: large ? 72 : 58).background(.white, in: Circle()).shadow(color: .black.opacity(0.3), radius: 12, y: 6)
             }.buttonStyle(.pressable(0.9)).accessibilityLabel(p.isPlaying ? "Pause" : "Play")
             Spacer()
-            Button { Haptics.tap(); p.next() } label: { Image(systemName: "forward.end.fill").font(.system(size: large ? 32 : 26)) }.accessibilityLabel("Next")
+            Button { Haptics.tap(); p.next() } label: { Image(systemName: "forward.end.fill").font(.system(size: large ? 32 : 26)).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Next")
             Spacer()
             if spoken { toggle("goforward.30", "Forward 30 seconds", false) { p.skip(by: 30) } }
             else { toggle(p.repeatMode == .one ? "repeat.1" : "repeat", "Repeat", p.repeatMode != .off) { p.cycleRepeat() } }
@@ -491,7 +562,7 @@ struct AboutArtistCard: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     var body: some View {
-        if let a = app.library.library.artistByName[song.artist] {
+        if let a = app.library.library.artistByName[song.primaryArtist] {
             let plays = a.songs.reduce(0) { $0 + app.library.playCount($1.id) }
             Button { router.go(.artist(a.name)) } label: {
                 VStack(alignment: .leading, spacing: 0) {
@@ -539,7 +610,7 @@ struct LyricsSheet: View {
                 HStack {
                     VStack(alignment: .leading) { Text(s.title).text(.titleS); Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.7)) }
                     Spacer()
-                    Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 17, weight: .bold)).frame(width: 36, height: 36).background(.white.opacity(0.15), in: Circle()) }
+                    Button { dismiss() } label: { Image(systemName: "chevron.down").font(.system(size: 17, weight: .bold)).frame(width: 36, height: 36).background(.white.opacity(0.15), in: Circle()).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Close lyrics")
                         .accessibilityLabel("Close lyrics")
                 }.padding(20)
                 if s.isSpoken { ScrollView { NotesCard(song: s).padding() } } else { LyricsView(song: s) }
@@ -623,6 +694,7 @@ struct LyricsView: View {
 
 struct QueueSheet: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var palette
     var body: some View {
         let p = app.player
         NavigationStack {
@@ -631,14 +703,15 @@ struct QueueSheet: View {
                     Section("Now playing") { row(cur, playing: true) }
                 }
                 if p.upNext.isEmpty {
-                    Text("Nothing queued. Use “Play next” or “Add to queue” from any song's menu.").text(.bodyS).foregroundStyle(.white.opacity(0.6))
+                    Text("Nothing queued. Use “Play next” or “Add to queue” from any song's menu.").text(.bodyS).foregroundStyle(palette.secondary)
                 }
                 queueSection(p.manuallyQueued, title: "Added by you")
                 queueSection(p.nextFromSource, title: p.source.map { "Next from: \($0)" } ?? "From your playback list")
+                queueSection(p.automaticallyQueued, title: "Autoplay · similar music")
                 if !p.upNext.isEmpty { Button("Clear upcoming songs") { p.clearUpNext() } }
 
             }
-            .listStyle(.plain).scrollContentBackground(.hidden)
+            .listStyle(.plain).scrollContentBackground(.hidden).background(palette.background)
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Queue").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { DismissButton() } }
@@ -662,10 +735,11 @@ struct QueueSheet: View {
         HStack(spacing: 12) {
             ArtworkView(s, cornerRadius: 5).frame(width: 44, height: 44)
             VStack(alignment: .leading) {
-                Text(s.title).text(.body).foregroundStyle(playing ? Color(hex: 0x1ED760) : .white).lineLimit(1)
-                Text(s.artist).text(.caption).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                Text(s.title).text(.body).foregroundStyle(playing ? palette.accent : palette.text).lineLimit(1)
+                Text(s.artist).text(.caption).foregroundStyle(palette.secondary).lineLimit(1)
             }
-        }.listRowBackground(Color.clear)
+            Spacer(minLength: 0)
+        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle()).listRowBackground(Color.clear)
     }
 }
 
@@ -696,12 +770,16 @@ struct PlaybackSettings: View {
     var body: some View {
         @Bindable var player = app.player
         VStack(alignment: .leading, spacing: 18) {
+            Toggle("Normalize volume", isOn: $player.normalizeVolume).text(.body)
+            Text("Lowers loud recordings for steadier listening. Your device volume stays under your control.").text(.caption).foregroundStyle(p.secondary)
+            Toggle("Keep music playing", isOn: $player.autoplay).text(.body)
+            Text("Similar music follows when your queue ends. Repeat, sleep timers, and clearing the queue still take priority.").text(.caption).foregroundStyle(p.secondary)
             Text("Speed\(app.player.current?.isSpoken == true ? " (podcasts & books)" : "")").text(.titleS)
-            HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                 ForEach([0.75, 1, 1.25, 1.5, 2] as [Float], id: \.self) { s in
                     Pill(title: s == 1 ? "1×" : String(format: "%g×", s), selected: app.player.speed == s) { app.player.setSpeed(s) }
                 }
-            }
+            } }
             VStack(alignment: .leading) {
                 HStack { Text("Crossfade").text(.titleS); Spacer(); Text(player.crossfade == 0 ? "Off" : "\(Int(player.crossfade))s").text(.label).foregroundStyle(p.accent) }
                 Slider(value: $player.crossfade, in: 0...12, step: 1)

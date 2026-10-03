@@ -52,6 +52,7 @@ final class MusicResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSes
     private var header = Data()
     private var readURL: URL
     private var lastTrim: Int64 = 0
+    private var requestOffset: Int64 = 0
     init(track: OnlineTrack,
          sourceURL: @escaping (OnlineTrack) -> URL? = { track in track.audioURL.flatMap { AudioFallback.validAudioURL($0) ? URL(string: $0) : nil } ?? (try? MonochromeClient.audioURL(track.id)) },
          alternate: @escaping (OnlineTrack) async throws -> OnlineTrack? = AudioFallback.resolve) {
@@ -86,35 +87,52 @@ final class MusicResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSes
         ListeningCache.active.insert(key)
         try? FileManager.default.createDirectory(at: ListeningCache.directory, withIntermediateDirectories: true)
         if let values = try? readURL.resourceValues(forKeys: [.fileSizeKey]), let length = values.fileSize, length > 0 {
-            size = Int64(length); expected = size; complete = true
-            contentType = detectType(readURL)
-            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: readURL.path)
-            return
+            if let handle = try? FileHandle(forReadingFrom: readURL) {
+                let header = (try? handle.read(upToCount: 12)) ?? Data(); try? handle.close()
+                if let type = Self.audioType(header) {
+                    size = Int64(length); expected = size; complete = true; contentType = type
+                    try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: readURL.path)
+                    return
+                }
+            }
+            // Older builds could keep error pages or wrongly labeled bytes as finished audio.
+            try? FileManager.default.removeItem(at: readURL)
         }
         readURL = ListeningCache.directory.appendingPathComponent(key + ".partial")
         ListeningCache.trim()
         FileManager.default.createFile(atPath: readURL.path, contents: nil)
         do { file = try FileHandle(forWritingTo: readURL); fetch() } catch { fail(error) }
     }
-    private func fetch() {
+    private func fetch(offset: Int64 = 0) {
         guard !cancelled else { return }
-        attempts += 1; expected = 0; headerChecked = false; header.removeAll()
+        requestOffset = offset
+        if offset == 0 { attempts += 1; expected = 0; headerChecked = false; header.removeAll() }
         guard let url = sourceURL(candidate) else { fail(URLError(.badURL)); return }
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 12; config.timeoutIntervalForResource = 600
         let delegateQueue = OperationQueue(); delegateQueue.maxConcurrentOperationCount = 1; delegateQueue.underlyingQueue = ListeningCache.queue
         session = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
         var request = URLRequest(url: url); request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        if offset > 0 { request.setValue("bytes=\(offset)-", forHTTPHeaderField: "Range") }
         transfer = session!.dataTask(with: request); transfer!.resume()
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        guard !cancelled, let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        guard dataTask === transfer, !cancelled else { completionHandler(.cancel); return }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 || http.statusCode == 206 else {
             completionHandler(.cancel)
             failOrFindCopy(MusicSourceError.http((response as? HTTPURLResponse)?.statusCode ?? 0)); return
         }
-        expected = response.expectedContentLength > 0 ? response.expectedContentLength : (candidate.audioByteCount ?? -1)
+        if http.statusCode == 206 {
+            guard let range = Self.contentRange(http.value(forHTTPHeaderField: "Content-Range")), range.start == requestOffset else {
+                completionHandler(.cancel); failOrFindCopy(URLError(.badServerResponse)); return
+            }
+            expected = range.total
+        } else {
+            guard requestOffset == 0 else { completionHandler(.cancel); fail(URLError(.badServerResponse)); return }
+            expected = response.expectedContentLength > 0 ? response.expectedContentLength : (candidate.audioByteCount ?? -1)
+        }
         guard expected <= ListeningCache.limit else { completionHandler(.cancel); fail(MusicSourceError.message("This song is too large to cache. Download it to listen.")); return }
-        contentType = (response.mimeType?.hasPrefix("audio/") == true ? UTType(mimeType: response.mimeType!)?.identifier : nil) ?? UTType(filenameExtension: candidate.audioExtension ?? "flac")?.identifier ?? "public.audio"
+        // No MIME type or extension can override the signature found in the first audio bytes.
         completionHandler(.allow); serve()
     }
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
@@ -139,6 +157,11 @@ final class MusicResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSes
         guard task === transfer, !cancelled, failure == nil else { return }
         if let error { if (error as NSError).code != NSURLErrorCancelled { failOrFindCopy(error) }; return }
         guard size > 0 else { failOrFindCopy(MusicSourceError.message("The source did not return audio.")); return }
+        if expected > size {
+            // Some hosts return a bounded range even without a Range request. Continue from exactly that byte.
+            guard size > requestOffset else { fail(URLError(.networkConnectionLost)); return }
+            session.finishTasksAndInvalidate(); fetch(offset: size); return
+        }
         guard expected <= 0 || size == expected else { fail(URLError(.networkConnectionLost)); return }
         do {
             try file?.close(); file = nil
@@ -197,10 +220,42 @@ final class MusicResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSes
         let bytes = (try? handle.read(upToCount: 12)) ?? Data()
         return Self.audioType(bytes) ?? contentType
     }
+    static func audioExtension(at url: URL) -> String? {
+        guard let file = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? file.close() }
+        return audioExtension((try? file.read(upToCount: 512)) ?? Data())
+    }
+    static func audioExtension(_ bytes: Data) -> String? {
+        guard let type = audioType(bytes) else { return nil }
+        if bytes.starts(with: Data("OggS".utf8)) {
+            return bytes.range(of: Data("OpusHead".utf8)) != nil ? "opus" : "ogg"
+        }
+        if bytes.starts(with: Data("fLaC".utf8)) { return "flac" }
+        if type == UTType.mpeg4Audio.identifier { return "m4a" }
+        return UTType(type)?.preferredFilenameExtension
+    }
+    static func contentRange(_ value: String?) -> (start: Int64, total: Int64)? {
+        guard let value, value.hasPrefix("bytes ") else { return nil }
+        let parts = value.dropFirst(6).split(separator: "/")
+        guard parts.count == 2, let total = Int64(parts[1]), total > 0 else { return nil }
+        let range = parts[0].split(separator: "-")
+        guard range.count == 2, let start = Int64(range[0]), let end = Int64(range[1]),
+              start >= 0, end >= start, end < total else { return nil }
+        return (start, total)
+    }
     static func audioType(_ bytes: Data) -> String? {
+        if bytes.starts(with: Data("OggS".utf8)) { return UTType(filenameExtension: "ogg")?.identifier ?? "org.xiph.ogg-audio" }
         if bytes.starts(with: Data("fLaC".utf8)) { return UTType(filenameExtension: "flac")?.identifier ?? "org.xiph.flac" }
         if bytes.count >= 8, bytes.subdata(in: 4..<8) == Data("ftyp".utf8) { return UTType.mpeg4Audio.identifier }
-        if bytes.starts(with: Data("ID3".utf8)) || (bytes.count >= 2 && bytes[0] == 0xff && bytes[1] & 0xe0 == 0xe0) { return UTType.mp3.identifier }
+        if bytes.count >= 12, bytes.starts(with: Data("RIFF".utf8)), bytes.subdata(in: 8..<12) == Data("WAVE".utf8) { return UTType.wav.identifier }
+        if bytes.count >= 12, bytes.starts(with: Data("FORM".utf8)), [Data("AIFF".utf8), Data("AIFC".utf8)].contains(bytes.subdata(in: 8..<12)) { return UTType.aiff.identifier }
+        if bytes.starts(with: Data("caff".utf8)) { return UTType(filenameExtension: "caf")?.identifier }
+        // ADTS AAC shares MP3's sync bits, but is a different codec. Labeling it MP3 produces bad decoding.
+        if bytes.count >= 2, bytes[0] == 0xff, bytes[1] & 0xf6 == 0xf0 { return UTType(filenameExtension: "aac")?.identifier ?? "public.aac-audio" }
+        if bytes.starts(with: Data("ID3".utf8)) { return UTType.mp3.identifier }
+        if bytes.count >= 3, bytes[0] == 0xff, bytes[1] & 0xe0 == 0xe0,
+           bytes[1] & 0x18 != 0x08, bytes[1] & 0x06 != 0,
+           bytes[2] & 0xf0 != 0xf0, bytes[2] & 0x0c != 0x0c { return UTType.mp3.identifier }
         return nil
     }
 }

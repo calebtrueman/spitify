@@ -95,4 +95,15 @@ class TasteTest {
             assertTrue(mixes.isNotEmpty())
         }
     }
+    @Test
+    fun guestCreditSharesMainArtistTasteAndCanBeHidden() {
+        val duet = song("Neon Harbor, Mira Sol", "Synthwave").copy(artistNames = listOf("Neon Harbor", "Mira Sol"))
+        val model = TasteModel(TasteInput(listOf(synth[0], duet), listOf(listen(duet, 0.0)), emptySet(), now = now))
+        assertEquals("Neon Harbor", model.topArtists().first())
+        assertFalse(duet.artist in model.topArtists())
+        assertTrue(PlaylistGenerator.artistRadio(model, "Mira Sol").any { it.id == duet.id })
+        val hidden = TasteModel(TasteInput(listOf(duet), emptyList(), emptySet(), hiddenArtists = setOf("Mira Sol"), now = now))
+        assertTrue(hidden.hidden(duet))
+    }
+
 }

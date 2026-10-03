@@ -37,6 +37,7 @@ data class PlayerUiState(
     val queue: List<Long> = emptyList(),
     val currentIndex: Int = -1,
     val manualQueueIndices: Set<Int> = emptySet(),
+    val autoplayQueueIndices: Set<Int> = emptySet(),
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val playbackState: Int = Player.STATE_IDLE,
@@ -45,6 +46,8 @@ data class PlayerUiState(
     val durationMs: Long = 0,
     val speed: Float = 1f,
     val skipSilence: Boolean = false,
+    val autoplay: Boolean = true,
+    val normalizeAudio: Boolean = true,
     val crossfadeMs: Int = 0,
     val crossfadeKeepAlbums: Boolean = true,
     /** What the queue was started from, e.g. "Liked Songs" - shown as "Playing from". */
@@ -86,6 +89,8 @@ class PlayerConnection(
             shuffle = prefs.getBoolean(KEY_SHUFFLE, false),
             skipSilence = prefs.getBoolean(KEY_SKIP_SILENCE, false),
             source = prefs.getString(KEY_SOURCE, null),
+            autoplay = prefs.getBoolean(PlayerPrefs.AUTOPLAY, true),
+            normalizeAudio = prefs.getBoolean(PlayerPrefs.NORMALIZE_AUDIO, true),
             crossfadeMs = prefs.getInt(PlayerPrefs.CROSSFADE_MS, 0),
             crossfadeKeepAlbums = prefs.getBoolean(PlayerPrefs.CROSSFADE_KEEP_ALBUMS, true),
         ),
@@ -105,6 +110,12 @@ class PlayerConnection(
     private var countedCurrent = false
     private var ticker: Job? = null
     private var sleepJob: Job? = null
+    private var continuationJob: Job? = null
+    private var sourceSongs: List<Song> = emptyList()
+    private var continuationFilter = ""
+    private var clearedUpNext = false
+    private val failedSongs = mutableSetOf<Long>()
+    private val app get() = context.applicationContext as com.localfy.app.LocalfyApp
 
     private var connecting = false
 
@@ -158,6 +169,7 @@ class PlayerConnection(
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            refillQueue()
             val title = controller?.currentMediaItem?.mediaMetadata?.title ?: "this track"
             val ext = resolve(controller?.currentMediaItem?.mediaId?.toLongOrNull() ?: 0)?.fileName?.substringAfterLast('.', "")?.uppercase()
             _messages.tryEmit(
@@ -170,7 +182,11 @@ class PlayerConnection(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_ENDED) { markCurrentFinished(); endListen(auto = true) }
+            if (playbackState == Player.STATE_ENDED) {
+                markCurrentFinished(); endListen(auto = true)
+                if (_sleepTimer.value == SleepTimer.EndOfTrack) { controller?.pause(); _sleepTimer.value = null }
+                else refillQueue()
+            }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -239,6 +255,7 @@ class PlayerConnection(
             playbackState = c.playbackState,
             queue = ids,
             manualQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.toSet(),
+            autoplayQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isAutoplayItem() }.toSet(),
             currentIndex = if (ids.isEmpty()) -1 else c.currentMediaItemIndex,
             isPlaying = c.isPlaying,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
@@ -256,6 +273,7 @@ class PlayerConnection(
             while (isActive) {
                 val c = controller
                 if (c != null) {
+                    refillQueue()
                     val pos = c.currentPosition
                     _position.value = pos
                     lastPosition = pos
@@ -292,6 +310,10 @@ class PlayerConnection(
         if (usable.isEmpty()) { _messages.tryEmit("This format isn't supported (${songs.first().fileName.substringAfterLast('.').uppercase()})"); return }
         if (usable.size != songs.size) return playSongs(usable, usable.indexOf(wanted).coerceAtLeast(0), shuffle, source, startPositionMs)
         queueVersion += 1
+        continuationJob?.cancel()
+        sourceSongs = songs
+        failedSongs.clear()
+        clearedUpNext = false
         val wantShuffle = shuffle ?: _state.value.shuffle
         val start = startIndex.coerceIn(songs.indices)
         val ordered: List<Song>
@@ -362,7 +384,10 @@ class PlayerConnection(
     }
 
     fun appendFromSource(songs: List<Song>) {
-        controller?.addMediaItems(songs.filter { it.playable }.map { it.toMediaItem() })
+        val c = controller ?: return
+        sourceSongs = (sourceSongs + songs).distinctBy { it.id }
+        val insertion = (c.currentMediaItemIndex + 1 until c.mediaItemCount).firstOrNull { c.getMediaItemAt(it).isAutoplayItem() } ?: c.mediaItemCount
+        c.addMediaItems(insertion, songs.filter { it.playable }.map { it.toMediaItem() })
         saveQueue()
     }
 
@@ -420,6 +445,8 @@ class PlayerConnection(
 
     fun clearUpNext() {
         queueVersion += 1
+        continuationJob?.cancel()
+        clearedUpNext = true
         val c = controller ?: return
         val cur = c.currentMediaItemIndex
         if (cur + 1 < c.mediaItemCount) c.removeMediaItems(cur + 1, c.mediaItemCount)
@@ -428,12 +455,15 @@ class PlayerConnection(
     }
 
     fun cycleRepeat() {
+        continuationJob?.cancel()
         val c = controller ?: return
         c.repeatMode = when (c.repeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
+        removeAutoplayItems()
+        refillQueue()
     }
 
     /**
@@ -442,6 +472,8 @@ class PlayerConnection(
      */
     fun toggleShuffle() {
         val c = controller ?: return
+        continuationJob?.cancel()
+        removeAutoplayItems()
         val enable = !_state.value.shuffle
         setShuffleFlag(enable)
         if (c.mediaItemCount < 2) return
@@ -512,11 +544,81 @@ class PlayerConnection(
         )
     }
 
+    fun setNormalizeAudio(enabled: Boolean) {
+        prefs.edit { putBoolean(PlayerPrefs.NORMALIZE_AUDIO, enabled) }
+        _state.value = _state.value.copy(normalizeAudio = enabled)
+    }
+
+    fun setAutoplay(enabled: Boolean) {
+        continuationJob?.cancel()
+        prefs.edit { putBoolean(PlayerPrefs.AUTOPLAY, enabled) }
+        _state.value = _state.value.copy(autoplay = enabled)
+        clearedUpNext = false
+        removeAutoplayItems()
+        refillQueue()
+    }
+
+    internal fun markUnplayable(id: Long?) { if (id != null) failedSongs += id }
+
+    private fun removeAutoplayItems() {
+        val c = controller ?: return
+        for (i in c.mediaItemCount - 1 downTo c.currentMediaItemIndex + 1) {
+            if (c.getMediaItemAt(i).isAutoplayItem()) c.removeMediaItem(i)
+        }
+    }
+
+    /** Fill ahead while the current song is still playing, including when the phone UI is closed. */
+    private fun refillQueue() {
+        val c = controller ?: return
+        if (!c.playWhenReady || !state.value.autoplay || clearedUpNext || roomSpeed != null ||
+            c.repeatMode != Player.REPEAT_MODE_OFF || _sleepTimer.value == SleepTimer.EndOfTrack ||
+            c.currentMediaItem?.mediaMetadata?.mediaType.isSpoken() || c.mediaItemCount == 0) return
+        val seed = c.currentMediaItem?.mediaId?.toLongOrNull()?.let { id -> resolve(id) ?: sourceSongs.find { it.id == id } } ?: return
+        val hiddenSongs = app.taste.hiddenSongs.value
+        val hiddenArtists = app.taste.hiddenArtists.value
+        val filter = hiddenSongs.sorted().joinToString() + "|" + hiddenArtists.sorted().joinToString()
+        if (filter != continuationFilter) { continuationFilter = filter; continuationJob?.cancel(); removeAutoplayItems() }
+        if (c.mediaItemCount - c.currentMediaItemIndex - 1 > 2 || continuationJob?.isActive == true) return
+        val version = queueVersion
+        continuationJob = scope.launch {
+            fun allowed(song: Song) = song.playable && !song.isPodcast && !song.isAudiobook && song.id !in failedSongs && song.id !in app.taste.hiddenSongs.value && song.creditedArtists.none { it in app.taste.hiddenArtists.value }
+            var pool = (app.taste.songRadio(seed) + sourceSongs + repo.library.value.songs).filter(::allowed).distinctBy { it.id }
+            // A single streamed song should also become a station, without saving picks to the library.
+            if (pool.size < 4 && seed.sourceUri?.scheme == "spitify") {
+                val online = try { withTimeoutOrNull(12_000) { com.localfy.app.data.music.Monochrome.search(seed.primaryArtist) }.orEmpty() }
+                    catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) { emptyList() }
+                pool = (pool + online.filter { it.playable }.map { app.musicStreams.register(it) }).filter(::allowed).distinctBy { it.id }
+            }
+            if (version != queueVersion || controller !== c || !state.value.autoplay || clearedUpNext ||
+                roomSpeed != null || c.repeatMode != Player.REPEAT_MODE_OFF || _sleepTimer.value == SleepTimer.EndOfTrack) return@launch
+            val recent = (0..c.currentMediaItemIndex).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
+            val queued = (c.currentMediaItemIndex until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }.toSet()
+            pool = pool.filter(::allowed)
+            val byId = pool.associateBy { it.id }
+            val candidates = if (state.value.shuffle) pool.shuffled() else pool
+            var ids = continuationIds(candidates.map { it.id }, recent, queued, 5)
+            if (ids.isEmpty() && queued.size == 1 && pool.size == 1) ids = listOf(pool.single().id)
+            if (ids.isEmpty()) return@launch
+            val wasEnded = c.playbackState == Player.STATE_ENDED || c.playerError != null
+            val next = c.mediaItemCount
+            c.addMediaItems(ids.mapNotNull { byId[it]?.toMediaItem()?.asAutoplayItem() })
+            if (wasEnded && c.playWhenReady) { c.seekTo(next, 0); c.prepare(); c.play() }
+            // Keep a recent history without allowing a radio session to grow without a bound.
+            if (c.currentMediaItemIndex > 40) c.removeMediaItems(0, c.currentMediaItemIndex - 30)
+            saveQueue()
+        }
+    }
+
+    private fun setSleepGain(gain: Float) {
+        controller?.sendCustomCommand(SessionCommand(PlaybackService.CMD_SLEEP_GAIN, Bundle.EMPTY), Bundle().apply { putFloat(PlaybackService.EXTRA_GAIN, gain) })
+    }
+
     // ---- Sleep timer (fades out over the last 10 seconds) ----
 
     fun setSleepTimer(minutes: Int?) {
         sleepJob?.cancel()
-        controller?.volume = 1f
+        setSleepGain(1f)
         if (minutes == null) { _sleepTimer.value = null; return }
         val endsAt = System.currentTimeMillis() + minutes * 60_000L
         _sleepTimer.value = SleepTimer.At(endsAt)
@@ -525,11 +627,11 @@ class PlayerConnection(
                 val left = endsAt - System.currentTimeMillis()
                 if (left <= 0) {
                     controller?.pause()
-                    controller?.volume = 1f
+                    setSleepGain(1f)
                     _sleepTimer.value = null
                     break
                 }
-                if (left < FADE_MS) controller?.volume = (left / FADE_MS.toFloat()).coerceIn(0f, 1f)
+                if (left < FADE_MS) setSleepGain((left / FADE_MS.toFloat()).coerceIn(0f, 1f))
                 delay(200)
             }
         }
@@ -537,7 +639,7 @@ class PlayerConnection(
 
     fun sleepAtEndOfTrack() {
         sleepJob?.cancel()
-        controller?.volume = 1f
+        setSleepGain(1f)
         _sleepTimer.value = SleepTimer.EndOfTrack
     }
 
@@ -554,6 +656,7 @@ class PlayerConnection(
         val ids = (0 until c.mediaItemCount).joinToString(",") { c.getMediaItemAt(it).mediaId }
         prefs.edit {
             putString(KEY_QUEUE, ids)
+            putString(KEY_AUTOPLAY_ITEMS, (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isAutoplayItem() }.joinToString(","))
             putString(KEY_MANUAL, (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.joinToString(","))
             putInt(KEY_INDEX, c.currentMediaItemIndex)
             putLong(KEY_POSITION, c.currentPosition)
@@ -568,11 +671,14 @@ class PlayerConnection(
         if (ids.any { it >= 0 }) withTimeoutOrNull(5_000) { repo.library.first { !it.isEmpty } }
         if (ids.any { it < 0 && resolve(it) == null }) withTimeoutOrNull(3_000) { podcasts.episodeSongs.first { it.isNotEmpty() } }
         val manual = prefs.getString(KEY_MANUAL, null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
+        val autoplayItems = prefs.getString(KEY_AUTOPLAY_ITEMS, null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty().toSet()
         val restored = ids.mapIndexedNotNull { i, id -> resolve(id)?.let { i to it } }
         val songs = restored.map { it.second }
         if (songs.isEmpty()) return
-        val index = prefs.getInt(KEY_INDEX, 0).coerceIn(songs.indices)
-        c.setMediaItems(restored.map { (i, song) -> song.toMediaItem().let { if (i in manual) it.asManualQueueItem() else it } }, index, prefs.getLong(KEY_POSITION, 0))
+        val savedIndex = prefs.getInt(KEY_INDEX, 0)
+        val index = restored.indexOfFirst { it.first >= savedIndex }.let { if (it < 0) restored.lastIndex else it }
+        sourceSongs = restored.filter { it.first !in autoplayItems && it.first !in manual }.map { it.second }
+        c.setMediaItems(restored.map { (i, song) -> song.toMediaItem().let { if (i in manual) it.asManualQueueItem() else if (i in autoplayItems) it.asAutoplayItem() else it } }, index, prefs.getLong(KEY_POSITION, 0))
         c.repeatMode = prefs.getInt(KEY_REPEAT, Player.REPEAT_MODE_OFF)
         c.prepare()
     }
@@ -583,6 +689,7 @@ class PlayerConnection(
         private const val KEY_SHUFFLE = "shuffle"
         private const val KEY_SKIP_SILENCE = "skip_silence"
         private const val KEY_QUEUE = "queue"
+        private const val KEY_AUTOPLAY_ITEMS = "autoplay_indices"
         private const val KEY_MANUAL = "manual_queue_indices"
         private const val KEY_INDEX = "index"
         private const val KEY_POSITION = "position"
@@ -625,4 +732,10 @@ private const val MANUAL_QUEUE_ITEM = "spitify.manual_queue"
 private fun MediaItem.isManualQueueItem() = mediaMetadata.extras?.getBoolean(MANUAL_QUEUE_ITEM) == true
 internal fun MediaItem.asManualQueueItem(): MediaItem = buildUpon().setMediaMetadata(
     mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putBoolean(MANUAL_QUEUE_ITEM, true) }).build(),
+).build()
+
+private const val AUTOPLAY_ITEM = "spitify.autoplay"
+private fun MediaItem.isAutoplayItem() = mediaMetadata.extras?.getBoolean(AUTOPLAY_ITEM) == true
+private fun MediaItem.asAutoplayItem(): MediaItem = buildUpon().setMediaMetadata(
+    mediaMetadata.buildUpon().setExtras(Bundle(mediaMetadata.extras ?: Bundle()).apply { putBoolean(AUTOPLAY_ITEM, true) }).build(),
 ).build()

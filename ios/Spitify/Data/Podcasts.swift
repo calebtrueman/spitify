@@ -39,14 +39,17 @@ final class FeedParser: NSObject, XMLParserDelegate {
     private var feed = Feed()
     private var text = ""
     private var inItem = false, inImage = false
+    private var rootIsFeed = false, sawRoot = false
     private var cur: [String: String] = [:]
 
     static func parse(_ data: Data) -> Feed? {
         let p = XMLParser(data: data); let d = FeedParser(); p.delegate = d
-        return p.parse() || !d.feed.episodes.isEmpty ? d.feed : nil
+        let parsed = p.parse()
+        return d.rootIsFeed && (parsed || !d.feed.episodes.isEmpty) ? d.feed : nil
     }
 
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName q: String?, attributes a: [String: String] = [:]) {
+        if !sawRoot { sawRoot = true; rootIsFeed = ["rss", "feed", "rdf:RDF"].contains(name) }
         text = ""
         switch name {
         case "item", "entry": inItem = true; cur = [:]
@@ -150,9 +153,9 @@ final class ShowsStore {
 
     // MARK: Discovery
 
-    func searchPodcasts(_ term: String) async -> [ShowSearchResult] {
-        guard let root = await HTTP.json("https://itunes.apple.com/search?media=podcast&entity=podcast&limit=30&term=\(HTTP.q(term))") as? [String: Any],
-              let res = root["results"] as? [[String: Any]] else { return [] }
+    func searchPodcasts(_ term: String, fetch: (String) async throws -> Any? = HTTP.fetchJSON) async throws -> [ShowSearchResult] {
+        guard let root = try await fetch("https://itunes.apple.com/search?media=podcast&entity=podcast&limit=30&term=\(HTTP.q(term))") as? [String: Any],
+              let res = root["results"] as? [[String: Any]] else { throw URLError(.badServerResponse) }
         return res.compactMap { o in
             guard let feed = o["feedUrl"] as? String else { return nil }
             return ShowSearchResult(title: o["collectionName"] as? String ?? "", author: o["artistName"] as? String ?? "", feedURL: feed,
@@ -160,11 +163,11 @@ final class ShowsStore {
         }
     }
 
-    func searchBooks(_ term: String) async -> [BookSearchResult] {
+    func searchBooks(_ term: String, fetch: (String) async throws -> Any? = HTTP.fetchJSON) async throws -> [BookSearchResult] {
         let q = HTTP.q("collection:librivoxaudio AND (\(term))")
         let fields = ["identifier", "title", "creator", "description", "runtime", "language"].map { "&fl%5B%5D=\($0)" }.joined()
-        guard let root = await HTTP.json("https://archive.org/advancedsearch.php?q=\(q)\(fields)&sort%5B%5D=downloads+desc&rows=30&output=json") as? [String: Any],
-              let docs = (root["response"] as? [String: Any])?["docs"] as? [[String: Any]] else { return [] }
+        guard let root = try await fetch("https://archive.org/advancedsearch.php?q=\(q)\(fields)&sort%5B%5D=downloads+desc&rows=30&output=json") as? [String: Any],
+              let docs = (root["response"] as? [String: Any])?["docs"] as? [[String: Any]] else { throw URLError(.badServerResponse) }
         func str(_ v: Any?) -> String { (v as? String) ?? (v as? [String])?.joined(separator: ", ") ?? "" }
         return docs.map { d in
             let id = str(d["identifier"])
@@ -225,14 +228,16 @@ final class ShowsStore {
         shows.removeAll { $0.id == show.id }
     }
 
-    func refreshAll() async {
+    func refreshAll(fetch: (String) async -> Data? = HTTP.get) async {
+        guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
-        for (i, show) in shows.enumerated() where show.kind == .podcast && show.following {
-            guard let data = await HTTP.get(show.feedURL), let feed = FeedParser.parse(data) else { continue }
-            let known = Set(show.episodes.map(\.id))
+        for show in shows where show.kind == .podcast && show.following {
+            guard let data = await fetch(show.feedURL), let feed = FeedParser.parse(data),
+                  let i = shows.firstIndex(where: { $0.id == show.id && $0.following }) else { continue }
+            let known = Set(shows[i].episodes.map(\.id))
             let fresh = feed.episodes.filter { !known.contains($0.id) }
-            if !fresh.isEmpty, i < shows.count { shows[i].episodes = fresh + shows[i].episodes }
+            if !fresh.isEmpty { shows[i].episodes = fresh + shows[i].episodes }
         }
     }
 

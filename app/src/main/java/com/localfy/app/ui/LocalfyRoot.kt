@@ -350,7 +350,11 @@ fun LocalfyRoot(activity: Activity) {
                             composable(Routes.FOLDER) { FolderScreen(it.arguments?.getString("path").orEmpty()) }
                         }
                         // Collection pages draw their own pinned bar; everything else gets a status-bar scrim.
-
+                        if (route in listOf(Routes.HOME, Routes.SEARCH, Routes.LIBRARY, Routes.STATS,
+                                Routes.SETTINGS, Routes.APPEARANCE, Routes.EQUALIZER, Routes.PODCASTS,
+                                Routes.BOOKS, Routes.PROFILE, Routes.FRIENDS, "rooms", "releases")) {
+                            StatusBarScrim()
+                        }
                     }
                     when {
                         !wide -> Spacer(Modifier.height(navTotal + if (player.hasMedia) miniHeight else 0.dp))

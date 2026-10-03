@@ -55,10 +55,6 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -79,6 +75,109 @@
                 <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
+
+
+        <!-- Switch only aliases; MainActivity stays enabled for playback and deep links. -->
+        <activity-alias android:name=".icons.Icon_not_for_rent" android:targetActivity=".MainActivity"
+            android:enabled="true" android:exported="true" android:icon="@mipmap/vinyl_not_for_rent" android:roundIcon="@mipmap/vinyl_not_for_rent" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_no_landlords" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_no_landlords" android:roundIcon="@mipmap/vinyl_no_landlords" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_skip_fees" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_skip_fees" android:roundIcon="@mipmap/vinyl_skip_fees" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_no_ads" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_no_ads" android:roundIcon="@mipmap/vinyl_no_ads" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_your_music" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_your_music" android:roundIcon="@mipmap/vinyl_your_music" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_green" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_green" android:roundIcon="@mipmap/vinyl_green" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_moon" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_moon" android:roundIcon="@mipmap/vinyl_moon" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_sun" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_sun" android:roundIcon="@mipmap/vinyl_sun" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_mountain" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_mountain" android:roundIcon="@mipmap/vinyl_mountain" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_ocean" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_ocean" android:roundIcon="@mipmap/vinyl_ocean" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_flower" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_flower" android:roundIcon="@mipmap/vinyl_flower" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_lightning" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_lightning" android:roundIcon="@mipmap/vinyl_lightning" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_cassette" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_cassette" android:roundIcon="@mipmap/vinyl_cassette" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_fire" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_fire" android:roundIcon="@mipmap/vinyl_fire" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_aurora" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_aurora" android:roundIcon="@mipmap/vinyl_aurora" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_rocket" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_rocket" android:roundIcon="@mipmap/vinyl_rocket" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_dino" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_dino" android:roundIcon="@mipmap/vinyl_dino" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_race" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_race" android:roundIcon="@mipmap/vinyl_race" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_butterfly" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_butterfly" android:roundIcon="@mipmap/vinyl_butterfly" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_unicorn" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_unicorn" android:roundIcon="@mipmap/vinyl_unicorn" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_cat" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_cat" android:roundIcon="@mipmap/vinyl_cat" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_robot" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_robot" android:roundIcon="@mipmap/vinyl_robot" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_rainbow" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_rainbow" android:roundIcon="@mipmap/vinyl_rainbow" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_soccer" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_soccer" android:roundIcon="@mipmap/vinyl_soccer" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".icons.Icon_frog" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true" android:icon="@mipmap/vinyl_frog" android:roundIcon="@mipmap/vinyl_frog" android:label="@string/app_name">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity-alias>
 
         <service
             android:name=".playback.PlaybackService"

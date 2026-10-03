@@ -44,6 +44,15 @@ final class EngineBackend {
     private var startFrame: [AVAudioFramePosition] = [0, 0]
     private var pausedAt: [Double?] = [nil, nil]
     private var generation = [0, 0]
+    private var trackGains: [Float] = [1, 1]
+    var normalizeVolume = true {
+        didSet {
+            for i in nodes.indices {
+                trackGains[i] = normalizeVolume ? files[i].map(AudioLeveling.fileGain) ?? 1 : 1
+                nodes[i].volume = trackGains[i]
+            }
+        }
+    }
     private(set) var active = 0
     private var fadeTimer: Timer?
     /// Called on the main queue when the active node plays to the end of its file.
@@ -86,7 +95,8 @@ final class EngineBackend {
         stopNode(active)
         connect(active, file: file)
         files[active] = file
-        nodes[active].volume = 1
+        trackGains[active] = normalizeVolume ? AudioLeveling.fileGain(file) : 1
+        nodes[active].volume = trackGains[active]
         if play { startEngine(); schedule(active, from: seconds); nodes[active].play() }
         else { pausedAt[active] = seconds; engine.pause() }
     }
@@ -108,6 +118,7 @@ final class EngineBackend {
 
     func seek(_ seconds: Double) {
         let playing = isPlaying
+        cancelFade(); stopNode(1 - active)
         stopNode(active)
         if playing { schedule(active, from: seconds); nodes[active].play() } else { pausedAt[active] = seconds }
     }
@@ -121,6 +132,7 @@ final class EngineBackend {
         stopNode(next)
         connect(next, file: file)
         files[next] = file
+        trackGains[next] = normalizeVolume ? AudioLeveling.fileGain(file) : 1
         schedule(next, from: 0)
         nodes[next].volume = 0
         nodes[next].play()
@@ -131,23 +143,30 @@ final class EngineBackend {
         fadeTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] t in
             guard let self else { t.invalidate(); return }
             let p = min(1, Date().timeIntervalSince(start) / seconds)
-            self.nodes[next].volume = Float(sin(p * .pi / 2))
-            self.nodes[old].volume = Float(cos(p * .pi / 2))
+            self.nodes[next].volume = Float(sin(p * .pi / 2)) * self.trackGains[next]
+            self.nodes[old].volume = Float(cos(p * .pi / 2)) * self.trackGains[old]
             if p >= 1 { t.invalidate(); self.stopNode(old); self.files[old] = nil }
         }
     }
 
-    func setRate(_ rate: Float) { pitch.rate = rate }
-    func setVolume(_ v: Float) { engine.mainMixerNode.outputVolume = v }
+    func setRate(_ rate: Float) { pitch.rate = rate.isFinite ? min(3, max(0.5, rate)) : 1 }
+    func recoverAfterRouteChange(at seconds: Double, play: Bool) {
+        guard files[active] != nil else { return }
+        cancelFade(); stopNode(1 - active); stopNode(active)
+        // An output change clears AVAudioPlayerNode's scheduled data even when isPlaying was true.
+        if play { startEngine(); schedule(active, from: seconds); nodes[active].play() }
+        else { pausedAt[active] = seconds; engine.pause() }
+    }
+    func setVolume(_ v: Float) { engine.mainMixerNode.outputVolume = v.isFinite ? min(1, max(0, v)) : 0 }
 
     func apply(_ s: EQSettings) {
         for (i, b) in eq.bands.enumerated() {
-            let bass: Float = i < 3 ? s.bass * Float(8 - i * 2) : 0
-            b.gain = s.enabled ? max(-12, min(12, s.gains[i] + bass)) : 0
+            let bass: Float = i < 3 && s.bass.isFinite ? min(1, max(0, s.bass)) * Float(8 - i * 2) : 0
+            b.gain = s.enabled ? max(-12, min(12, (s.gains.indices.contains(i) && s.gains[i].isFinite ? s.gains[i] : 0) + bass)) : 0
         }
-        eq.globalGain = s.enabled ? s.loudness - max(0, (s.gains.max() ?? 0) * 0.4) : 0
+        eq.globalGain = s.enabled ? -max(0, eq.bands.map(\.gain).max() ?? 0) : 0
         eq.bypass = !s.enabled
-        limiter.bypass = !(s.enabled && s.limiter)
+        limiter.bypass = false // Crossfades and boosted EQ bands always need a peak ceiling.
     }
 
     // MARK: private
@@ -185,7 +204,7 @@ final class EngineBackend {
 
     private func cancelFade() {
         fadeTimer?.invalidate(); fadeTimer = nil
-        nodes[active].volume = 1
+        nodes[active].volume = trackGains[active]
     }
 }
 
@@ -199,8 +218,14 @@ final class StreamBackend {
     private var statusObserver: NSKeyValueObservation?
     var onError: (() -> Void)?
     private var rate: Float = 1
+    private var loadTask: Task<Void, Never>?
+    private var wantsPlay = false
+    var normalizeVolume = true {
+        didSet { if let item = player.currentItem { configureLeveling(item, play: wantsPlay) } }
+    }
 
     func load(_ url: URL, at seconds: Double, play: Bool) {
+        loadTask?.cancel(); wantsPlay = play
         resourceLoader?.stop(); resourceLoader = nil
         let item: AVPlayerItem
         if url.scheme == "spitify", let track = MusicStreams.shared.tracks[url.lastPathComponent] {
@@ -216,21 +241,43 @@ final class StreamBackend {
                 self.onError?()
             }
         }
-        item.audioTimePitchAlgorithm = .timeDomain
+        item.audioTimePitchAlgorithm = .spectral
         if let o = endObserver { NotificationCenter.default.removeObserver(o) }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self, weak item] _ in
             MainActor.assumeIsolated { guard let self, self.player.currentItem === item else { return }; self.onFinished?() }
         }
         player.replaceCurrentItem(with: item)
         if seconds > 0 { player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600)) }
-        if play { self.play() }
+        configureLeveling(item, play: play)
     }
-    func play() { player.playImmediately(atRate: rate) }
-    func pause() { player.pause() }
-    func stop() { player.pause(); statusObserver = nil; player.replaceCurrentItem(with: nil); resourceLoader?.stop(); resourceLoader = nil }
+    private func configureLeveling(_ item: AVPlayerItem, play: Bool) {
+        loadTask?.cancel(); loadTask = nil
+        if !normalizeVolume {
+            item.audioMix = nil
+            if play { self.play() }
+            return
+        }
+        loadTask = Task { [weak self, weak item] in
+            guard let item else { return }
+            let tracks = try? await item.asset.loadTracks(withMediaType: .audio)
+            guard let self, !Task.isCancelled, self.player.currentItem === item else { return }
+            let parameters = (tracks ?? []).compactMap { track -> AVMutableAudioMixInputParameters? in
+                guard let tap = StreamLeveling.makeTap() else { return nil }
+                let parameters = AVMutableAudioMixInputParameters(track: track)
+                parameters.audioTapProcessor = tap
+                return parameters
+            }
+            if !parameters.isEmpty { let mix = AVMutableAudioMix(); mix.inputParameters = parameters; item.audioMix = mix }
+            self.loadTask = nil
+            if self.wantsPlay { self.player.playImmediately(atRate: self.rate) }
+        }
+    }
+    func play() { wantsPlay = true; if loadTask == nil { player.playImmediately(atRate: rate) } }
+    func pause() { wantsPlay = false; player.pause() }
+    func stop() { wantsPlay = false; loadTask?.cancel(); loadTask = nil; player.pause(); statusObserver = nil; player.replaceCurrentItem(with: nil); resourceLoader?.stop(); resourceLoader = nil }
     func seek(_ s: Double) { player.seek(to: CMTime(seconds: s, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
-    func setRate(_ r: Float) { rate = r; if player.rate != 0 { player.rate = r } }
-    func setVolume(_ v: Float) { player.volume = v }
+    func setRate(_ r: Float) { rate = r.isFinite ? min(3, max(0.5, r)) : 1; if player.rate != 0 { player.rate = rate } }
+    func setVolume(_ v: Float) { player.volume = v.isFinite ? min(1, max(0, v)) : 0 }
     var currentTime: Double { player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0 }
     var duration: Double { let d = player.currentItem?.duration.seconds ?? 0; return d.isFinite ? d : 0 }
     var isPlaying: Bool { player.rate != 0 }

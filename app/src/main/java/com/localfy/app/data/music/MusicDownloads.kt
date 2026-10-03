@@ -74,6 +74,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                 if (old?.active == true) { active++; continue }
                 if (old?.state == "complete" && exists(old.localUri)) { saved++; continue }
                 lookups.remove(track.id)
+                _progress.update { it - track.id }
                 dao.put(MusicDownloadEntity(track.id, track.json(), wifiOnly = _wifiOnly.value)); added++
             }
         }
@@ -90,6 +91,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
         mutex.withLock {
             val job = dao.get(id)?.takeIf { it.active } ?: return@withLock
             lookups.remove(id)
+            _progress.update { it - id }
             job.downloadId?.let { manager.remove(it) }
             WorkManager.getInstance(context).cancelUniqueWork("music-retry-$id")
             removePending(job.localUri)
@@ -142,6 +144,8 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                     val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                     when (status) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
+                            progress[job.id] = 1f
+                            _progress.update { it + (job.id to 1f) }
                             try { publish(job, total) }
                             catch (e: Exception) {
                                 if (e is CancellationException) throw e
@@ -162,13 +166,14 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                                 // Use the same short retries and source handoff as a finished failure.
                                 failedTransfer(job, DownloadManager.ERROR_HTTP_DATA_ERROR)
                                 manager.remove(job.downloadId)
-                            } else progress[job.id] = if (total > 0) done.toFloat() / total else 0f
+                            } else DownloadProgress.measured(_progress.value[job.id], done, total)?.let { progress[job.id] = it }
                         }
-                        else -> progress[job.id] = if (total > 0) done.toFloat() / total else 0f
+                        else -> DownloadProgress.measured(_progress.value[job.id], done, total)?.let { progress[job.id] = it }
                     }
                 }
             }
-            _progress.value = progress
+            val transferring = dao.all().filter { it.state == "downloading" || it.state == "checking" }.mapTo(mutableSetOf()) { it.id }
+            _progress.value = progress.filterKeys { it in transferring }
             var slots = 2 - dao.all().count { it.state == "downloading" || it.state == "checking" }
             for (job in dao.all().filter { it.state == "queued" }) {
                 if (slots <= 0) break
@@ -203,6 +208,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     }
 
     private suspend fun failedTransfer(job: MusicDownloadEntity, reason: Int) {
+        _progress.update { it - job.id }
         val temporary = DownloadRetry.isTemporary(reason)
         val track = job.track()
         if (temporary && (track.retryCount < 3 || track.fallbackTried)) {
@@ -241,8 +247,12 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     }
 
     private suspend fun publish(job: MusicDownloadEntity, expectedSize: Long) {
-        val track = job.track()
+        val originalTrack = job.track()
         val file = temp(job.id)
+        val container = try { file.inputStream().use { AudioContainer.detect(it.readNBytes(128)) } }
+            catch (e: Exception) { throw InvalidDownloadedAudio(e) }
+            ?: throw InvalidDownloadedAudio(IllegalArgumentException("The source did not return a supported audio file."))
+        val track = originalTrack.copy(audioExtension = container.extension)
         val quality = try {
         check(expectedSize <= 0 || file.length() == expectedSize) { "The audio download is incomplete." }
         if (track.audioExtension == "flac") FlacInfo.read(file, track.durationMs).label else {
@@ -251,7 +261,7 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                 reader.setDataSource(file.path)
                 val length = reader.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0
                 check(length > 0 && reader.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes" && kotlin.math.abs(length - track.durationMs) <= 5_000) { "The downloaded audio does not match this song." }
-                if (track.audioExtension == "mp3") "MP3" else "M4A"
+                container.label
             } finally { reader.release() }
         }
         } catch (e: Exception) {
@@ -269,19 +279,25 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
                     cover.readBytes()
                 } finally { cover.delete() }
             }
-            com.localfy.app.data.meta.FileTags.tag(tagged, com.localfy.app.data.meta.MetadataEdit(
-                title = track.title, artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.albumArtist ?: com.localfy.app.data.AlbumGrouping.albumArtist(track.artist),
+            // The tag writer does not support Opus or raw AAC. Preserve those audio bytes and
+            // keep their title/artist/cover in the library instead of rejecting a good recording.
+            if (container !in setOf(AudioContainer.OPUS, AudioContainer.AAC)) com.localfy.app.data.meta.FileTags.tag(tagged, com.localfy.app.data.meta.MetadataEdit(
+                title = track.title, artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.albumArtist ?: track.primaryArtist,
                 track = track.track.takeIf { it > 0 }, disc = track.disc), artwork)
             val resolver = context.contentResolver
             val values = ContentValues().apply {
                 put(MediaStore.Audio.Media.DISPLAY_NAME, "${job.id}.${track.audioExtension}")
-                put(MediaStore.Audio.Media.MIME_TYPE, when (track.audioExtension) { "m4a" -> "audio/mp4"; "mp3" -> "audio/mpeg"; else -> "audio/flac" })
+                put(MediaStore.Audio.Media.MIME_TYPE, container.mime)
+                put(MediaStore.Audio.Media.TITLE, track.title)
+                put(MediaStore.Audio.Media.ARTIST, track.artist)
+                put(MediaStore.Audio.Media.ALBUM, track.album)
+                put(MediaStore.Audio.Media.ALBUM_ARTIST, track.albumArtist ?: track.primaryArtist)
                 put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/Spitify/Monochrome/${track.releaseId.takeIf(Monochrome::validId) ?: "Singles"}/")
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
                 put(MediaStore.Audio.Media.IS_MUSIC, 1)
             }
             val uri = job.localUri?.let(Uri::parse) ?: checkNotNull(resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)) { "Could not create the music file." }
-            dao.put(job.copy(state = "checking", localUri = uri.toString(), quality = quality))
+            dao.put(job.copy(state = "checking", trackJson = track.json(), localUri = uri.toString(), quality = quality))
             resolver.openOutputStream(uri, "wt").use { output ->
                 checkNotNull(output) { "Could not open the music file." }
                 tagged.inputStream().use { it.copyTo(output) }
@@ -289,12 +305,12 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
             val songId = android.content.ContentUris.parseId(uri)
             if (db.metadata().get(songId)?.fileName != "${job.id}.${track.audioExtension}") {
                 db.metadata().put(MetadataOverrideEntity(songId = songId, fileName = "${job.id}.${track.audioExtension}", title = track.title,
-                    artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.albumArtist ?: com.localfy.app.data.AlbumGrouping.albumArtist(track.artist),
+                    artist = track.artist, album = track.album.ifEmpty { null }, albumArtist = track.albumArtist ?: track.primaryArtist,
                     genre = null, year = null, track = track.track.takeIf { it > 0 }, disc = track.disc,
                     source = "online", updatedAt = System.currentTimeMillis()))
             }
             check(resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null) == 1) { "Could not finish adding the song." }
-            dao.put(job.copy(state = "complete", localUri = uri.toString(), quality = quality, error = null))
+            dao.put(job.copy(state = "complete", trackJson = track.json(), localUri = uri.toString(), quality = quality, error = null))
             withContext(Dispatchers.Main) { (context.applicationContext as LocalfyApp).library.refresh() }
         } finally { tagged.delete() }
     }

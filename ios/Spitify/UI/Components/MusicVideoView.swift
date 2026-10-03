@@ -6,18 +6,19 @@ struct SilentVideoSurface: UIViewRepresentable {
     var position: Double
     var playing: Bool
     var speed: Float
+    var reduceMotion: Bool
     var onState: (String) -> Void
 
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         var parent: SilentVideoSurface
         init(_ parent: SilentVideoSurface) { self.parent = parent }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame, let value = message.body as? String, ["READY", "ERROR"].contains(value) else { return }
+            guard message.frameInfo.isMainFrame, let value = message.body as? String, ["READY", "WAITING", "ERROR"].contains(value) else { return }
             parent.onState(value)
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             let seconds = parent.position.isFinite ? max(0, parent.position) : 0
-            webView.evaluateJavaScript("if(window.spitifySync) spitifySync(\(seconds),\(parent.playing ? "true" : "false"),\(parent.speed));", completionHandler: nil)
+            webView.evaluateJavaScript("if(window.spitifySync) spitifySync(\(seconds),\(parent.playing ? "true" : "false"),\(parent.speed),\(parent.reduceMotion ? "true" : "false"));", completionHandler: nil)
         }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { parent.onState("ERROR") }
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -36,7 +37,7 @@ struct SilentVideoSurface: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {
         context.coordinator.parent = self
         let seconds = position.isFinite ? max(0, position) : 0
-        view.evaluateJavaScript("if(window.spitifySync) spitifySync(\(seconds),\(playing ? "true" : "false"),\(speed));", completionHandler: nil)
+        view.evaluateJavaScript("if(window.spitifySync) spitifySync(\(seconds),\(playing ? "true" : "false"),\(speed),\(reduceMotion ? "true" : "false"));", completionHandler: nil)
     }
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
         view.evaluateJavaScript("if(window.spitifySync) spitifySync(0,false,1);", completionHandler: nil)
@@ -49,6 +50,8 @@ struct SilentVideoSurface: UIViewRepresentable {
 struct MusicVideoBackdrop: View {
     @Environment(AppModel.self) private var app
     @Environment(\.scenePhase) private var phase
+    @Environment(\.themeSettings) private var theme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var video: MusicVideo?
     @State private var alternatives: [MusicVideo] = []
     @State private var loading = true
@@ -58,9 +61,9 @@ struct MusicVideoBackdrop: View {
             ZStack {
                 if let song = app.player.current { ArtworkView(song, cornerRadius: 0).scaledToFill().frame(width: geometry.size.width, height: geometry.size.height).clipped() }
                 if let video, message == nil, phase == .active {
-                    SilentVideoSurface(videoID: video.id, position: app.player.position, playing: app.player.isPlaying, speed: app.player.speed) { state in
+                    SilentVideoSurface(videoID: video.id, position: app.player.position, playing: app.player.isPlaying, speed: app.player.speed, reduceMotion: theme.reduceMotion || systemReduceMotion) { state in
                         guard self.video?.id == video.id else { return }
-                        loading = false
+                        loading = state != "READY"
                         if state == "ERROR" { tryNextVideo() }
                     }.id(video.id).frame(width: geometry.size.width, height: geometry.size.height).opacity(loading ? 0 : 1)
                 }
@@ -89,17 +92,37 @@ struct MusicVideoBackdrop: View {
 
 @MainActor enum VideoWebCache {
     private static var cached: (String, WKWebView)?
+    private static var requestedID: String?
+    private static var activeID: String?
+    private static weak var activeView: WKWebView?
     static func prepare(_ id: String) {
-        guard cached?.0 != id else { return }
-        store(make(id), id: id)
+        select(id)
+        guard cached == nil, activeID != id || activeView == nil else { return }
+        cached = (id, make(id))
     }
     static func take(_ id: String) -> WKWebView {
-        if let entry = cached, entry.0 == id { cached = nil; return entry.1 }
-        return make(id)
+        select(id)
+        let view = cached?.1 ?? make(id)
+        cached = nil
+        activeID = id; activeView = view
+        return view
     }
     static func store(_ view: WKWebView, id: String) {
-        if let old = cached?.1, old !== view { old.stopLoading(); old.loadHTMLString("", baseURL: nil) }
+        if activeView === view { activeID = nil; activeView = nil }
+        // The previous surface may leave after the next song's clip is ready.
+        guard requestedID == id, activeID != id || activeView == nil else { discard(view); return }
+        if let ready = cached?.1 {
+            if ready !== view { discard(view) }
+            return
+        }
         cached = (id, view)
+    }
+    private static func select(_ id: String) {
+        requestedID = id
+        if let entry = cached, entry.0 != id { cached = nil; discard(entry.1) }
+    }
+    private static func discard(_ view: WKWebView) {
+        view.stopLoading(); view.loadHTMLString("", baseURL: nil)
     }
     private static func make(_ videoID: String) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -110,6 +133,7 @@ struct MusicVideoBackdrop: View {
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         }
         let view = WKWebView(frame: .zero, configuration: configuration)
+        view.isUserInteractionEnabled = false
         view.isOpaque = false; view.backgroundColor = .black; view.scrollView.isScrollEnabled = false
         view.scrollView.contentInsetAdjustmentBehavior = .never
         if let url = Bundle.main.url(forResource: "music-video", withExtension: "html"),

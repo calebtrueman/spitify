@@ -136,11 +136,12 @@ fun BooksScreen() {
     val books = rememberBooks()
     val resume by app.podcasts.resume.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<BookSearchResult>?>(null) }
-    var searching by remember { mutableStateOf(false) }
+    val search = remember { com.localfy.app.data.podcast.SpokenSearch(scope, app.podcasts::searchBooks) }
+    val searchState by search.state.collectAsStateWithLifecycle()
+    val results = searchState.results
+    val searching = searchState.searching
     val runSearch: (String) -> Unit = { term ->
-        query = term; focus.clearFocus(); searching = true
-        scope.launch { results = app.podcasts.searchBooks(term); searching = false }
+        query = term; focus.clearFocus(); search.search(term)
     }
     val inProgress = books.filter { b -> b.chapters.any { resume[it.resumeKey] != null } && bookProgress(b.chapters, resume).third < 0.99f }
 
@@ -150,11 +151,11 @@ fun BooksScreen() {
         }
         item {
             TextField(
-                value = query, onValueChange = { query = it; if (it.isBlank()) results = null },
+                value = query, onValueChange = { query = it; search.clear() },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 placeholder = { Text("Search 20,000+ free books by title or author") },
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; results = null }) { Icon(Icons.Rounded.Close, "Clear") } },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; search.clear() }) { Icon(Icons.Rounded.Close, "Clear") } },
                 singleLine = true, shape = RoundedCornerShape(10.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { if (query.isNotBlank()) runSearch(query) }),
@@ -165,6 +166,12 @@ fun BooksScreen() {
             )
         }
         if (searching) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
+        searchState.error?.let { error -> item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(error, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { runSearch(query) }) { Text("Try again") }
+            }
+        } }
         results?.let { list ->
             item { SectionHeader("LibriVox results", eyebrow = "Free public-domain recordings") }
             if (list.isEmpty() && !searching) item { EmptyState("No books found", "LibriVox searches titles from the start, or authors by surname.") }
@@ -246,15 +253,20 @@ private fun BookResultRow(r: BookSearchResult) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     val shows by app.podcasts.shows.collectAsStateWithLifecycle()
     val owned = shows.firstOrNull { it.podcast.feedUrl == r.rssUrl }
     val open = {
-        if (owned != null) app.navigate(Routes.book(owned.id)) else {
-            busy = true
+        if (owned != null) app.navigate(Routes.book(owned.id)) else if (!busy) {
+            busy = true; error = null
             scope.launch {
-                val id = app.podcasts.subscribe(r.rssUrl, r.coverUrl, KIND_AUDIOBOOK, r.title, r.author, r.description)
-                busy = false
-                if (id != null) app.navigate(Routes.book(id))
+                try {
+                    val id = app.podcasts.subscribe(r.rssUrl, r.coverUrl, KIND_AUDIOBOOK, r.title, r.author, r.description)
+                    if (id != null) app.navigate(Routes.book(id)) else error = "Couldn't add this book. Tap to try again."
+                } catch (failure: Exception) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    error = "Couldn't add this book. Tap to try again."
+                } finally { busy = false }
             }
         }
     }
@@ -264,6 +276,7 @@ private fun BookResultRow(r: BookSearchResult) {
         Column(Modifier.weight(1f)) {
             Text(r.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(r.author, style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Text(
                 listOfNotNull(r.totalSeconds.takeIf { it > 0 }?.let { hours(it * 1000) }, r.sections.takeIf { it > 0 }?.let { "$it chapters" }, r.language.takeIf { it.isNotBlank() }).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall, color = LocalfyColors.TextTertiary,

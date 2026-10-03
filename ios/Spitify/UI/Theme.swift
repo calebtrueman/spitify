@@ -10,18 +10,26 @@ struct Palette {
     var tertiary: Color
     var isDark: Bool
     var tint: Color { text.opacity(isDark ? 0.08 : 0.06) }
-    var onAccent: Color { accent.luminance > 0.45 ? .black : .white }
+    var onAccent: Color { accent.luminance > 0.179 ? .black : .white }
 
     static func make(_ t: ThemeSettings, scheme: ColorScheme, artAccent: Color?) -> Palette {
         let dark = t.mode == .system ? scheme == .dark : t.mode != .light
         let accent = (t.accentSource == .artwork ? artAccent : nil) ?? Color(hex: t.accent)
+        if let backdrop = t.backdrop, t.mode != .amoled, t.mode != .system {
+            let bg = Color(hex: backdrop)
+            let ink: Color = dark ? .white : .black
+            return Palette(accent: accent.readable(on: bg.mix(ink, dark ? 0.085 : 0.05)), background: bg, surface: bg.mix(ink, dark ? 0.045 : 0.018),
+                surfaceHigh: bg.mix(ink, dark ? 0.085 : 0.05), text: dark ? .white : Color(hex: 0x111114),
+                secondary: dark ? Color(hex: 0xB9BAC4) : Color(hex: 0x535361),
+                tertiary: dark ? Color(hex: 0xAEAEBA) : Color(hex: 0x595968), isDark: dark)
+        }
         if !dark {
-            return Palette(accent: accent.mix(.black, 0.12), background: Color(hex: 0xF7F7F9), surface: .white, surfaceHigh: Color(hex: 0xEDEDF1),
-                           text: Color(hex: 0x111114), secondary: Color(hex: 0x5E5E66), tertiary: Color(hex: 0x8E8E96), isDark: false)
+            return Palette(accent: accent.readable(on: Color(hex: 0xEDEDF1)), background: Color(hex: 0xF7F7F9), surface: .white, surfaceHigh: Color(hex: 0xEDEDF1),
+                           text: Color(hex: 0x111114), secondary: Color(hex: 0x5E5E66), tertiary: Color(hex: 0x63636D), isDark: false)
         }
         let amoled = t.mode == .amoled
-        return Palette(accent: accent, background: amoled ? .black : Color(hex: 0x09090B), surface: amoled ? Color(hex: 0x0A0A0B) : Color(hex: 0x131316),
-                       surfaceHigh: amoled ? Color(hex: 0x141416) : Color(hex: 0x1C1C21), text: .white, secondary: Color(hex: 0xA7A7AE), tertiary: Color(hex: 0x6E6E76), isDark: true)
+        return Palette(accent: accent.readable(on: Color(hex: amoled ? 0x141416 : 0x1C1C21)), background: amoled ? .black : Color(hex: 0x09090B), surface: amoled ? Color(hex: 0x0A0A0B) : Color(hex: 0x131316),
+                       surfaceHigh: amoled ? Color(hex: 0x141416) : Color(hex: 0x1C1C21), text: .white, secondary: Color(hex: 0xA7A7AE), tertiary: Color(hex: 0x92929D), isDark: true)
     }
 }
 
@@ -33,10 +41,28 @@ extension EnvironmentValues {
 }
 
 extension Color {
+    /// Accents also label selected items, so pale colours need deeper ink on light cards.
+    func readable(on background: Color) -> Color {
+        let backdrop = background.luminance
+        func contrast(_ color: Color) -> Double {
+            let ink = color.luminance
+            return (max(ink, backdrop) + 0.05) / (min(ink, backdrop) + 0.05)
+        }
+        guard contrast(self) < 4.5 else { return self }
+        let target: Color = backdrop > 0.179 ? .black : .white
+        var low = 0.0, high = 1.0
+        for _ in 0..<12 {
+            let amount = (low + high) / 2
+            if contrast(mix(target, amount)) < 4.5 { low = amount } else { high = amount }
+        }
+        return mix(target, high)
+    }
+
     var luminance: Double {
         let c = UIColor(self); var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         c.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        func linear(_ c: CGFloat) -> Double { let v = Double(c); return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
     func mix(_ other: Color, _ amount: Double) -> Color {
         let a = UIColor(self), b = UIColor(other)

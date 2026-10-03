@@ -10,23 +10,22 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Crossfade between consecutive tracks.
  *
  * The session's [main] player always owns the real queue. A few seconds before a track ends we
  * start a throwaway "tail" player on the *outgoing* track at the same position, move [main] to the
- * next track at zero volume, and ramp the two with an equal-power curve. Notification, lock screen,
+ * next track at zero volume, and ramp the two with an peak-safe curve. Notification, lock screen,
  * Bluetooth and the UI therefore see an ordinary track change - just smoother.
  */
-class Crossfader(
+internal class Crossfader(
     private val context: Context,
     private val main: ExoPlayer,
     private val attributes: AudioAttributes,
     private val resolve: (MediaItem) -> MediaItem,
+    private val volume: PlaybackVolume,
+    private val canCrossfade: () -> Boolean = { true },
 ) : Player.Listener {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PlayerPrefs.FILE, Context.MODE_PRIVATE)
@@ -36,7 +35,6 @@ class Crossfader(
     private var tailForIndex = C.INDEX_UNSET
     private var fadeStartedAt = 0L
     private var fadeLength = 0L
-    private var baseVolume = 1f
     /** Listener callbacks arrive asynchronously, so our own skip is marked and consumed once. */
     private var ignoreNextSeek = false
 
@@ -56,12 +54,14 @@ class Crossfader(
         handler.removeCallbacks(tick)
         main.removeListener(this)
         dropTail()
+        volume.setFade(1f, 0f, null)
     }
 
     private val crossfadeMs: Long get() = prefs.getInt(PlayerPrefs.CROSSFADE_MS, 0).toLong()
     private val keepAlbumsGapless: Boolean get() = prefs.getBoolean(PlayerPrefs.CROSSFADE_KEEP_ALBUMS, true)
 
     private fun step() {
+        if (!canCrossfade()) { interrupt(); return }
         if (fadeLength > 0) return ramp()
         val cf = crossfadeMs
         if (cf <= 0 || !main.isPlaying || main.repeatMode == Player.REPEAT_MODE_ONE) { dropTail(); return }
@@ -87,6 +87,8 @@ class Crossfader(
             .apply {
                 // Same audio session as the main player so the equaliser shapes the fading tail too.
                 setAudioSessionId(main.audioSessionId)
+                playbackParameters = main.playbackParameters
+                skipSilenceEnabled = main.skipSilenceEnabled
                 setMediaItem(resolve(main.getMediaItemAt(index)), startAt)
                 playWhenReady = false
                 prepare()
@@ -96,27 +98,25 @@ class Crossfader(
 
     private fun beginFade(remaining: Long) {
         val t = tail ?: return
-        baseVolume = main.volume.takeIf { it > 0f } ?: 1f
         fadeLength = remaining.coerceAtLeast(500)
         fadeStartedAt = SystemClock.elapsedRealtime()
         t.seekTo(main.currentPosition)
-        t.volume = baseVolume
+        volume.setFade(0f, 1f, t)
         t.play()
         ignoreNextSeek = true
-        main.volume = 0f
         main.seekToNextMediaItem()
     }
 
     private fun ramp() {
         val p = ((SystemClock.elapsedRealtime() - fadeStartedAt) / fadeLength.toFloat()).coerceIn(0f, 1f)
-        main.volume = baseVolume * sin(p * PI / 2).toFloat()
-        tail?.volume = baseVolume * cos(p * PI / 2).toFloat()
+        // A linear mix keeps the combined peak below the chosen gain, even for identical audio.
+        volume.setFade(p, 1f - p, tail)
         if (p >= 1f) finishFade()
     }
 
     private fun finishFade() {
         dropTail()
-        main.volume = baseVolume
+        volume.setFade(1f, 0f, null)
         fadeLength = 0
     }
 
@@ -156,6 +156,8 @@ class Crossfader(
 /** Shared keys for the "player" prefs file read by both the UI and the service. */
 object PlayerPrefs {
     const val FILE = "player"
+    const val NORMALIZE_AUDIO = "normalize_audio"
+    const val AUTOPLAY = "autoplay"
     const val CROSSFADE_MS = "crossfade_ms"
     const val CROSSFADE_KEEP_ALBUMS = "crossfade_keep_albums"
 }

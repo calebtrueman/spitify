@@ -8,15 +8,15 @@ struct OnlineMusicView: View {
 struct DownloadMark: View {
     var complete = false
     var active = false
-    var progress: Double = 0
+    var progress: Double? = nil
     var body: some View {
         ZStack {
             if active {
-                if progress > 0 {
+                if let progress {
                     Circle().stroke(.secondary.opacity(0.25), lineWidth: 2)
                     Circle().trim(from: 0, to: min(1, progress)).stroke(.green, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
                 } else { ProgressView().controlSize(.small) }
-                if progress > 0 { Image(systemName: "arrow.down").font(.system(size: 10, weight: .bold)) }
+                if progress != nil { Image(systemName: "arrow.down").font(.system(size: 10, weight: .bold)) }
             } else {
                 Image(systemName: complete ? "arrow.down.circle.fill" : "arrow.down.circle").font(.system(size: 23))
                     .foregroundStyle(complete ? Color.green : Color.secondary)
@@ -42,6 +42,8 @@ struct OnlineTrackRow: View {
     var body: some View {
         let job = app.musicDownloads.jobs.first { $0.id == track.id }
         let song = savedSong(track, app: app)
+        let complete = song != nil || job?.state == .complete
+        let fraction = DownloadProgress.fraction(state: job?.state, measured: app.musicDownloads.progress[track.id])
         if let onPlay {
             let playable = song ?? MusicStreams.song(track)
             HStack(spacing: 0) {
@@ -52,8 +54,8 @@ struct OnlineTrackRow: View {
                     Button {
                         if job?.state.active == true { app.musicDownloads.cancel(track.id) }
                         else { app.musicStreams.save([track]); Task { _ = await app.musicDownloads.enqueue([track]) } }
-                    } label: { DownloadMark(active: job?.state.active == true, progress: app.musicDownloads.progress[track.id] ?? 0).frame(width: 44, height: 44) }
-                        .buttonStyle(.plain).padding(.trailing, 8).accessibilityLabel(job?.state.active == true ? "Cancel download" : "Download \(track.title)")
+                    } label: { DownloadMark(complete: complete, active: job?.state.active == true, progress: fraction).frame(width: 44, height: 44) }
+                        .buttonStyle(.plain).disabled(complete).padding(.trailing, 8).accessibilityLabel(complete ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
                 }
             }.onAppear { app.musicStreams.register(track) }
         } else {
@@ -67,10 +69,10 @@ struct OnlineTrackRow: View {
                     else { SearchCover(id: "track:" + track.id, album: track.album.isEmpty ? track.title : track.album, artist: track.artist, artwork: track.artwork) }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title).lineLimit(2).font(.body)
-                        Text(track.artist).font(.caption)
+                        Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Spacer(minLength: 0)
-                }.foregroundStyle(Color.primary).contentShape(Rectangle())
+                }.frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Color.primary).contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(onPlay != nil && song == nil)
             Button {
                 if job?.state.active == true { app.musicDownloads.cancel(track.id) }
@@ -85,10 +87,10 @@ struct OnlineTrackRow: View {
                     }
                 }
             } label: {
-                DownloadMark(complete: song != nil, active: preparing || job?.state.active == true, progress: app.musicDownloads.progress[track.id] ?? 0)
+                DownloadMark(complete: complete, active: preparing || job?.state.active == true, progress: fraction)
                     .frame(width: 44, height: 44)
-            }.buttonStyle(.plain).disabled(song != nil || preparing)
-                .accessibilityLabel(song != nil ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
+            }.buttonStyle(.plain).disabled(complete || preparing)
+                .accessibilityLabel(complete ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
         }.padding(.vertical, 6).padding(.horizontal, onPlay == nil ? 0 : 16)
         }
     }
@@ -145,13 +147,18 @@ struct OnlineAlbumView: View {
             .disabled(tracks.isEmpty).accessibilityLabel(saved ? "Remove from Library" : "Add to Library")
     }
     private var downloadButton: some View {
-        let songs = tracks.compactMap { savedSong($0, app: app) }
         let ids = Set(tracks.map(\.id))
         let jobs = app.musicDownloads.jobs.filter { ids.contains($0.id) }
         let active = jobs.contains { $0.state.active }
-        let complete = !tracks.isEmpty && songs.count == tracks.count
-        let transferred = jobs.filter { $0.state.active }.reduce(0.0) { sum, job in sum + (app.musicDownloads.progress[job.id] ?? 0) }
-        let progress = tracks.isEmpty ? 0 : (Double(songs.count) + transferred) / Double(tracks.count)
+        let fractions = tracks.map { track -> Double? in
+            if savedSong(track, app: app) != nil { return 1 }
+            let job = jobs.first { $0.id == track.id }
+            return DownloadProgress.fraction(state: job?.state, measured: app.musicDownloads.progress[track.id])
+        }
+        let complete = !tracks.isEmpty && tracks.allSatisfy { track in
+            savedSong(track, app: app) != nil || jobs.contains { $0.id == track.id && $0.state == .complete }
+        }
+        let progress = DownloadProgress.album(fractions)
         let label = complete ? "Downloaded" : active ? "Cancel downloads" : single == nil ? "Download album" : "Download song"
         return Button {
             if active { for job in jobs where job.state.active { app.musicDownloads.cancel(job.id) } }

@@ -80,12 +80,15 @@ final class LibraryStore {
             let values = try? url.resourceValues(forKeys: Set(keys))
             let modified = values?.contentModificationDate ?? .distantPast
             let size = Int64(values?.fileSize ?? 0)
-            if let c = cache[rel], c.modified == modified, c.size == size { found[rel] = c; continue }
+            let fileSuffix = url.pathExtension.lowercased()
+            let ext = MusicResourceLoader.audioExtension(at: url) ?? fileSuffix
+            if var c = cache[rel], c.modified == modified, c.size == size {
+                c.song.fileExtension = ext; found[rel] = c; continue
+            }
             let tags = await TagReader.read(url)
-            let ext = url.pathExtension.lowercased()
             let parentFolder = (rel as NSString).deletingLastPathComponent
             let folderName = (parentFolder as NSString).lastPathComponent
-            let isBook = rel.lowercased().hasPrefix("audiobooks/") || ext == "m4b"
+            let isBook = rel.lowercased().hasPrefix("audiobooks/") || fileSuffix == "m4b"
             let base = url.deletingPathExtension().lastPathComponent
             let artist = tags.artist ?? "Unknown artist"
             var song = Song(

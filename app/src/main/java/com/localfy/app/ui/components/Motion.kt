@@ -112,14 +112,14 @@ fun rememberHaptics(): (HapticFeedbackType) -> Unit {
     return remember(h, enabled) { { type -> if (enabled) h.performHapticFeedback(type) } }
 }
 
-/** Darkens the strip behind the status bar so scrolled content never fights the clock/icons. */
+/** Keeps scrolling text from showing through the clock and status icons. */
 @Composable
 fun StatusBarScrim(modifier: Modifier = Modifier, color: Color = LocalfyColors.Background) {
     Box(
         modifier
             .fillMaxWidth()
             .windowInsetsTopHeight(WindowInsets.statusBars)
-            .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.85f), color.copy(alpha = 0.3f)))),
+            .background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.94f)))),
     )
 }
 

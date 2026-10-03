@@ -10,6 +10,9 @@ struct SongRow: View {
     var onRemove: (() -> Void)? = nil
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
+    @Environment(\.themeSettings) private var theme
+    @Environment(\.dynamicTypeSize) private var textSize
+    private var roomyText: Bool { textSize >= .xxLarge || theme.textScale == .huge }
 
     @State private var swipeX: CGFloat = 0
     @State private var suppressTapUntil = Date.distantPast
@@ -30,17 +33,18 @@ struct SongRow: View {
                     }.frame(width: 50, height: 50)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(1)
+                    Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(roomyText ? 2 : 1).multilineTextAlignment(.leading)
                     HStack(spacing: 4) {
                         if downloaded { Image(systemName: "arrow.down.circle.fill").font(.system(size: 12)).foregroundStyle(.green).accessibilityLabel("Downloaded") }
-                        Text(song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))").text(.bodyS).foregroundStyle(p.secondary).lineLimit(1)
+                        Text(song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))").text(.bodyS).foregroundStyle(p.secondary).lineLimit(roomyText ? 2 : 1).multilineTextAlignment(.leading)
                     }
                 }
                 Spacer(minLength: 4)
                 SongMenu(song: song, removeLabel: removeLabel, onRemove: onRemove) {
-                    Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold)).foregroundStyle(p.secondary).frame(width: 36, height: 44).contentShape(Rectangle())
+                    Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold)).foregroundStyle(p.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.vertical, 6)
             .contentShape(Rectangle())
             .opacity(song.playable ? 1 : 0.45)
@@ -107,15 +111,21 @@ struct SongMenuItems: View {
             Button("Share with friends", systemImage: "square.and.arrow.up") { router.share(name: song.title, songs: [song], kind: "song", app: app) }
             Button("Add to playlist", systemImage: "text.badge.plus") { if let track = app.musicStreams.track(song) { app.musicStreams.save([track]) }; router.addingToPlaylist = [song] }
             Divider()
-            Button("Go to album", systemImage: "square.stack") { if let track = app.musicStreams.track(song) { router.go(.catalogAlbum(OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork))) } else { router.go(.album(song.albumKey)) } }
-            Button("Go to artist", systemImage: "person") { router.go(.artist(song.artist)) }
+            Button("Go to album", systemImage: "square.stack") { if let track = app.musicStreams.track(song) { router.go(.catalogAlbum(OnlineAlbum(id: track.releaseID, title: track.album, artist: track.albumArtist ?? track.primaryArtist, artwork: track.artwork))) } else { router.go(.album(song.albumKey)) } }
+            if song.creditedArtists.count > 1 {
+                Menu("Go to artist", systemImage: "person") {
+                    ForEach(song.creditedArtists, id: \.self) { name in Button(name) { router.go(.artist(name)) } }
+                }
+            } else {
+                Button("Go to artist", systemImage: "person") { router.go(.artist(song.primaryArtist)) }
+            }
         }
         if song.kind != .remote { Button("Edit info & artwork", systemImage: "pencil") { router.playerOpen = false; router.editing = ([song], false) } }
         if let onRemove { Button(removeLabel ?? "Remove", systemImage: "minus.circle", role: .destructive, action: onRemove) }
         if !song.isSpoken {
             Divider()
             Button("Don't recommend this song", systemImage: "hand.thumbsdown") { app.library.hiddenSongs.insert(song.id) }
-            Button("Don't recommend \(song.artist)", systemImage: "person.slash") { app.library.hiddenArtists.insert(song.artist) }
+            Button("Don't recommend \(song.primaryArtist)", systemImage: "person.slash") { app.library.hiddenArtists.insert(song.primaryArtist) }
         }
         Button("Song info", systemImage: "info.circle") { router.info = song }
     }
@@ -134,7 +144,7 @@ struct SectionHeader: View {
                 Text(title).text(.headlineS).foregroundStyle(p.text)
             }
             Spacer()
-            if let action, let onAction { Button(action, action: onAction).text(.label).foregroundStyle(p.secondary).buttonStyle(.pressable) }
+            if let action, let onAction { Button(action: onAction) { Text(action).text(.label).foregroundStyle(p.secondary).frame(minHeight: 44).contentShape(Rectangle()) }.buttonStyle(.pressable) }
         }
         .padding(.horizontal, 16).padding(.top, 26).padding(.bottom, 10)
     }
@@ -165,7 +175,7 @@ struct MediaTile: View {
                 }
                 .frame(width: width, height: width)
                 .shadow(color: .black.opacity(0.35), radius: 10, y: 6)
-                Text(tile.title).text(.titleS).foregroundStyle(p.text).lineLimit(1)
+                Text(tile.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Text(tile.subtitle).text(.caption).foregroundStyle(p.secondary).lineLimit(2).multilineTextAlignment(tile.circle ? .center : .leading)
             }
             .frame(width: width, alignment: tile.circle ? .center : .leading)
@@ -209,10 +219,10 @@ struct QuickTile: View {
         Button(action: { Haptics.tap(); tile.action() }) {
             HStack(spacing: 0) {
                 Group { if let m = tile.mix { MixCover(mix: m, compact: true) } else { ArtworkView(tile.song, cornerRadius: 0) } }.frame(width: 54, height: 54)
-                Text(tile.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).multilineTextAlignment(.leading).padding(.horizontal, 10)
+                Text(tile.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.vertical, 6)
                 Spacer(minLength: 0)
             }
-            .frame(height: 54).frame(maxWidth: .infinity)
+            .frame(minHeight: 54).frame(maxWidth: .infinity)
             .background(p.tint).clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }.buttonStyle(.pressable)
     }
@@ -256,8 +266,8 @@ struct Pill: View {
     @Environment(\.palette) private var p
     var body: some View {
         Button(action: { Haptics.tap(); action() }) {
-            Text(title).text(.label).foregroundStyle(selected ? p.onAccent : p.text)
-                .padding(.horizontal, 15).padding(.vertical, 8)
+            Text(title).text(.label).foregroundStyle(selected ? p.onAccent : p.text).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 15).padding(.vertical, 8).frame(minHeight: 44)
                 .background(selected ? p.accent : p.tint, in: Capsule())
         }.buttonStyle(.pressable)
     }

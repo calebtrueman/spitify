@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,7 +51,7 @@ fun AlbumScreen(albumId: Long) {
     val streams = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicStreams
     val catalog = (album.songs.mapNotNull(streams::track) + jobs.map { com.localfy.app.data.music.Monochrome.parseTrack(org.json.JSONObject(it.trackJson)) }.filterNotNull()).firstOrNull {
         com.localfy.app.data.music.SearchMatch.fold(it.album) == com.localfy.app.data.music.SearchMatch.fold(album.title) &&
-            com.localfy.app.data.music.SearchMatch.fold(it.artist) == com.localfy.app.data.music.SearchMatch.fold(album.artist) && it.releaseId.isNotEmpty()
+            com.localfy.app.data.music.SearchMatch.fold(it.albumArtist ?: it.primaryArtist) == com.localfy.app.data.music.SearchMatch.fold(album.artist) && it.releaseId.isNotEmpty()
     }
     if (catalog != null) {
         CatalogAlbumScreen(com.localfy.app.data.music.OnlineAlbum(catalog.releaseId, album.title, album.artist, catalog.artwork))
@@ -94,7 +95,7 @@ fun ArtistScreen(name: String) {
     CollectionScreen(
         title = artist.name,
         kindLabel = "Artist",
-        subtitle = "${artist.albums.size} albums • ${songCount(artist.songs.size)}",
+        subtitle = "${artist.albums.size} ${if (artist.albums.size == 1) "album" else "albums"} • ${songCount(artist.songs.size)}",
         art = artist.cover.artKey,
         hero = true,
         songs = popular,
@@ -127,6 +128,7 @@ fun PlaylistScreen(id: Long) {
     val playlist = playlists.firstOrNull { it.id == id } ?: return
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    var options by remember { mutableStateOf(false) }
 
     CollectionScreen(
         title = playlist.name,
@@ -136,8 +138,13 @@ fun PlaylistScreen(id: Long) {
         songs = playlist.songs,
         extrasFor = { i, _ -> SongMenuExtras("Remove from this playlist") { app.repo.removeFromPlaylist(id, i) } },
         headerActions = {
-            IconButton(onClick = { renaming = true }) { Icon(Icons.Rounded.Edit, "Rename", tint = LocalfyColors.TextSecondary) }
-            IconButton(onClick = { deleting = true }) { Icon(Icons.Rounded.DeleteOutline, "Delete playlist", tint = LocalfyColors.TextSecondary) }
+            androidx.compose.foundation.layout.Box {
+                IconButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, "Playlist options", tint = LocalfyColors.TextSecondary) }
+                androidx.compose.material3.DropdownMenu(options, onDismissRequest = { options = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Rename playlist") }, onClick = { options = false; renaming = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Delete playlist") }, onClick = { options = false; deleting = true }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) })
+                }
+            }
         },
         emptyText = "Add songs from any song’s ⋮ menu.",
     )

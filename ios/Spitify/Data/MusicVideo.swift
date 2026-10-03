@@ -28,9 +28,15 @@ enum MusicVideoLookup {
 
     @MainActor private static var cache: [String: (Date, [MusicVideo])] = [:]
     @MainActor private static var pending: [String: Task<[MusicVideo], Error>] = [:]
+    @MainActor private static var preparation: Task<Void, Never>?
     @MainActor static func prepare(_ song: Song) {
+        preparation?.cancel(); preparation = nil
         guard !song.isSpoken else { return }
-        Task { if let videos = try? await findAll(title: song.title, artist: song.artist, durationMs: song.durationMs), let first = videos.first { VideoWebCache.prepare(first.id) } }
+        preparation = Task {
+            guard let videos = try? await findAll(title: song.title, artist: song.artist, durationMs: song.durationMs),
+                  !Task.isCancelled, let first = videos.first else { return }
+            VideoWebCache.prepare(first.id)
+        }
     }
     @MainActor static func findAll(title: String, artist: String, durationMs: Int64) async throws -> [MusicVideo] {
         let key = "\(SearchMatch.fold(title))|\(SearchMatch.fold(artist))"

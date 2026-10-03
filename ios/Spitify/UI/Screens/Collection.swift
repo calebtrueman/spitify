@@ -29,19 +29,19 @@ struct CollectionView<Extra: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     if let toolbarExtra { toolbarExtra }
                     if !songs.isEmpty && songs.allSatisfy({ !$0.isSpoken }) {
-                        Button { router.share(name: title, songs: songs, kind: kind == "Album" ? "album" : kind == "Song" ? "song" : "playlist", app: app) } label: { Image(systemName: "square.and.arrow.up").frame(width: 40, height: 40) }.accessibilityLabel("Share with friends")
+                        Button { router.share(name: title, songs: songs, kind: kind == "Album" ? "album" : kind == "Song" ? "song" : "playlist", app: app) } label: { Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Share with friends")
                     }
-                    Button { app.player.addToQueue(songs) } label: { Image(systemName: "text.badge.plus").font(.system(size: 20)).frame(width: 40, height: 40) }.disabled(songs.isEmpty)
-                    Spacer()
+                    Button { app.player.addToQueue(songs) } label: { Image(systemName: "text.badge.plus").font(.system(size: 20)).frame(width: 44, height: 44).contentShape(Rectangle()) }.disabled(songs.isEmpty)
+                    Spacer(minLength: 0)
                     Button { app.player.play(songs, shuffle: true, source: title) } label: { Image(systemName: "shuffle").font(.system(size: 22, weight: .semibold)).frame(width: 44, height: 44) }.disabled(songs.isEmpty)
                     PlayButton(playing: isThis && app.player.isPlaying) {
                         if isThis && app.player.hasMedia { app.player.toggle() } else { app.player.play(songs, shuffle: false, source: title) }
                     }.disabled(songs.isEmpty).opacity(songs.isEmpty ? 0.4 : 1)
                 }
-                .foregroundStyle(p.secondary).padding(.horizontal, 12).padding(.vertical, 4)
+                .foregroundStyle(p.secondary).padding(.horizontal, 8).padding(.vertical, 4)
                 if let mix, mix.why != nil || mix.refresh != nil {
                     Text([mix.why, mix.refresh].compactMap { $0 }.joined(separator: " · ")).text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16).padding(.bottom, 6)
                 }
@@ -118,14 +118,14 @@ struct AlbumView: View {
     var body: some View {
         if let a = app.library.library.albumById[id] {
             if let track = (app.musicDownloads.jobs.map(\.track) + Array(app.musicStreams.tracks.values)).first(where: {
-                SearchMatch.fold($0.album) == SearchMatch.fold(a.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(a.artist) && !$0.releaseID.isEmpty
+                SearchMatch.fold($0.album) == SearchMatch.fold(a.title) && SearchMatch.fold($0.albumArtist ?? $0.primaryArtist) == SearchMatch.fold(a.artist) && !$0.releaseID.isEmpty
             }) {
                 OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: a.title, artist: a.artist, artwork: track.artwork))
             } else {
             let more = (app.library.library.artistByName[a.artist]?.albums ?? []).filter { $0.id != a.id }
             CollectionView(title: a.title, kind: "Album", subtitle: [a.artist, a.year > 0 ? String(a.year) : nil].compactMap { $0 }.joined(separator: " • "), art: a.cover, songs: a.songs,
                            trackNumbers: true, songSubtitle: { $0.artist },
-                           toolbarExtra: AnyView(Button { router.editing = (a.songs, true) } label: { Image(systemName: "pencil").font(.system(size: 20)).frame(width: 40, height: 40) })) {
+                           toolbarExtra: AnyView(Button { router.editing = (a.songs, true) } label: { Image(systemName: "pencil").font(.system(size: 20)).frame(width: 44, height: 44).contentShape(Rectangle()) })) {
                 EmptyView()
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { if !more.isEmpty { Menu { ForEach(more) { m in Button(m.title) { router.go(.album(m.id)) } } } label: { Image(systemName: "square.stack") } } } }
@@ -145,7 +145,7 @@ struct ArtistView: View {
             CollectionView(title: a.name, kind: "Artist", subtitle: "\(a.albums.count) albums • \(songCount(a.songs.count))", art: a.cover, songs: popular, hero: true,
                            songSubtitle: { s in (counts[s.id] ?? 0) > 0 ? "\(counts[s.id]!) plays • \(s.album)" : s.album },
                            toolbarExtra: AnyView(Button { app.player.play(app.artistRadio(a.name).isEmpty ? a.songs : app.artistRadio(a.name), shuffle: false, source: "\(a.name) Radio") } label: {
-                               Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 20)).frame(width: 40, height: 40) })) {
+                               Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 20)).frame(width: 44, height: 44).contentShape(Rectangle()) })) {
                 if !a.albums.isEmpty {
                     TileShelf(title: "Discography", tiles: a.albums.map { al in Tile(id: al.id, title: al.title, subtitle: al.year > 0 ? String(al.year) : "Album", song: al.cover) { router.go(.album(al.id)) } })
                     SectionHeader(title: "Popular in your library")

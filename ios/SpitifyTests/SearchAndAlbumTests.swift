@@ -34,6 +34,54 @@ final class SearchAndAlbumTests: XCTestCase {
         for song in songs { XCTAssertEqual(library.songById[song.id]?.artist, song.artist) }
         XCTAssertEqual(Song.albumArtist("Tyler, The Creator"), "Tyler, The Creator")
     }
+    @MainActor func testFeaturedArtistsHaveTheirOwnPagesAndRetainCredits() throws {
+        let track = try XCTUnwrap(MonochromeClient.track([
+            "trackId": "123", "title": "Tomorrow Never Came", "albumTitle": "Lust for Life",
+            "artistNames": ["Lana Del Rey", "Sean Ono Lennon"], "duration": 300000
+        ]))
+        XCTAssertEqual(track.artist, "Lana Del Rey, Sean Ono Lennon")
+        XCTAssertEqual(track.primaryArtist, "Lana Del Rey")
+        let data = try JSONEncoder().encode(track)
+        let restored = try JSONDecoder().decode(OnlineTrack.self, from: data)
+        var oldEntry = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        oldEntry.removeValue(forKey: "artistNames")
+        let legacy = try JSONDecoder().decode(OnlineTrack.self, from: JSONSerialization.data(withJSONObject: oldEntry))
+        XCTAssertNil(legacy.artistNames)
+        XCTAssertEqual(legacy.artist, track.artist)
+        let song = MusicStreams.song(restored)
+        let library = Library.build([song])
+        XCTAssertEqual(Set(library.artists.map(\.name)), ["Lana Del Rey", "Sean Ono Lennon"])
+        XCTAssertEqual(library.artistByName["Sean Ono Lennon"]?.songs.map(\.id), [song.id])
+        XCTAssertEqual(library.albums.first?.artist, "Lana Del Rey")
+        XCTAssertEqual(library.songById[song.id]?.artist, track.artist)
+        var downloaded = song; downloaded.id = "download"; downloaded.kind = .file; downloaded.artistNames = nil
+        XCTAssertEqual(Library.completeAlbumDetails(downloaded, from: [song]).creditedArtists, track.artistNames)
+    }
+
+    func testOldFilesUseKnownArtistBoundariesWithoutBreakingBandNames() {
+        func song(_ id: String, _ artist: String, _ albumArtist: String) -> Song {
+            Song(id: id, title: id, artist: artist, album: "Album " + id, albumArtist: albumArtist,
+                 durationMs: 180000, track: 1, disc: 1, year: 2020, location: id + ".flac", kind: .file,
+                 dateAdded: Date(), sizeBytes: 100, fileExtension: "flac")
+        }
+        let library = Library.build([
+            song("solo", "Lana Del Rey", "Lana Del Rey"),
+            song("guest", "Lana Del Rey, Sean Ono Lennon", "Lana Del Rey, Sean Ono Lennon"),
+            song("band", "Earth, Wind & Fire", "Earth, Wind & Fire"),
+            song("tyler", "Tyler, The Creator", "Tyler, The Creator"),
+            song("feature", "Lana Del Rey (feat. Father John Misty)", "Lana Del Rey")
+        ])
+        XCTAssertEqual(library.artistByName["Lana Del Rey"]?.songs.count, 3)
+        XCTAssertNotNil(library.artistByName["Sean Ono Lennon"])
+        XCTAssertNotNil(library.artistByName["Father John Misty"])
+        XCTAssertNotNil(library.artistByName["Earth, Wind & Fire"])
+        XCTAssertNotNil(library.artistByName["Tyler, The Creator"])
+        XCTAssertNil(library.artistByName["Lana Del Rey, Sean Ono Lennon"])
+        XCTAssertEqual(ArtistCredits.names("Broadcast (UK)"), ["Broadcast (UK)"])
+        XCTAssertEqual(ArtistCredits.names("Simon & Garfunkel"), ["Simon & Garfunkel"])
+        XCTAssertEqual(library.songById["guest"]?.artist, "Lana Del Rey, Sean Ono Lennon")
+    }
+
     func testAlternateAudioRejectsWrongVersionsAndUntrustedURLs() {
         let track = OnlineTrack(id: "1", title: "High Hopes", artist: "Joji", album: "Nectar", releaseID: "2", durationMs: 183000, trackNumber: 1, discNumber: 1, artwork: nil, playable: false)
         XCTAssertTrue(AudioFallback.matches(track, title: "Joji - High Hopes (Official Audio)", author: "Joji", durationMs: 183000))

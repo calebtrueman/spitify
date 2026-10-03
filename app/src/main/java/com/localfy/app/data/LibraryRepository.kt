@@ -78,7 +78,12 @@ class LibraryRepository(
     val library: StateFlow<Library> = combine(_raw, metadata.overrides, metadata.artVersions, (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.saved) { raw, o, _, saved ->
         fun key(song: Song) = com.localfy.app.data.music.SearchMatch.fold(song.title) + "|" + com.localfy.app.data.music.SearchMatch.fold(song.artist)
         val savedBySong = saved.groupBy(::key)
-        val local = raw.map { metadata.apply(it, o[it.id]) }.map { song ->
+        val local = raw.map { metadata.apply(it, o[it.id]) }.map { original ->
+            val names = savedBySong[key(original)].orEmpty().filter {
+                com.localfy.app.data.music.SearchMatch.sameSong(original.title, original.artist, original.durationMs, it.title, it.artist, it.durationMs) &&
+                    (original.album.isBlank() || original.album == "Unknown album" || com.localfy.app.data.music.AudioFallback.sameRelease(original.album, it.album))
+            }.mapNotNull { it.artistNames }.distinct().singleOrNull()
+            val song = if (original.artistNames == null && names != null) original.copy(artistNames = names) else original
             if (song.album.isNotBlank() && song.album != "Unknown album") song else {
                 val matches = savedBySong[key(song)].orEmpty().filter { it.album.isNotBlank() && it.album != "Unknown album" && kotlin.math.abs(it.durationMs - song.durationMs) <= 5000 }
                 if (matches.map { it.album }.distinct().size == 1) song.copy(album = matches.first().album, albumArtist = matches.first().albumArtist, artUrl = song.artUrl ?: matches.first().artUrl) else song

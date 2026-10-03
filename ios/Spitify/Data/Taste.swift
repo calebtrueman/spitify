@@ -68,8 +68,8 @@ final class TasteModel {
         self.input = input
         byId = Dictionary(input.songs.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         for s in input.songs {
-            artistSongCount[s.artist, default: 0] += 1
-            if let g = s.genreKey { artistGenres[s.artist, default: []].insert(g) }
+            artistSongCount[s.primaryArtist, default: 0] += 1
+            if let g = s.genreKey { artistGenres[s.primaryArtist, default: []].insert(g) }
         }
         build()
     }
@@ -92,11 +92,11 @@ final class TasteModel {
                 daypartSong[part, default: [:]][s.id, default: 0] += w * decay
             }
         }
-        if !input.seedArtists.isEmpty { for s in input.songs where input.seedArtists.contains(s.artist) { songScore[s.id, default: 0] += 0.8 } }
+        if !input.seedArtists.isEmpty { for s in input.songs where s.creditedArtists.contains(where: input.seedArtists.contains) { songScore[s.id, default: 0] += 0.8 } }
 
         for (id, sc) in songScore {
             guard let s = byId[id] else { continue }
-            artistScore[s.artist, default: 0] += sc
+            artistScore[s.primaryArtist, default: 0] += sc
             if let g = s.genreKey { genreScore[g, default: 0] += sc }
             if let d = s.decade { decadeScore[d, default: 0] += sc }
         }
@@ -112,7 +112,7 @@ final class TasteModel {
                     let w = 1.0 / Double(j - i)
                     co[a, default: [:]][b, default: 0] += w
                     co[b, default: [:]][a, default: 0] += w
-                    let aa = byId[a]!.artist, ba = byId[b]!.artist
+                    let aa = byId[a]!.primaryArtist, ba = byId[b]!.primaryArtist
                     if aa != ba {
                         artistCo[aa, default: [:]][ba, default: 0] += w
                         artistCo[ba, default: [:]][aa, default: 0] += w
@@ -140,7 +140,7 @@ final class TasteModel {
 
     func similarity(_ a: Song, _ b: Song) -> Double {
         var s = 0.0
-        if a.artist == b.artist { s += 0.45 }
+        if a.primaryArtist == b.primaryArtist { s += 0.45 }
         if a.albumKey == b.albumKey { s += 0.2 }
         if let ga = a.genreKey, let gb = b.genreKey {
             if ga == gb { s += 0.25 } else if ga.split(separator: " ").contains(where: { $0.count > 2 && gb.contains($0) }) { s += 0.12 }
@@ -148,7 +148,7 @@ final class TasteModel {
         if a.decade != nil, a.decade == b.decade { s += 0.08 }
         let c = co[a.id]?[b.id] ?? 0
         s += 0.6 * c / (c + 1)
-        let ac = artistCo[a.artist]?[b.artist] ?? 0
+        let ac = artistCo[a.primaryArtist]?[b.primaryArtist] ?? 0
         s += 0.3 * ac / (ac + 1)
         return s
     }
@@ -165,10 +165,10 @@ final class TasteModel {
 
     func predicted(_ s: Song) -> Double {
         let resemblance = favourites.map { similarity(s, $0) * max(0, normSong($0.id)) }.max() ?? 0
-        return 0.5 * normArtist(s.artist) + 0.3 * normGenre(s.genreKey) + 0.1 * normDecade(s.decade) + 0.6 * resemblance
+        return 0.5 * normArtist(s.primaryArtist) + 0.3 * normGenre(s.genreKey) + 0.1 * normDecade(s.decade) + 0.6 * resemblance
     }
 
-    func hidden(_ s: Song) -> Bool { input.hiddenSongs.contains(s.id) || input.hiddenArtists.contains(s.artist) }
+    func hidden(_ s: Song) -> Bool { input.hiddenSongs.contains(s.id) || input.hiddenArtists.contains(s.artist) || s.creditedArtists.contains(where: input.hiddenArtists.contains) }
 
     lazy var topArtists: [String] = {
         let ranked = artistScore.filter { $0.value > 0 && !input.hiddenArtists.contains($0.key) }.sorted { $0.value > $1.value }.map(\.key)
@@ -233,7 +233,7 @@ enum PlaylistGenerator {
 
         // This Is / Radio
         for (i, artist) in m.topArtists.prefix(3).enumerated() {
-            let theirs = songs.filter { $0.artist == artist }
+            let theirs = songs.filter { $0.creditedArtists.contains(artist) }
             if theirs.count >= 5 {
                 out.append(Mix(id: "thisis:\(artist)", title: "This Is \(artist)", description: "The essential tracks, ranked by how much you play them.",
                                songs: theirs.sorted { m.normSong($0.id) * 2 + m.predicted($0) > m.normSong($1.id) * 2 + m.predicted($1) }, section: .yourMixes, style: .collage, accent: palette[(i + 2) % palette.count]))
@@ -296,12 +296,12 @@ enum PlaylistGenerator {
     }
 
     static func artistRadio(_ m: TasteModel, _ artist: String, _ songs: [Song]? = nil) -> [Song] {
-        let all = songs ?? m.input.songs.filter { $0.playable && !$0.isSpoken }
+        let all = (songs ?? m.input.songs).filter { $0.playable && !$0.isSpoken && !m.hidden($0) }
         let related = Array(m.topArtists.filter { $0 != artist }.sorted { m.artistSimilarity(artist, $0) > m.artistSimilarity(artist, $1) }.prefix(6))
-        let pool = all.filter { $0.artist != artist && related.contains($0.artist) }
+        let pool = all.filter { !$0.creditedArtists.contains(artist) && related.contains($0.primaryArtist) }
         return interleave(
-            Array(all.filter { $0.artist == artist }.sorted { m.normSong($0.id) + m.predicted($0) > m.normSong($1.id) + m.predicted($1) }.prefix(20)),
-            Array(pool.sorted { m.predicted($0) + m.artistSimilarity(artist, $0.artist) > m.predicted($1) + m.artistSimilarity(artist, $1.artist) }.prefix(30)))
+            Array(all.filter { $0.creditedArtists.contains(artist) }.sorted { m.normSong($0.id) + m.predicted($0) > m.normSong($1.id) + m.predicted($1) }.prefix(20)),
+            Array(pool.sorted { m.predicted($0) + m.artistSimilarity(artist, $0.primaryArtist) > m.predicted($1) + m.artistSimilarity(artist, $1.primaryArtist) }.prefix(30)))
     }
 
     static func interleave(_ a: [Song], _ b: [Song]) -> [Song] {
@@ -317,12 +317,12 @@ enum PlaylistGenerator {
     static func diversify(_ list: [Song], maxPerArtist: Int = 3, maxPerAlbum: Int = .max) -> [Song] {
         var perArtist: [String: Int] = [:], perAlbum: [String: Int] = [:]
         var kept = list.filter { s in
-            perArtist[s.artist, default: 0] += 1; perAlbum[s.albumKey, default: 0] += 1
-            return perArtist[s.artist]! <= maxPerArtist && perAlbum[s.albumKey]! <= maxPerAlbum
+            perArtist[s.primaryArtist, default: 0] += 1; perAlbum[s.albumKey, default: 0] += 1
+            return perArtist[s.primaryArtist]! <= maxPerArtist && perAlbum[s.albumKey]! <= maxPerAlbum
         }
         if kept.count > 2 {
-            for i in 1..<kept.count where kept[i].artist == kept[i - 1].artist {
-                if let swap = ((i + 1)..<kept.count).first(where: { kept[$0].artist != kept[i - 1].artist }) { kept.swapAt(i, swap) }
+            for i in 1..<kept.count where kept[i].primaryArtist == kept[i - 1].primaryArtist {
+                if let swap = ((i + 1)..<kept.count).first(where: { kept[$0].primaryArtist != kept[i - 1].primaryArtist }) { kept.swapAt(i, swap) }
             }
         }
         return kept

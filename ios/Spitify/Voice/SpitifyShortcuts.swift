@@ -30,13 +30,15 @@ struct SpitifyMediaQuery: EntityStringQuery {
     static func ready() async {
         guard AppModel.shared.profile.onboarded else { return }
         await AppModel.shared.start()
-        while AppModel.shared.library.scanning { try? await Task.sleep(for: .milliseconds(50)) }
+        let deadline = Date().addingTimeInterval(20)
+        while AppModel.shared.library.scanning && !Task.isCancelled && Date() < deadline { try? await Task.sleep(for: .milliseconds(50)) }
     }
 
     static func items() -> [SpitifyMedia] {
         let app = AppModel.shared
         var out: [SpitifyMedia] = []
         out.append(SpitifyMedia(id: "allSongs", title: "All songs", subtitle: "Library"))
+        out.append(SpitifyMedia(id: "liked", title: "Liked Songs", subtitle: "Playlist"))
         out += app.library.playlists.map { SpitifyMedia(id: "playlist:" + $0.id, title: $0.name, subtitle: "Playlist") }
         out += app.library.library.albums.map { SpitifyMedia(id: "album:" + $0.id, title: $0.title, subtitle: "Album by " + $0.artist) }
         out += app.library.library.artists.map { SpitifyMedia(id: "artist:" + $0.name, title: $0.name, subtitle: "Artist") }
@@ -49,6 +51,11 @@ struct SpitifyMediaQuery: EntityStringQuery {
         }
         out += Dictionary(grouping: app.library.books, by: \.albumKey).map { key, chapters in
             SpitifyMedia(id: "book:" + key, title: chapters[0].album, subtitle: "Book by " + chapters[0].artist)
+        }
+        var seen = Set(out.map(\.id))
+        for song in app.player.queue where song.playable && !song.isSpoken {
+            let id = "song:" + song.id
+            if seen.insert(id).inserted { out.append(SpitifyMedia(id: id, title: song.title, subtitle: "Song by " + song.artist)) }
         }
         return out
     }
@@ -75,7 +82,8 @@ struct SpitifyMediaQuery: EntityStringQuery {
         var songs: [Song] = []
         var title = "Spitify"
         switch parts.first {
-        case "allSongs", "liked": songs = app.library.library.songs; title = "All songs"
+        case "allSongs": songs = app.library.library.songs; title = "All songs"
+        case "liked": songs = app.library.likedSongs; title = "Liked Songs"
         case "song", "episode": if let song = app.lookup(key) { songs = [song]; title = song.album }
         case "album": if let album = app.library.library.albumById[key] { songs = album.songs; title = album.title }
         case "artist": songs = app.library.library.artistByName[key]?.songs ?? []; title = key
@@ -126,6 +134,55 @@ struct PauseSpitify: AudioPlaybackIntent {
     @MainActor func perform() async throws -> some IntentResult { if AppModel.shared.player.hasMedia { AppModel.shared.player.pause() }; return .result() }
 }
 
+struct NextSpitifyTrack: AudioPlaybackIntent {
+    static var title: LocalizedStringResource = "Next song in Spitify"
+    @MainActor func perform() async throws -> some IntentResult {
+        await VoiceLibrary.ready(); AppModel.shared.player.next(); return .result()
+    }
+}
+
+struct PreviousSpitifyTrack: AudioPlaybackIntent {
+    static var title: LocalizedStringResource = "Previous song in Spitify"
+    @MainActor func perform() async throws -> some IntentResult {
+        await VoiceLibrary.ready(); AppModel.shared.player.previous(); return .result()
+    }
+}
+
+enum VoiceSwitch: String, AppEnum {
+    case on, off
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "On or off")
+    static var caseDisplayRepresentations: [VoiceSwitch: DisplayRepresentation] = [.on: "On", .off: "Off"]
+}
+
+struct ShuffleSpitify: AudioPlaybackIntent {
+    static var title: LocalizedStringResource = "Set shuffle in Spitify"
+    @Parameter(title: "Shuffle", default: .on) var mode: VoiceSwitch
+    static var parameterSummary: some ParameterSummary { Summary("Turn shuffle \(\.$mode) in Spitify") }
+    @MainActor func perform() async throws -> some IntentResult {
+        await VoiceLibrary.ready()
+        let player = AppModel.shared.player
+        if player.shuffle != (mode == .on) { player.toggleShuffle() }
+        return .result()
+    }
+}
+
+enum VoiceRepeat: String, AppEnum {
+    case off, queue, song
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Repeat mode")
+    static var caseDisplayRepresentations: [VoiceRepeat: DisplayRepresentation] = [.off: "Off", .queue: "Queue", .song: "Song"]
+}
+
+struct RepeatSpitify: AudioPlaybackIntent {
+    static var title: LocalizedStringResource = "Set repeat in Spitify"
+    @Parameter(title: "Repeat", default: .off) var mode: VoiceRepeat
+    static var parameterSummary: some ParameterSummary { Summary("Set repeat to \(\.$mode) in Spitify") }
+    @MainActor func perform() async throws -> some IntentResult {
+        await VoiceLibrary.ready()
+        AppModel.shared.player.setRepeat(mode == .off ? .off : mode == .queue ? .all : .one)
+        return .result()
+    }
+}
+
 struct SpitifyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: PlaySpitifyMedia(), phrases: [
@@ -137,5 +194,9 @@ struct SpitifyShortcuts: AppShortcutsProvider {
             "Play music in \(.applicationName)", "Resume \(.applicationName)", "Play \(.applicationName)",
         ], shortTitle: "Resume", systemImageName: "play.circle")
         AppShortcut(intent: PauseSpitify(), phrases: ["Pause \(.applicationName)"], shortTitle: "Pause", systemImageName: "pause.fill")
+        AppShortcut(intent: NextSpitifyTrack(), phrases: ["Next song in \(.applicationName)", "Skip song in \(.applicationName)"], shortTitle: "Next song", systemImageName: "forward.end.fill")
+        AppShortcut(intent: PreviousSpitifyTrack(), phrases: ["Previous song in \(.applicationName)", "Go back in \(.applicationName)"], shortTitle: "Previous song", systemImageName: "backward.end.fill")
+        AppShortcut(intent: ShuffleSpitify(), phrases: ["Turn shuffle \(\.$mode) in \(.applicationName)"], shortTitle: "Shuffle", systemImageName: "shuffle")
+        AppShortcut(intent: RepeatSpitify(), phrases: ["Set repeat to \(\.$mode) in \(.applicationName)"], shortTitle: "Repeat", systemImageName: "repeat")
     }
 }

@@ -1,69 +1,122 @@
 <!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#stage{position:fixed;inset:0;overflow:hidden;background:#000}#video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0;pointer-events:none}</style></head>
+<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#stage{position:fixed;inset:0;overflow:hidden;background:#000}#video{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;opacity:0}</style></head>
 <body><div id="stage"><div id="video"></div></div><script>
 'use strict';
-let player, ready = false, desired = {position:0, playing:false, speed:1}, lastSeek = 0;
+let player, ready = false, frameReady = false, desired = {playing:false, reduceMotion:false}, loop = [], shot = 0, lastSeek = 0, loopTimer, bootstrapping = false;
+const videoID = '__VIDEO_ID__';
 function report(state) {
   if (window.webkit && window.webkit.messageHandlers.videoState) window.webkit.messageHandlers.videoState.postMessage(state);
   console.log('SPITIFY_VIDEO_' + state);
 }
-function spitifyBeginDisplay() { if (ready) report('READY'); }
+function sendSurfaceState() {
+  const frame = document.getElementById('video');
+  if (frame.contentWindow) frame.contentWindow.postMessage({spitifyCanvas:{paused:!desired.playing, reduceMotion:desired.reduceMotion, shot:shot}}, 'https://www.youtube.com');
+}
+function spitifyBeginDisplay() {
+  const frame = document.getElementById('video');
+  report(ready && frameReady ? 'READY' : 'WAITING');
+  if (frame.contentWindow) frame.contentWindow.postMessage({spitifyRequestFrame:true}, 'https://www.youtube.com');
+  sendSurfaceState();
+}
 function spitifyHideCaptions() {
   if (!player) return;
-  // Caption modules can arrive after the player is ready.
   try { if (typeof player.unloadModule === 'function') player.unloadModule('captions'); } catch (_) {}
   try { if (typeof player.setOption === 'function') player.setOption('captions', 'track', {}); } catch (_) {}
 }
-let lastWidth = 0, lastHeight = 0, nativeFill = false;
+let lastWidth = 0, lastHeight = 0;
 window.addEventListener('message', function(event) {
   const frame = document.getElementById('video');
-  if (event.origin === 'https://www.youtube.com' && event.source === frame.contentWindow && event.data && event.data.spitifyVideoSurface === true) {
-    nativeFill = true; lastWidth = 0; lastHeight = 0; spitifyResize();
+  if (event.origin !== 'https://www.youtube.com' || event.source !== frame.contentWindow || !event.data || event.data.spitifyVideoSurface !== true) return;
+  frameReady = event.data.frameReady === true;
+  frame.style.opacity = frameReady ? '1' : '0';
+  if (frameReady) {
+    bootstrapping = false;
+    if (!desired.playing && ready && (player.getPlayerState() === 1 || player.getPlayerState() === 3)) player.pauseVideo();
   }
+  report(frameReady && ready ? 'READY' : 'WAITING');
+  sendSurfaceState();
 });
 function spitifyResize() {
   if (!player || !ready) return;
   const stage = document.getElementById('stage');
-  const width = stage.clientWidth, height = stage.clientHeight;
-  if (width <= 0 || height <= 0) return;
-  const videoWidth = Math.ceil(nativeFill ? width : Math.max(width, height * 16 / 9));
-  const videoHeight = Math.ceil(nativeFill ? height : Math.max(height, width * 9 / 16));
-  if (videoWidth === lastWidth && videoHeight === lastHeight) return;
-  lastWidth = videoWidth; lastHeight = videoHeight;
-  player.setSize(videoWidth, videoHeight);
-  const frame = document.getElementById('video');
-  frame.style.width = videoWidth + 'px'; frame.style.height = videoHeight + 'px';
+  const width = Math.ceil(stage.clientWidth), height = Math.ceil(stage.clientHeight);
+  if (width <= 0 || height <= 0 || (width === lastWidth && height === lastHeight)) return;
+  lastWidth = width; lastHeight = height; player.setSize(width,height);
+  const frame = document.getElementById('video'); frame.style.width = width+'px'; frame.style.height = height+'px';
 }
 window.addEventListener('resize', spitifyResize);
 if (window.ResizeObserver) new ResizeObserver(spitifyResize).observe(document.getElementById('stage'));
-function spitifySync(position, playing, speed) {
-  desired = {position: Math.max(0, Number(position)||0), playing: Boolean(playing), speed: Number(speed)||1};
-  if (!ready) return;
-  spitifyResize();
-  const current = player.getCurrentTime(), now = Date.now();
-  if (Math.abs(current - desired.position) > 1.25 && now-lastSeek > 750) {
-    lastSeek = now; player.seekTo(desired.position, true);
-  }
-  const rates = player.getAvailablePlaybackRates();
-  if (rates.includes(desired.speed) && player.getPlaybackRate() !== desired.speed) player.setPlaybackRate(desired.speed);
-  const state = player.getPlayerState();
-  if (desired.playing && state !== 1 && state !== 3) player.playVideo();
-  if (!desired.playing && (state === 1 || state === 3)) player.pauseVideo();
+// Two nearby shots make a repeatable seven-second visual loop. Pick from the body of the video,
+// leaving room for intros and credits. This is a timing rule, not a claim to understand the scene.
+function spitifyMakeLoop(duration, key) {
+  duration = Number(duration);
+  if (!Number.isFinite(duration) || duration <= 0) return [];
+  if (duration < 16) return [{start:Math.min(1,duration*.1), length:Math.max(.5,Math.min(7,duration*.8))}];
+  let hash = 0; for (const letter of key) hash = (hash*31 + letter.charCodeAt(0)) >>> 0;
+  const start = Math.max(3,Math.min(45,duration*.15));
+  const end = duration - Math.max(3,Math.min(30,duration*.12));
+  const available = Math.max(0,end-start-10);
+  const anchor = start + available*(.15+(hash%700)/1000);
+  return [{start:anchor,length:3.6},{start:anchor+5,length:3.4}];
 }
-function spitifyStop() { spitifyBeginDisplay(); desired.playing = false; ready = false; if (player) { player.mute(); player.stopVideo(); player.destroy(); } }
+function ensureLoop() {
+  if (loop.length || !ready) return;
+  loop = spitifyMakeLoop(player.getDuration(),videoID);
+  if (loop.length) { shot = 0; lastSeek = Date.now(); player.seekTo(loop[0].start,true); sendSurfaceState(); }
+}
+function canvasTick() {
+  if (!ready || document.hidden) return;
+  ensureLoop();
+  if (!desired.playing || !loop.length) return;
+  const current = player.getCurrentTime(), clip = loop[shot], now = Date.now();
+  if (now-lastSeek < 700 || player.getPlayerState() === 3) return;
+  if (current >= clip.start+clip.length || current < clip.start-.75) {
+    shot = (shot+1)%loop.length; lastSeek = now; player.seekTo(loop[shot].start,true); sendSurfaceState();
+    if (player.getPlayerState() !== 1) player.playVideo();
+  }
+}
+function spitifySync(_position, playing, _speed, reduceMotion) {
+  desired = {playing:Boolean(playing), reduceMotion:Boolean(reduceMotion)};
+  sendSurfaceState();
+  if (!ready) return;
+  spitifyResize(); ensureLoop();
+  // Music seeking and playback speed never push this short visual loop through the whole video.
+  if (player.getPlaybackRate() !== 1) player.setPlaybackRate(1);
+  const state = player.getPlayerState();
+  if ((desired.playing || bootstrapping) && !document.hidden && state !== 1 && state !== 3) player.playVideo();
+  if (!desired.playing && !bootstrapping && (state === 1 || state === 3)) player.pauseVideo();
+}
+function spitifyStop() {
+  desired.playing = false; ready = false; frameReady = false; clearInterval(loopTimer); loopTimer = null;
+  document.getElementById('video').style.opacity = '0';
+  if (player) { player.mute(); player.stopVideo(); player.destroy(); }
+}
 function onYouTubeIframeAPIReady() {
   player = new YT.Player('video', {
-    videoId: '__VIDEO_ID__', width:'100%', height:'100%',
-    playerVars: {autoplay:0, cc_load_policy:0, controls:0, playsinline:1, fs:0, rel:0, origin:location.origin},
-    events: {
-      onReady: function() { player.mute(); player.setVolume(0); ready=true; spitifyResize(); spitifyHideCaptions(); report('READY'); spitifySync(desired.position, desired.playing, desired.speed); },
-      onApiChange: spitifyHideCaptions,
-      onStateChange: function(event) { spitifyHideCaptions(); player.mute(); player.setVolume(0); if(event.data === 1 || event.data === 2) report('READY'); },
-      onError: function() { ready=false; report('ERROR'); }
+    videoId:videoID, width:'100%', height:'100%',
+    playerVars:{autoplay:0,cc_load_policy:0,controls:0,playsinline:1,fs:0,rel:0,origin:location.origin},
+    events:{
+      onReady:function() {
+        player.mute(); player.setVolume(0); ready=true; loop=[]; shot=0; spitifyResize(); spitifyHideCaptions(); ensureLoop(); spitifyBeginDisplay();
+        // Decode one silent frame even when preloading or paused, then freeze it until needed.
+        bootstrapping = !frameReady; if (bootstrapping && !document.hidden) player.playVideo();
+        spitifySync(0,desired.playing,1,desired.reduceMotion);
+        clearInterval(loopTimer); loopTimer=setInterval(canvasTick,150);
+      },
+      onApiChange:spitifyHideCaptions,
+      onStateChange:function(event) {
+        spitifyHideCaptions(); player.mute(); player.setVolume(0);
+        if (event.data === 1 || event.data === 2) spitifyBeginDisplay();
+        if (event.data === 0 && desired.playing && loop.length) { shot=0; lastSeek=Date.now(); player.seekTo(loop[0].start,true); player.playVideo(); }
+      },
+      onError:function() { ready=false; frameReady=false; document.getElementById('video').style.opacity='0'; report('ERROR'); }
     }
   });
 }
-document.addEventListener('visibilitychange', function() { if(document.hidden && ready) player.pauseVideo(); });
+document.addEventListener('visibilitychange',function() {
+  if (!ready) return;
+  if (document.hidden) player.pauseVideo(); else spitifySync(0,desired.playing,1,desired.reduceMotion);
+});
 </script><script src="https://www.youtube.com/iframe_api"></script></body></html>

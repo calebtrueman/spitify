@@ -9,6 +9,7 @@ captures/
 *.apk
 *.aab
 .DS_Store
+work/
 
 # iOS
 ios/build/

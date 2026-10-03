@@ -33,6 +33,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
 	<key>UISupportsDocumentBrowser</key><false/>
 	<key>NSAppleMusicUsageDescription</key><string>Spitify can play the songs already downloaded in your Music library.</string>
+	<key>IntentsSupported</key><array><string>INPlayMediaIntent</string></array>
+	<key>NSUserActivityTypes</key><array><string>INPlayMediaIntent</string></array>
+	<key>NSSiriUsageDescription</key><string>Use Siri to play music and control Spitify.</string>
 	<key>NSPhotoLibraryUsageDescription</key><string>Choose a profile picture or custom artwork.</string>
 	<key>UIAppFonts</key>
 	<array>

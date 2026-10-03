@@ -22,6 +22,7 @@ final class MusicStreams {
             if track.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { track.album = previous.album }
             if track.releaseID.isEmpty { track.releaseID = previous.releaseID }
             if track.albumArtist == nil { track.albumArtist = previous.albumArtist }
+            if track.artistNames == nil { track.artistNames = previous.artistNames }
             if track.artwork == nil { track.artwork = previous.artwork }
         }
         if tracks[track.id] != track { tracks[track.id] = track; Store.save(tracks, storageName + "Tracks") }
@@ -37,9 +38,9 @@ final class MusicStreams {
     func track(_ song: Song) -> OnlineTrack? { guard song.id.hasPrefix("stream:") else { return nil }; return tracks[String(song.id.dropFirst(7))] }
     static func song(_ track: OnlineTrack) -> Song {
         Song(id: "stream:" + track.id, title: track.title, artist: track.artist, album: track.album,
-             albumArtist: track.albumArtist ?? Song.albumArtist(track.artist), durationMs: track.durationMs,
+             albumArtist: track.albumArtist ?? track.primaryArtist, durationMs: track.durationMs,
              track: track.trackNumber, disc: track.discNumber, year: 0, genre: nil,
              location: "spitify://music/" + track.id, kind: .remote, dateAdded: Date(timeIntervalSince1970: 0),
-             sizeBytes: 0, fileExtension: track.audioExtension ?? "flac", artURL: track.artwork, explicit: track.explicit)
+             sizeBytes: 0, fileExtension: track.audioExtension ?? "flac", artURL: track.artwork, explicit: track.explicit, artistNames: track.artistNames)
     }
 }

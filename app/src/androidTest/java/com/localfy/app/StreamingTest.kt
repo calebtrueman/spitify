@@ -47,6 +47,23 @@ class StreamingTest {
         } finally { download.delete(); streams.remove(listOf(item)) }
     }
 
+    @Test fun opusSourceKeepsTheOriginalRecordingInsteadOfFallingBack() {
+        val bytes = instrumentation.context.assets.open("playback/quiet-opus.ogg").use { it.readBytes() }
+        val item = track().copy(id = (System.nanoTime() % 1_000_000_000).toString())
+        val song = context.musicStreams.register(item)
+        val key = "https://stream-test.invalid/${System.nanoTime()}.flac"
+        val source = MusicStreamDataSource(context, sourceURL = { key },
+            alternate = { throw AssertionError("Valid Opus audio must not select another recording") },
+            upstreamFactory = DataSource.Factory { ByteArrayDataSource(bytes) })
+        try {
+            assertEquals(bytes.size.toLong(), source.open(DataSpec(song.uri)))
+            val actual = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(4096)
+            while (true) { val count = source.read(buffer, 0, buffer.size); if (count < 0) break; actual.write(buffer, 0, count) }
+            assertArrayEquals(bytes, actual.toByteArray())
+        } finally { source.close(); ListeningCache.get(context).removeResource(key) }
+    }
+
     @Test fun playbackStartsBeforeTransferFinishesAndReplaysWithoutNetwork() = runBlocking {
         val content = wave()
         val read = AtomicInteger()

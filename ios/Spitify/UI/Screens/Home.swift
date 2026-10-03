@@ -5,9 +5,13 @@ struct HomeView: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
+    @Environment(\.themeSettings) private var theme
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var sidebarOpen = false
     @State private var filter: Filter = .all
     @State private var glow = Color(hex: 0x2A2A2E)
+    @State private var gridWidth: CGFloat = 0
+    private var roomyText: Bool { textSize >= .xxLarge || theme.textScale == .huge }
 
     private var visibleMixes: [Mix] { app.showRecommendations ? app.mixes : [] }
 
@@ -74,7 +78,7 @@ struct HomeView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button { withAnimation { sidebarOpen = true } } label: { Avatar(size: 34) }.accessibilityLabel("Open menu")
+            Button { withAnimation { sidebarOpen = true } } label: { Avatar(size: 34).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Open menu")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) { ForEach(Filter.allCases, id: \.self) { f in Pill(title: f.rawValue, selected: filter == f) { filter = f } } }
             }
@@ -97,9 +101,12 @@ struct HomeView: View {
     }
 
     private func grid(_ tiles: [Tile]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14)], spacing: 18) {
-            ForEach(tiles) { t in MediaTile(tile: t, width: (UIScreen.main.bounds.width - 46) / 2) }
-        }.padding(.horizontal, 16).padding(.top, 12)
+        let columns = roomyText ? 1 : max(1, Int((gridWidth + 14) / 164))
+        let width = max(1, (gridWidth - CGFloat(columns - 1) * 14) / CGFloat(columns))
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: columns), spacing: 18) {
+            ForEach(tiles) { t in MediaTile(tile: t, width: width) }
+        }.onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+            .padding(.horizontal, 16).padding(.top, 12)
     }
 
     @ViewBuilder private var allContent: some View {
@@ -113,7 +120,7 @@ struct HomeView: View {
         let _ = visibleMixes.prefix(4).forEach { m in quick.append(Tile(id: "q" + m.id, title: m.title, subtitle: "", song: m.cover, mix: m) { router.go(.mix(m.id)) }) }
         let _ = lib.albums.prefix(8).forEach { a in quick.append(Tile(id: "qa" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
         let picks = Array(quick.reduce(into: [Tile]()) { acc, t in if !acc.contains(where: { $0.title == t.title }) { acc.append(t) } }.prefix(6))
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) { ForEach(picks) { QuickTile(tile: $0) } }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: roomyText ? 1 : 2), spacing: 8) { ForEach(picks) { QuickTile(tile: $0) } }
             .padding(.horizontal, 16).padding(.top, 10)
 
         ForEach(Mix.Section.allCases, id: \.self) { section in
@@ -143,7 +150,7 @@ struct HomeView: View {
                     Spacer()
                     PlayButton(playing: false, size: 50) { app.player.play(app.library.library.songs, shuffle: true, source: "All songs") }
                 }
-                .padding(16).frame(height: 108).background(p.tint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(16).frame(minHeight: 108).background(p.tint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }.buttonStyle(.pressable(0.98)).padding(.horizontal, 16).padding(.vertical, 8)
         }
     }

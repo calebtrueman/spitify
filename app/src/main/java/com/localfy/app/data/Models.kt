@@ -34,7 +34,12 @@ data class Song(
     /** Bumped when custom artwork changes, so image caches refresh. */
     val artVersion: Long = 0,
     val explicit: Boolean? = null,
+    /** Separate artists when supplied by the source; artist retains the complete credit. */
+    val artistNames: List<String>? = null,
 ) {
+    val creditedArtists: List<String> get() = ArtistCredits.names(artist, artistNames, albumArtist)
+    val primaryArtist: String get() = artistNames?.firstOrNull() ?: creditedArtists.firstOrNull() ?: artist
+
     val uri: Uri get() = sourceUri ?: ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
     /** Album URI; MediaStore can produce a thumbnail for it (used for notification / lock-screen art). */
@@ -92,12 +97,21 @@ data class Library(
 ) {
     val songById: Map<Long, Song> by lazy { songs.associateBy { it.id } }
     val albumById: Map<Long, Album> by lazy { albums.associateBy { it.id } }
-    val artistByName: Map<String, Artist> by lazy { artists.associateBy { it.name } }
+    val artistByName: Map<String, Artist> by lazy {
+        buildMap {
+            artists.forEach { artist ->
+                put(artist.name, artist)
+                artist.songs.flatMap { it.creditedArtists }.filter { it.equals(artist.name, true) }.forEach { put(it, artist) }
+            }
+        }
+    }
 
     val isEmpty: Boolean get() = songs.isEmpty()
 
     companion object {
-        fun from(songs: List<Song>): Library {
+        fun from(source: List<Song>): Library {
+            val known = source.flatMap { it.artistNames ?: listOf(AlbumGrouping.albumArtist(it.albumArtist), AlbumGrouping.albumArtist(it.artist)) }.filterNot { ',' in it }
+            val songs = source.map { it.copy(artistNames = ArtistCredits.names(it.artist, it.artistNames, it.albumArtist, known)) }
             val titleOrder = compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
             val albums = songs.groupBy { it.albumId }.map { (id, tracks) ->
                 val sorted = tracks.sortedWith(compareBy<Song>({ it.disc }, { it.track }).then(titleOrder))
@@ -111,11 +125,11 @@ data class Library(
                 )
             }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
 
-            val albumsByArtist = albums.groupBy { it.artist }
-            val artists = songs.groupBy { it.artist }.map { (name, tracks) ->
-                val ownAlbums = (albumsByArtist[name].orEmpty() +
-                    albums.filter { a -> a.songs.any { it.artist == name } }).distinctBy { it.id }
-                Artist(name, tracks.sortedWith(titleOrder), ownAlbums.sortedByDescending { it.year })
+            val artists = songs.flatMap { song -> song.creditedArtists.map { it to song } }.groupBy { it.first.lowercase() }.map { (key, entries) ->
+                val tracks = entries.map { it.second }
+                val ids = tracks.map { it.id }.toSet()
+                val ownAlbums = albums.filter { it.artist.lowercase() == key || it.songs.any { song -> song.id in ids } }
+                Artist(entries.first().first, tracks.sortedWith(titleOrder), ownAlbums.sortedByDescending { it.year })
             }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
             val genres = songs.filter { !it.genre.isNullOrBlank() }

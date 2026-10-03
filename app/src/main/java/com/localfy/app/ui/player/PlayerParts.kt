@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,8 +90,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -328,7 +332,11 @@ private fun ScrubbableRecord(song: Song?, modifier: Modifier) {
     var dragging by remember(song?.id) { mutableStateOf(false) }
     var dragAngle by remember(song?.id) { mutableStateOf(0f) }
     LaunchedEffect(state.isPlaying, dragging, still) {
-        if (state.isPlaying && !dragging && !still) while (true) spin.animateTo(spin.value + 360f, tween(9_000, easing = LinearEasing))
+        if (state.isPlaying && !dragging && !still) while (true) {
+            // A zero system animation scale otherwise makes this endless loop run without waiting.
+            if (!android.animation.ValueAnimator.areAnimatorsEnabled()) { kotlinx.coroutines.delay(250); continue }
+            spin.animateTo(spin.value + 360f, tween(9_000, easing = LinearEasing))
+        }
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box(modifier.pointerInput(song?.id, state.durationMs) {
@@ -365,35 +373,77 @@ private fun ScrubbableRecord(song: Song?, modifier: Modifier) {
             }
         }
     }.semantics {
-        contentDescription = "Record. Turn clockwise to move forward, or counterclockwise to rewind."
+        contentDescription = "Record. ${song?.album.orEmpty()} by ${song?.primaryArtist.orEmpty()}. Turn clockwise to move forward, or counterclockwise to rewind."
         customActions = listOf(
             androidx.compose.ui.semantics.CustomAccessibilityAction("Forward 10 seconds") { app.player.skipBy(10_000); true },
             androidx.compose.ui.semantics.CustomAccessibilityAction("Back 10 seconds") { app.player.skipBy(-10_000); true },
         )
     }) {
-        VinylRecord(song, Modifier.fillMaxSize().graphicsLayer { rotationZ = (if (dragging) dragAngle else spin.value) % 360f })
+        VinylRecord(song, Modifier.fillMaxSize(), rotation = { (if (dragging) dragAngle else spin.value) % 360f })
     }
 }
 
-/** A record: grooved black disc with the album art as the centre label. */
+/** The light stays in place while the artwork's paper label turns beneath it. */
 @Composable
-private fun VinylRecord(song: Song?, modifier: Modifier) {
-    Box(modifier.shadow(30.dp, CircleShape, spotColor = Color.Black).clip(CircleShape).background(Color(0xFF0D0D0F)), contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val r = size.minDimension / 2
-            var ring = r * 0.98f
-            while (ring > r * 0.42f) {
-                drawCircle(Color.White.copy(alpha = 0.035f), radius = ring, style = androidx.compose.ui.graphics.drawscope.Stroke(1.2f))
-                ring -= r * 0.022f
+private fun VinylRecord(song: Song?, modifier: Modifier, rotation: () -> Float = { 0f }) {
+    Box(modifier.shadow(30.dp, CircleShape, spotColor = Color.Black).clip(CircleShape).drawWithCache {
+        val radius = size.minDimension / 2
+        val base = Brush.radialGradient(listOf(Color(0xFF252526), Color(0xFF080809), Color(0xFF171719)), radius = radius)
+        val sheen = Brush.sweepGradient(
+            0f to Color.Transparent, 0.10f to Color.White.copy(alpha = 0.025f),
+            0.17f to Color.White.copy(alpha = 0.18f), 0.24f to Color.Transparent,
+            0.55f to Color.Transparent, 0.66f to Color.White.copy(alpha = 0.12f),
+            0.74f to Color.Transparent, 1f to Color.Transparent,
+        )
+        onDrawBehind {
+            drawCircle(base, radius)
+            repeat(74) { index ->
+                val ring = radius * (0.96f - index * 0.0066f)
+                val color = if (index % 5 == 0) Color.Black.copy(alpha = 0.55f) else Color.White.copy(alpha = if (index % 3 == 0) 0.09f else 0.045f)
+                drawCircle(color, ring, style = androidx.compose.ui.graphics.drawscope.Stroke(if (index % 5 == 0) 0.8.dp.toPx() else 0.5.dp.toPx()))
             }
-            // Light sheen across the grooves.
-            drawCircle(
-                Brush.sweepGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.08f), Color.Transparent, Color.White.copy(alpha = 0.06f), Color.Transparent)),
-                radius = r,
-            )
+            drawCircle(sheen, radius)
+            drawCircle(Color.Black.copy(alpha = 0.65f), radius * 0.49f, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            drawCircle(Color.White.copy(alpha = 0.15f), radius - 1.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx()))
+            drawCircle(Color.Black.copy(alpha = 0.8f), radius - 3.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.4.dp.toPx()))
         }
-        Artwork(song?.artKey, Modifier.fillMaxSize(0.4f), CircleShape, song?.album)
-        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF0D0D0F)))
+    }, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize(0.45f).graphicsLayer { rotationZ = rotation() }
+            .shadow(1.5.dp, CircleShape, spotColor = Color.Black).clip(CircleShape).background(Color(0xFFE9DFC5)), contentAlignment = Alignment.Center) {
+            Artwork(song?.artKey, Modifier.fillMaxSize().padding(2.dp), CircleShape)
+            Box(Modifier.fillMaxSize().background(Color(0xFFE7CE9B).copy(alpha = 0.12f)).drawWithCache {
+                val paper = androidx.compose.ui.graphics.ShaderBrush(androidx.compose.ui.graphics.ImageShader(VinylPaperTexture.image,
+                    androidx.compose.ui.graphics.TileMode.Repeated, androidx.compose.ui.graphics.TileMode.Repeated))
+                onDrawBehind {
+                    drawRect(paper, alpha = 0.22f)
+                    val radius = size.minDimension / 2
+                    drawCircle(Color.Black.copy(alpha = 0.20f), radius - 3.dp.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(0.8.dp.toPx()))
+                    drawCircle(Color.White.copy(alpha = 0.23f), radius * 0.38f, style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx()))
+                    drawCircle(Color.Black.copy(alpha = 0.24f), radius * 0.36f, style = androidx.compose.ui.graphics.drawscope.Stroke(1.1.dp.toPx()))
+                }
+            })
+        }
+        Box(Modifier.fillMaxSize(0.055f).clip(CircleShape).background(Color.Black.copy(alpha = 0.16f)))
+        Box(Modifier.fillMaxSize(0.023f).clip(CircleShape).background(Color(0xFF08090A)).drawWithCache {
+            onDrawBehind { drawCircle(Color.White.copy(alpha = 0.30f), size.minDimension / 2, style = androidx.compose.ui.graphics.drawscope.Stroke(0.7.dp.toPx())) }
+        })
+    }
+}
+
+/** Build the faint paper fibres once; playback only rotates the already drawn label. */
+private object VinylPaperTexture {
+    val image by lazy {
+        val bitmap = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val paint = android.graphics.Paint()
+        val random = java.util.Random(0x51F17)
+        repeat(1300) {
+            val x = random.nextFloat() * 96; val y = random.nextFloat() * 96
+            paint.color = if (random.nextBoolean()) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+            paint.alpha = 33 + random.nextInt(57)
+            canvas.drawRect(x, y, x + 0.35f + random.nextFloat() * 0.8f, y + 0.35f + random.nextFloat() * 0.6f, paint)
+        }
+        bitmap.asImageBitmap()
     }
 }
 
@@ -524,33 +574,34 @@ fun ToggleIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Str
 @Composable
 fun TitleBlock(song: Song, modifier: Modifier = Modifier, large: Boolean = false, onArtist: (() -> Unit)? = null) {
     val app = LocalApp.current
-    val liked = song.id in app.repo.likedIds.collectAsStateWithLifecycle().value
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        AnimatedContent(
-            song,
-            transitionSpec = { (slideInHorizontally { it / 6 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 6 } + fadeOut()) },
-            modifier = Modifier.weight(1f),
-            label = "title",
-        ) { s ->
-            Column {
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedContent(
+                song,
+                transitionSpec = { (slideInHorizontally { it / 6 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 6 } + fadeOut()) },
+                modifier = Modifier.weight(1f),
+                label = "title",
+            ) { s ->
                 Text(
                     s.title,
                     style = if (large) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 2_000),
-                )
-                Text(
-                    s.artist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.72f),
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = if (onArtist != null) Modifier.pressable(pressedScale = 0.98f, onClick = onArtist) else Modifier,
                 )
             }
+            if (!song.isPodcast) IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
         }
-        if (!song.isPodcast && !song.isAudiobook) MusicVideoButton()
-        if (!song.isPodcast) IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                song.artist,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.72f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).then(if (onArtist != null) Modifier.pressable(pressedScale = 0.98f, onClick = onArtist) else Modifier).padding(vertical = 12.dp),
+            )
+            if (!song.isPodcast && !song.isAudiobook) { ArtworkStyleButton(); MusicVideoButton() }
+        }
     }
 }
 
@@ -633,13 +684,20 @@ fun PlaybackDialog(onDismiss: () -> Unit) {
 }
 
 /** Speed, crossfade and silence trimming - shared by the player dialog and Settings. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlaybackSettings(modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val state = rememberPlayerState()
     Column(modifier) {
+        SwitchRow("Keep music playing", "Add more music when the queue runs low; repeat and sleep settings still apply", state.autoplay, app.player::setAutoplay)
+        SwitchRow("Normalize volume", "Soften louder tracks while keeping your volume setting", state.normalizeAudio, app.player::setNormalizeAudio)
         Text("Speed", style = MaterialTheme.typography.titleSmall)
-        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(
+            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
                 Pill("${s}×".replace(".0×", "×"), state.speed == s, { app.player.setSpeed(s) })
             }
@@ -654,7 +712,7 @@ fun PlaybackSettings(modifier: Modifier = Modifier) {
             onValueChange = { app.player.setCrossfade((it.roundToInt() * 1000)) },
             valueRange = 0f..12f,
             steps = 11,
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = MaterialTheme.colorScheme.primary),
+            colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary),
         )
         SwitchRow("Keep albums gapless", "Don't crossfade between consecutive tracks of the same album", state.crossfadeKeepAlbums, app.player::setCrossfadeKeepAlbums)
         SwitchRow("Skip silence", "Trim silent gaps inside and between tracks", state.skipSilence, app.player::setSkipSilence)

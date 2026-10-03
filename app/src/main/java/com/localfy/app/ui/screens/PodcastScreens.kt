@@ -106,14 +106,15 @@ fun PodcastsScreen() {
     val refreshing by app.podcasts.refreshing.collectAsStateWithLifecycle()
     val local by app.repo.localPodcasts.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<PodcastSearchResult>?>(null) }
-    var searching by remember { mutableStateOf(false) }
+    val search = remember { com.localfy.app.data.podcast.SpokenSearch(scope, app.podcasts::search) }
+    val searchState by search.state.collectAsStateWithLifecycle()
+    val results = searchState.results
+    val searching = searchState.searching
     var addRss by remember { mutableStateOf(false) }
     val runSearch: (String) -> Unit = { term ->
         query = term
         focus.clearFocus()
-        searching = true
-        scope.launch { results = app.podcasts.search(term); searching = false }
+        search.search(term)
     }
 
     val allEpisodes = shows.flatMap { s -> s.episodes.map { it to s } }
@@ -134,11 +135,11 @@ fun PodcastsScreen() {
         item {
             TextField(
                 value = query,
-                onValueChange = { query = it; if (it.isBlank()) results = null },
+                onValueChange = { query = it; search.clear() },
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 placeholder = { Text("Search all podcasts") },
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; results = null }) { Icon(Icons.Rounded.Close, "Clear") } },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; search.clear() }) { Icon(Icons.Rounded.Close, "Clear") } },
                 singleLine = true,
                 shape = RoundedCornerShape(10.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -150,6 +151,12 @@ fun PodcastsScreen() {
             )
         }
         if (searching) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
+        searchState.error?.let { error -> item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                Text(error, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { runSearch(query) }) { Text("Try again") }
+            }
+        } }
         results?.let { list ->
             item { SectionHeader("Results for “$query”") }
             if (list.isEmpty() && !searching) item { EmptyState("No shows found", "Try another name, or add the show's RSS link.") }
@@ -239,13 +246,18 @@ private fun SearchResultRow(r: PodcastSearchResult, subscribed: Boolean) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     fun open(follow: Boolean) {
         if (busy) return
-        busy = true
+        busy = true; error = null
         scope.launch {
-            val id = app.podcasts.subscribe(r.feedUrl, r.artworkUrl, follow = follow)
-            busy = false
-            if (id != null) app.navigate(Routes.show(id))
+            try {
+                val id = app.podcasts.subscribe(r.feedUrl, r.artworkUrl, follow = follow)
+                if (id != null) app.navigate(Routes.show(id)) else error = "Couldn't open this show. Tap to try again."
+            } catch (failure: Exception) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                error = "Couldn't open this show. Tap to try again."
+            } finally { busy = false }
         }
     }
     Row(
@@ -257,6 +269,7 @@ private fun SearchResultRow(r: PodcastSearchResult, subscribed: Boolean) {
         Column(Modifier.weight(1f)) {
             Text(r.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(r.author, r.genre).joinToString(" • "), style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
         Spacer(Modifier.width(8.dp))
         if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
@@ -422,7 +435,7 @@ private fun ShowLayout(
             when (filter) {
                 EpisodeFilter.All -> true
                 EpisodeFilter.Unplayed -> resume[s.resumeKey] != true
-                EpisodeFilter.Downloaded -> e?.localPath != null
+                EpisodeFilter.Downloaded -> e == null || e.localPath != null
             }
         }
         .let { list -> if (newestFirst) list else list.reversed() }
@@ -473,6 +486,12 @@ private fun ShowLayout(
             }
         }
         item { Text("${shown.size} episodes", style = MaterialTheme.typography.labelMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(horizontal = 16.dp)) }
+        if (shown.isEmpty()) item {
+            EmptyState(
+                when (filter) { EpisodeFilter.Downloaded -> "No downloaded episodes"; EpisodeFilter.Unplayed -> "You're all caught up"; EpisodeFilter.All -> "No episodes yet" },
+                when (filter) { EpisodeFilter.Downloaded -> "Download an episode from All to listen offline."; EpisodeFilter.Unplayed -> "Choose All to listen again."; EpisodeFilter.All -> "Check for new episodes from Podcasts." },
+            )
+        }
         items(shown, key = { it.second.id }) { (e, s) -> EpisodeRow(s, e, showArt = false) }
     }
 }

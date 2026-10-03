@@ -55,9 +55,11 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - Online results are ready to play, even before saving them. **Play** streams online audio as it arrives. **Add to Library** saves the song without downloading it. **Download** keeps an offline copy with song details and cover art.
 - Temporary listening audio has a separate 1 GB cache. Older audio is removed first; Settings can clear it without touching downloads. See [streaming and saved music](docs/STREAMING.md).
 - Downloads include Wi-Fi-only mode, cancellation, retries, and matched backup sources when the first source fails. Online availability varies. See [music sources and checks](docs/MONOCHROME.md).
+- Download rings keep their last known progress while files are checked and saved. Album counts include completed files immediately.
 - Your Library with filters, sorting, and grid or list view.
 - Album, artist and playlist pages with collapsing headers coloured from the artwork.
 - Liked Songs, playlists, and a queue you can reorder by dragging.
+- **Keep music playing** is on by default. Fresh suggestions follow your queue, while manual picks, repeat, sleep timers and clearing the queue take priority.
 - Shuffle that reorders the real queue, so "Next up" shows what will actually play.
 - Sleep timer with fade-out, playback speed, skip silence, gapless playback, and 0–12 s **crossfade**.
 - **Synced lyrics** from file tags, `.lrc` files, or [LRCLIB](https://lrclib.net), fetched automatically when you're online. They follow playback and you can tap a line to jump to it.
@@ -75,13 +77,13 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
 
 ### Music videos
-Tap the video icon for an edge-to-edge video behind the song controls, including behind the status bar. Tap the icon again to return to album art. This choice stays set across songs and app restarts. The video stays muted and follows the song's position, pause state and speed. Your existing song audio continues. Closing the view or putting the app in the background pauses the visuals.
+Tap the video icon for a short looping video behind the song controls, including behind the status bar. Tap the icon again to return to album art. This choice stays set across songs and app restarts. Each loop uses two nearby cuts from the middle of the video. It stays muted and runs separately from the song's position. Pausing freezes the picture with a gentle drift; Reduce Motion turns that drift off. Closing the view or putting the app in the background pauses the visuals.
 
-Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse. This is not an offline video download. Artwork stays visible while the video gets ready, without a loading message. The player requests captions off; words burned into the video itself cannot be removed.
+Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse. This is not an offline video download. Artwork stays visible until a decoded video frame is ready, without a loading message. The embedded page hides its controls, captions and other page elements before showing that frame. The picture fills the screen. When the host allows pixel reads, the app also crops detected black bars inside the video. Words burned into the video itself cannot be removed.
 
 All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
 
-Videos use YouTube's embedded player. Some songs have no matching video, and some videos block embedding or show provider ads. The song keeps playing if the video cannot load.
+Videos use YouTube's embedded player. Some songs have no matching video, and some videos block embedding. Detected ad playback is hidden. The song keeps playing if the video cannot load. Cut selection follows a timing rule; it does not understand scenes. A host that blocks pixel reads can also prevent detection of black bars already inside the source picture.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -102,7 +104,7 @@ There's also song radio on any song, artist radio on artist pages, and **Don't r
 
 The iPhone app sends the current song, cover, playback position and play/pause/skip controls to Apple’s Now Playing screen. It keeps using the same queue when you move between the phone, Bluetooth and the car.
 
-- **Siri and Shortcuts:** play a named song, album, artist, playlist or followed show from your library; pause or resume. These actions also appear in Apple’s Shortcuts app.
+- **Siri and Shortcuts:** play a named song, album, artist, playlist or followed show from your library; pause, resume, skip, go back, shuffle or change repeat. These actions also appear in Apple’s Shortcuts app. Siri's built-in music requests also have a handler, which needs a Siri-enabled signing profile.
 - **CarPlay browsing:** the included interface has For you, Library, Podcasts and Books, plus Now Playing and the queue. Shuffle and repeat use the phone’s player.
 - **Signing limit:** the dedicated Spitify CarPlay icon and browsing screens require Apple’s approved CarPlay audio permission in the signing profile. The normal SideStore build leaves that permission off. The car’s system Now Playing controls do not depend on that separate browsing interface.
 
@@ -124,6 +126,7 @@ The Android app supports Android Auto, Android Automotive, Assistant and Bluetoo
 - **Your own audiobooks:** files in an `Audiobooks` folder or `.m4b` files show up on the Books tab. Each book shows "Chapter X of Y · time left" and continues where you stopped.
 
 ### 🏷️ Metadata & artwork
+- Main and featured artists have separate artist pages while each song keeps its full credits.
 - **Auto-fix:** untagged songs are matched on Deezer or iTunes, and books on Open Library. A match is only accepted when the length matches within 3 s.
 - **Missing covers:** fetched automatically.
 - **Manual editing:** edit any song, album or book, with online suggestions or your own image.
@@ -132,9 +135,11 @@ The Android app supports Android Auto, Android Automotive, Assistant and Bluetoo
 ### 🔊 Formats & sound
 Both apps have a 10-band equaliser. On iPhone, EQ and crossfade apply to local files and downloads; live music streams use the system player.
 
+**Normalize volume** is on by default. It measures decoded audio and lowers loud recordings without boosting quiet ones or raising your device volume. Format detection reads the actual audio bytes, even when a source supplies the wrong filename or format label.
+
 | Platform | Audio formats |
 |---|---|
-| iPhone | FLAC, ALAC, AAC/M4A, MP3, WAV, AIFF and CAF through iOS decoders |
+| iPhone | FLAC, ALAC, AAC/M4A, MP3, WAV, AIFF and CAF through iOS decoders; Ogg/Opus verified on iOS 26.4, with support on older iOS versions depending on their decoders |
 | Android | The formats below, with extra decoders bundled in the app |
 
 The following details describe Android. See [the iPhone guide](ios/README.md) for its format limits.
@@ -144,9 +149,13 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Equaliser:** an in-app **10-band** EQ with a curve you drag directly, 15 presets, bass boost, surround, loudness and a limiter.
 
 ### 🎨 Make it yours
+- **Ready-made looks:** six general themes and six colourful kids' themes, with matching background, accent and type choices.
+- **App icons:** 25 vinyl-record designs, including attitude labels, pictures and kids' choices.
 - **Theme:** Dark, Light, AMOLED or follow the system.
 - **Accent colour:** presets or the current album art on both apps; Android also offers Material You.
 - **Look and feel:** typefaces, text sizes, artwork shape, and player style: artwork, spinning vinyl or minimal. Font choices differ by platform.
+- **Room for longer text:** Home, Search, library lists and player controls adapt to narrow screens and larger text. Selected colours stay readable in light and dark themes.
+- **Player style button:** change artwork style beside the video button. Your choice stays set across songs. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** your name and photo, set up on first launch.
 

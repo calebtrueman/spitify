@@ -148,8 +148,8 @@ object PodcastDirectory {
     fun search(term: String): List<PodcastSearchResult> {
         val q = java.net.URLEncoder.encode(term, "UTF-8")
         val body = Http.open("https://itunes.apple.com/search?media=podcast&entity=podcast&limit=30&term=$q") { it.readBytes().toString(Charsets.UTF_8) }
-            ?: return emptyList()
-        val results = org.json.JSONObject(body).optJSONArray("results") ?: return emptyList()
+            ?: throw java.io.IOException("Podcast search is unavailable")
+        val results = org.json.JSONObject(body).optJSONArray("results") ?: throw java.io.IOException("Podcast search returned an unreadable reply")
         return (0 until results.length()).mapNotNull { i ->
             val o = results.getJSONObject(i)
             val feed = o.optString("feedUrl").takeIf { it.startsWith("http") } ?: return@mapNotNull null
@@ -193,7 +193,7 @@ object LibriVox {
         val q = java.net.URLEncoder.encode("collection:librivoxaudio AND (${term.trim()})", "UTF-8")
         val fields = listOf("identifier", "title", "creator", "description", "runtime", "language").joinToString("") { "&fl%5B%5D=$it" }
         val docs = json("https://archive.org/advancedsearch.php?q=$q$fields&sort%5B%5D=downloads+desc&rows=30&output=json")
-            ?.optJSONObject("response")?.optJSONArray("docs") ?: return emptyList()
+            ?.optJSONObject("response")?.optJSONArray("docs") ?: throw java.io.IOException("Book search is unavailable")
         return (0 until docs.length()).map { i ->
             val d = docs.getJSONObject(i)
             val id = d.optString("identifier")

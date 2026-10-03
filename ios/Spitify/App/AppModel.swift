@@ -13,6 +13,7 @@ let accentPresets: [(String, UInt32)] = [("Spitify green", 0x1ED760), ("Ocean", 
 
 struct ThemeSettings: Codable, Equatable {
     var mode: ThemeMode = .dark
+    var backdrop: UInt32?
     var accentSource: AccentSource = .preset
     var accent: UInt32 = 0x1ED760
     var font: AppFont = .figtree
@@ -95,7 +96,7 @@ final class AppModel {
             // The source may reuse a recording tagged with a different release. Keep the chosen album.
             let track = job.track
             library.saveOverride(MetadataOverride(title: track.title, artist: track.artist,
-                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? Song.albumArtist(track.artist), track: track.trackNumber > 0 ? track.trackNumber : nil,
+                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? track.primaryArtist, track: track.trackNumber > 0 ? track.trackNumber : nil,
                 disc: track.discNumber, source: "online"), for: [song])
         }
     }

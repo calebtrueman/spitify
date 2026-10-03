@@ -41,24 +41,41 @@ data class LocalfyPalette(
     val isDark: Boolean,
 ) {
     /** Text/icons drawn on top of [brand] (black on bright accents, white on dark ones). */
-    val onBrand: Color get() = if (brand.luminance() > 0.4f) Color.Black else Color.White
+    val onBrand: Color get() = if (brand.luminance() > 0.179f) Color.Black else Color.White
     /** Subtle fill for chips/tiles that works on both light and dark backgrounds. */
     val tint: Color get() = textPrimary.copy(alpha = if (isDark) 0.08f else 0.06f)
 }
 
+/** Accents also label selected items; keep those words readable on the theme's cards. */
+private fun Color.readableOn(background: Color): Color {
+    val backdrop = background.luminance()
+    fun contrast(color: Color): Float {
+        val ink = color.luminance()
+        return (maxOf(ink, backdrop) + 0.05f) / (minOf(ink, backdrop) + 0.05f)
+    }
+    if (contrast(this) >= 4.5f) return this
+    val target = if (backdrop > 0.179f) Color.Black else Color.White
+    var low = 0f; var high = 1f
+    repeat(12) {
+        val amount = (low + high) / 2
+        if (contrast(lerp(this, target, amount)) < 4.5f) low = amount else high = amount
+    }
+    return lerp(this, target, high)
+}
+
 fun darkPalette(brand: Color) = LocalfyPalette(
-    brand, Color(0xFF09090B), Color(0xFF131316), Color(0xFF1C1C21), Color(0xFF27272D),
-    Color.White, Color(0xFFA7A7AE), Color(0xFF6E6E76), isDark = true,
+    brand.readableOn(Color(0xFF27272D)), Color(0xFF09090B), Color(0xFF131316), Color(0xFF1C1C21), Color(0xFF27272D),
+    Color.White, Color(0xFFA7A7AE), Color(0xFF92929D), isDark = true,
 )
 
 fun amoledPalette(brand: Color) = LocalfyPalette(
-    brand, Color.Black, Color(0xFF0A0A0B), Color(0xFF141416), Color(0xFF1E1E21),
-    Color.White, Color(0xFF9E9EA6), Color(0xFF66666E), isDark = true,
+    brand.readableOn(Color(0xFF1E1E21)), Color.Black, Color(0xFF0A0A0B), Color(0xFF141416), Color(0xFF1E1E21),
+    Color.White, Color(0xFF9E9EA6), Color(0xFF898995), isDark = true,
 )
 
 fun lightPalette(brand: Color) = LocalfyPalette(
-    lerp(brand, Color.Black, 0.12f), Color(0xFFF7F7F9), Color(0xFFFFFFFF), Color(0xFFEDEDF1), Color(0xFFE2E2E8),
-    Color(0xFF111114), Color(0xFF5E5E66), Color(0xFF8E8E96), isDark = false,
+    brand.readableOn(Color(0xFFE2E2E8)), Color(0xFFF7F7F9), Color(0xFFFFFFFF), Color(0xFFEDEDF1), Color(0xFFE2E2E8),
+    Color(0xFF111114), Color(0xFF5E5E66), Color(0xFF63636D), isDark = false,
 )
 
 val LocalPalette = staticCompositionLocalOf { darkPalette(Color(0xFF1ED760)) }
@@ -137,11 +154,21 @@ fun resolvePalette(settings: ThemeSettings, artAccent: Color?): LocalfyPalette {
         } else Color(settings.accent)
         AccentSource.Preset -> Color(settings.accent)
     }
-    return when {
+    val base = when {
         !dark -> lightPalette(accent)
-        settings.mode == ThemeMode.Amoled || (settings.mode == ThemeMode.System && false) -> amoledPalette(accent)
+        settings.mode == ThemeMode.Amoled -> amoledPalette(accent)
         else -> darkPalette(accent)
     }
+    val background = settings.backdrop?.let { Color(it) } ?: return base
+    // Custom backgrounds use the selected light/dark mode; AMOLED always stays black.
+    if (settings.mode == ThemeMode.Amoled || settings.mode == ThemeMode.System) return base
+    val ink = if (dark) Color.White else Color.Black
+    val highest = lerp(background, ink, if (dark) 0.13f else 0.09f)
+    return base.copy(brand = accent.readableOn(highest), background = background, surface = lerp(background, ink, if (dark) 0.045f else 0.018f),
+        surfaceHigh = lerp(background, ink, if (dark) 0.085f else 0.05f),
+        surfaceHighest = highest,
+        textSecondary = if (dark) Color(0xFFB9BAC4) else Color(0xFF535361),
+        textTertiary = if (dark) Color(0xFFAEAEBA) else Color(0xFF595968))
 }
 
 @Composable

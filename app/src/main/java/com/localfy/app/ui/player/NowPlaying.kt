@@ -100,6 +100,7 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
     val lookup = rememberSongLookup()
     val current = state.currentId?.let(lookup)
     val upNext = state.upNext.mapNotNull { (i, id) -> lookup(id)?.let { i to it } }
+    fun queueGroup(index: Int) = when (index) { in state.manualQueueIndices -> 1; in state.autoplayQueueIndices -> 2; else -> 0 }
     val rowPx = with(LocalDensity.current) { QueueRowHeight.toPx() }
     var dragIndex by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -126,8 +127,8 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
             }
         }
         itemsIndexed(upNext, key = { _, (i, s) -> "q-$i-${s.id}" }) { pos, (queueIndex, song) ->
-            if (pos == 0 || (upNext[pos - 1].first in state.manualQueueIndices) != (queueIndex in state.manualQueueIndices)) {
-                QueueHeader(if (queueIndex in state.manualQueueIndices) "Added by you" else state.source?.let { "Next from: $it" } ?: "From your playback list")
+            if (pos == 0 || queueGroup(upNext[pos - 1].first) != queueGroup(queueIndex)) {
+                QueueHeader(when (queueGroup(queueIndex)) { 1 -> "Added by you"; 2 -> "Autoplay · similar music"; else -> state.source?.let { "Next from: $it" } ?: "From your playback list" })
             }
             val dragging = dragIndex == pos
             QueueRow(
@@ -146,7 +147,7 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
                         onDragStart = { dragIndex = pos; dragOffset = 0f },
                         onDragEnd = {
                             val steps = (dragOffset / rowPx).roundToInt()
-                            val group = upNext.indices.filter { (upNext[it].first in state.manualQueueIndices) == (queueIndex in state.manualQueueIndices) }
+                            val group = upNext.indices.filter { queueGroup(upNext[it].first) == queueGroup(queueIndex) }
                             val target = (pos + steps).coerceIn(group.first(), group.last())
                             if (target != pos) app.player.move(queueIndex, upNext[target].first)
                             dragIndex = -1; dragOffset = 0f
@@ -273,7 +274,7 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
                     Column(Modifier.height(pageHeight).statusBarsPadding().padding(top = 8.dp).navigationBarsPadding().padding(horizontal = 20.dp)) {
                         PlayerTopBar(state.source, onCollapse, { app.openSongMenu(song, SongMenuExtras()) })
                         ArtPager(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp))
-                        TitleBlock(song, onArtist = { onCollapse(); app.navigate(Routes.artist(song.artist)) })
+                        TitleBlock(song, onArtist = { onCollapse(); app.navigate(Routes.artist(song.primaryArtist)) })
                         Spacer(Modifier.height(6.dp))
                         SeekBar()
                         TransportControls()
@@ -289,7 +290,7 @@ fun NowPlayingFull(onCollapse: () -> Unit, nestedScroll: NestedScrollConnection?
                     LyricsCard(song, lerp(tint, Color.Black, 0.1f), onExpand = { overlay = "lyrics" }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 }
                 item(key = "next") { UpNextCard(onOpen = { overlay = "queue" }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                if (!song.isPodcast) item(key = "about") { AboutArtistCard(song, onOpen = { onCollapse(); app.navigate(Routes.artist(song.artist)) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                if (!song.isPodcast) item(key = "about") { AboutArtistCard(song, onOpen = { onCollapse(); app.navigate(Routes.artist(song.primaryArtist)) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 item(key = "credits") { CreditsCard(song, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             }
         }
@@ -364,7 +365,7 @@ private fun AboutArtistCard(song: Song, onOpen: () -> Unit, modifier: Modifier =
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
     val stats by app.repo.stats.collectAsStateWithLifecycle()
-    val artist = library.artistByName[song.artist] ?: return
+    val artist = library.artistByName[song.primaryArtist] ?: return
     val plays = artist.songs.sumOf { stats[it.id]?.playCount ?: 0 }
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.07f)).pressable(pressedScale = 0.98f, onClick = onOpen)) {
         Box {
@@ -498,7 +499,7 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
                     else -> Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                         ArtPager(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp))
                         Spacer(Modifier.height(8.dp))
-                        TitleBlock(song, onArtist = { app.navigate(Routes.artist(song.artist)) })
+                        TitleBlock(song, onArtist = { app.navigate(Routes.artist(song.primaryArtist)) })
                         SeekBar()
                         TransportControls(large = false)
                         SecondaryControls(onLyrics = { tab = 1 }, onQueue = { tab = 2 })
@@ -526,7 +527,7 @@ fun TheaterPlayer(hingeLeft: Dp, hingeWidth: Dp, onExit: () -> Unit) {
                 PlayerTopBar(app.player.state.collectAsStateWithLifecycle().value.source, onExit, { song?.let { app.openSongMenu(it, SongMenuExtras()) } }, Icons.Rounded.CloseFullscreen)
                 if (song == null) return@Column
                 ArtPager(Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp))
-                TitleBlock(song, large = true, onArtist = { onExit(); app.navigate(Routes.artist(song.artist)) })
+                TitleBlock(song, large = true, onArtist = { onExit(); app.navigate(Routes.artist(song.primaryArtist)) })
                 SeekBar()
                 TransportControls()
                 SecondaryControls()
@@ -564,8 +565,7 @@ fun TabletopPlayer(posture: FoldPosture, onExit: () -> Unit) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(topHeight).statusBarsPadding().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (song == null) { EmptyState("Flex mode", "Start some music and the controls will live down here on the desk."); return@Row }
-                if (!app.musicVideoEnabled.value || song.isPodcast || song.isAudiobook) Artwork(song.artKey, Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true).swipeToSkip(), RoundedCornerShape(12.dp), song.album)
-                else Spacer(Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true))
+                ArtPager(Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true), cornerRadius = 12.dp)
                 Spacer(Modifier.width(24.dp))
                 LyricsView(song, Modifier.weight(1f).fillMaxHeight(), MaterialTheme.typography.titleLarge, PaddingValues(vertical = 8.dp), showFooter = false)
             }

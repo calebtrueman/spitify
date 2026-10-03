@@ -19,6 +19,8 @@ struct OnlineTrack: Codable, Identifiable, Hashable {
     var attemptedSources: [String]? = nil
     var audioByteCount: Int64? = nil
     var explicit: Bool? = nil
+    var artistNames: [String]? = nil
+    var primaryArtist: String { ArtistCredits.names(artist, explicit: artistNames, albumArtist: albumArtist).first ?? artist }
 }
 
 struct OnlineAlbum: Identifiable, Hashable, Codable {
@@ -150,21 +152,26 @@ struct MonochromeClient {
         return string
     }
 
-    static func artist(_ item: [String: Any]) -> String {
+    static func artistNames(_ item: [String: Any]) -> [String] {
         let names = item["artistNames"] as? [String] ?? (item["artists"] as? [[String: Any]])?.compactMap { ($0["name"] ?? $0["displayName"]) as? String } ?? []
+        return names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    }
+    static func artist(_ item: [String: Any]) -> String {
+        let names = artistNames(item)
         return names.isEmpty ? "Unknown artist" : names.joined(separator: ", ")
     }
 
     static func track(_ item: [String: Any], album: [String: Any]? = nil) -> OnlineTrack? {
         guard let id = id(item["trackId"] ?? item["id"]), let title = item["title"] as? String else { return nil }
         let name = artist(item)
+        let names = artistNames(item).isEmpty ? artistNames(album ?? [:]) : artistNames(item)
         return OnlineTrack(id: id, title: title, artist: name == "Unknown artist" ? artist(album ?? [:]) : name,
             album: album?["title"] as? String ?? item["albumTitle"] as? String ?? "",
             releaseID: Self.id(item["releaseId"] ?? album?["releaseId"]) ?? "",
             durationMs: (item["duration"] as? NSNumber)?.int64Value ?? 0,
             trackNumber: item["trackNumber"] as? Int ?? 0, discNumber: item["discNumber"] as? Int ?? 1,
             artwork: (item["artwork"] ?? album?["artwork"]) as? String, playable: item["playable"] as? Bool ?? true,
-            albumArtist: item["albumArtist"] as? String ?? album.map { Self.artist($0) }, explicit: item["explicit"] as? Bool)
+            albumArtist: item["albumArtist"] as? String ?? album.flatMap { Self.artistNames($0).first }, explicit: item["explicit"] as? Bool, artistNames: names.isEmpty ? nil : names)
     }
 }
 

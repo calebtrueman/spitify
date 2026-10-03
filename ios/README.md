@@ -71,10 +71,32 @@ Bump `MARKETING_VERSION` in `project.yml`, then publish a GitHub release tagged 
 ## Voice and car playback
 
 Siri shortcuts are included in the app. After opening Spitify and loading your library,
-try “Play [song, album, artist, playlist, or show] in Spitify,” “Resume Spitify,” or
-“Pause Spitify.” These actions play items already in your library or followed shows.
-They also appear in Apple's Shortcuts app. Siri still decides which app a spoken
-request belongs to; the phone needs a real voice check after installation.
+try “Play [song, album, artist, playlist, or show] in Spitify,” “Resume Spitify,”
+“Pause Spitify,” “Next song in Spitify,” “Previous song in Spitify,”
+“Turn shuffle on in Spitify,” or “Set repeat to song in Spitify.”
+These actions also appear in Apple's Shortcuts app. Named shortcuts use your library,
+followed shows, and current queue.
+
+The app also handles Siri's built-in music requests directly. That path needs a
+Siri-enabled signing profile. Build with
+`SPITIFY_APP_ENTITLEMENTS=Spitify/Siri.entitlements` and a matching team/profile.
+To enable both Siri and CarPlay, use one entitlement file containing both keys.
+The regular SideStore build keeps this optional permission off. App Shortcuts stay
+available without it. Siri still chooses where to send a spoken request, so a real
+phone voice check is required after signing and installing.
+See [Apple's Siri setup](https://developer.apple.com/documentation/xcode/configuring-siri-support).
+
+“Keep music playing” is on by default. The queue keeps manual picks first, then the
+selected album or playlist, then a separate Autoplay section. It refreshes suggestions
+as you listen and skips tracks that fail. Repeat, sleep timers, listening rooms, and
+explicitly clearing the queue take priority. Podcasts and books do not lead into music.
+
+“Normalize volume” is on by default. Local files are measured from decoded samples;
+streams use a decoded-audio tap. Loud songs are lowered, quiet songs are never boosted,
+and the app never raises the phone's volume. Audio format detection uses file bytes
+rather than a server's label, including Ogg/Opus returned from a FLAC-labeled source.
+Native Ogg/Opus playback and normalization were checked on iOS 26.4; older iOS decoder
+support may differ.
 
 The car's built-in Now Playing screen uses the same audio, artwork, and play/pause/
 skip controls as the phone. The separate Spitify CarPlay screens include library

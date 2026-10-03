@@ -23,9 +23,20 @@ object MusicVideoLookup {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val cache = mutableMapOf<String, Pair<Long, List<MusicVideo>>>()
     private val pending = mutableMapOf<String, Deferred<List<MusicVideo>>>()
+    private var preloadJob: Job? = null
+    private var preloadRequest = 0L
     fun prepare(song: com.localfy.app.data.Song, context: android.content.Context) {
+        val request = ++preloadRequest
+        preloadJob?.cancel()
+        preloadJob = null
         if (song.isPodcast || song.isAudiobook) return
-        scope.launch { try { findAll(song.title, song.artist, song.durationMs).firstOrNull()?.let { com.localfy.app.ui.player.VideoWebCache.prepare(context, it.id) } } catch (e: Exception) { if (e is CancellationException) throw e } }
+        preloadJob = scope.launch {
+            try {
+                val clip = findAll(song.title, song.artist, song.durationMs).firstOrNull()
+                ensureActive()
+                if (clip != null && request == preloadRequest) com.localfy.app.ui.player.VideoWebCache.prepare(context, clip.id)
+            } catch (e: Exception) { if (e is CancellationException) throw e }
+        }
     }
     suspend fun findAll(title: String, artist: String, durationMs: Long): List<MusicVideo> = withContext(Dispatchers.Main.immediate) {
         val key = "${SearchMatch.fold(title)}|${SearchMatch.fold(artist)}"

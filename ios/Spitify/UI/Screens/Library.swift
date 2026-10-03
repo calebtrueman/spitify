@@ -47,15 +47,19 @@ struct LibraryView: View {
                 }
                 if filter == .songs {
                     let songs = sortedSongs
+                    if songs.isEmpty { EmptyState(title: "No songs yet", message: "Find music in Search, then add it to your library. You can also import your own files.", icon: "music.note") }
                     ForEach(Array(songs.enumerated()), id: \.element.id) { i, s in SongRow(song: s) { app.player.play(songs, from: i, shuffle: false, source: "All songs") } }
                 } else {
+                    if let filter, filter != .playlists, entries.isEmpty {
+                        EmptyState(title: "No \(filter.rawValue.lowercased()) yet", message: "Add music to your library to see it here.", icon: "music.note")
+                    }
                     ForEach(entries) { e in
                         Button { router.go(e.route) } label: {
                             HStack(spacing: 12) {
                                 ArtworkView(e.song, cornerRadius: 4, circle: e.circle).frame(width: 60, height: 60)
                                 VStack(alignment: .leading, spacing: 2) { Text(e.title).text(.body).foregroundStyle(p.text).lineLimit(1); Text(e.subtitle).text(.bodyS).foregroundStyle(p.secondary).lineLimit(1) }
                                 Spacer()
-                            }.padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
                         }.buttonStyle(.pressable(0.98))
                     }
                 }
@@ -66,7 +70,7 @@ struct LibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { ArtistReleasesView() } label: { Image(systemName: "bell") }.accessibilityLabel("New releases") }
             ToolbarItem(placement: .topBarTrailing) { NavigationLink { FriendsView() } label: { Image(systemName: "person.2") }.accessibilityLabel("Friends") }
-            ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") } }
+            ToolbarItem(placement: .topBarTrailing) { Button { creating = true } label: { Image(systemName: "plus") }.accessibilityLabel("Create playlist") }
         }
         .alert("Give your playlist a name", isPresented: $creating) {
             TextField("My playlist", text: $newName)
@@ -83,7 +87,7 @@ struct LibraryView: View {
                     .overlay(Image(systemName: icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white))
                 VStack(alignment: .leading, spacing: 2) { Text(title).text(.body).foregroundStyle(p.text); Text(sub).text(.bodyS).foregroundStyle(p.secondary) }
                 Spacer()
-            }.padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
         }.buttonStyle(.pressable(0.98))
     }
 

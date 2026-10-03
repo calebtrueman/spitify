@@ -4,6 +4,8 @@ struct SearchView: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
+    @Environment(\.themeSettings) private var theme
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var query = ""
 
     var body: some View {
@@ -25,16 +27,19 @@ struct SearchView: View {
     }
 
     private func browse(_ items: [(String, [Song], Route)]) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        let roomyText = textSize >= .xxLarge || theme.textScale == .huge
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: roomyText ? 1 : 2), spacing: 12) {
             ForEach(items, id: \.2) { name, songs, route in
+                let background = fallbackColor(name)
+                let ink: Color = background.luminance > 0.179 ? .black : .white
                 Button { router.go(route) } label: {
                     ZStack(alignment: .topLeading) {
-                        fallbackColor(name)
-                        VStack(alignment: .leading) { Text(name).text(.title).foregroundStyle(.white).lineLimit(2); Text(songCount(songs.count)).text(.caption).foregroundStyle(.white.opacity(0.8)) }.padding(12)
+                        background
+                        VStack(alignment: .leading) { Text(name).text(.title).lineLimit(2); Text(songCount(songs.count)).text(.caption) }.foregroundStyle(ink).fixedSize(horizontal: false, vertical: true).padding(12).padding(.bottom, 40)
                         ArtworkView(songs.first, cornerRadius: 4).frame(width: 64, height: 64).rotationEffect(.degrees(25)).offset(x: 14, y: 14)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     }
-                    .frame(height: 100).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(minHeight: roomyText ? 140 : 100).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }.buttonStyle(.pressable)
             }
         }.padding(.horizontal, 16)

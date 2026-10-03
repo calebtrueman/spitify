@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,7 +37,7 @@ fun FriendsScreen() {
     LazyColumn(contentPadding = PaddingValues(16.dp, 24.dp, 16.dp, 100.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { TextButton(onClick = { actions.nav.popBackStack() }) { Text("Back") }; Text("Friends", style = MaterialTheme.typography.headlineMedium) }
         item {
-            Row { Text("Connect with friends", Modifier.weight(1f)); Switch(store.enabled, { store.configure(it) }) }
+            Row { Text("Connect with friends", Modifier.weight(1f)); Switch(store.enabled, { store.configure(it) }, modifier = Modifier.semantics { contentDescription = "Connect with friends" }) }
             Text("Friends connect through public relays. Anyone can read public profiles and playlists. Direct shares are encrypted. Your audio files stay on your device.")
             if (store.enabled) Text("${store.connected} relays connected · ${store.pending} messages waiting")
             TextButton(onClick = { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, SocialLink("person", store.publicKey).url), "Share friend code")) }) { Text("Share your friend code") }
@@ -44,7 +46,7 @@ fun FriendsScreen() {
         item {
             Text("New shared playlist", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(playlistName, { playlistName = it }, label = { Text("Playlist name") })
-            Row { Text("Shared Mix", Modifier.weight(1f)); Switch(mix, { mix = it }) }
+            Row { Text("Shared Mix", Modifier.weight(1f)); Switch(mix, { mix = it }, modifier = Modifier.semantics { contentDescription = "Shared Mix" }) }
             Text("Add songs, then invite friends from the playlist's sharing controls.")
             Button(enabled = playlistName.isNotBlank(), onClick = {
                 runCatching { val list = SharedPlaylist(owner = store.publicKey, name = playlistName.trim(), kind = if (mix) "mix" else "playlist"); store.save(list); actions.navigate(com.localfy.app.ui.Routes.sharedPlaylist(list.key)) }.onFailure { message = it.message }
@@ -67,7 +69,7 @@ fun FriendsScreen() {
             OutlinedTextField(name, { name = it }, label = { Text("Name") })
             OutlinedTextField(about, { about = it }, label = { Text("About you") })
             Button(onClick = { scope.launch { try { store.publishProfile(name, about); message = "Profile published." } catch (e: Exception) { if (e is CancellationException) throw e; message = e.message } } }, enabled = store.enabled) { Text("Publish profile") }
-            Row { Text("Discover public profiles", Modifier.weight(1f)); Switch(store.discovery, { store.configure(store.enabled, it) }) }
+            Row { Text("Discover public profiles", Modifier.weight(1f)); Switch(store.discovery, { store.configure(store.enabled, it) }, modifier = Modifier.semantics { contentDescription = "Discover public profiles" }) }
         }
         item { Text("Following", style = MaterialTheme.typography.titleMedium) }
         items(following, key = { it }) { person -> Row { Text(store.state.profiles[person]?.name ?: "Friend ${person.take(8)}", Modifier.weight(1f)); TextButton(onClick = { store.unfollow(person) }) { Text("Unfollow") } } }
@@ -98,7 +100,7 @@ fun PlaylistSharingControls(playlist: SharedPlaylist) {
             people.forEach { person ->
                 Text(store.state.profiles[person]?.name ?: "Friend ${person.take(8)}")
                 TextButton(onClick = { send { store.share(playlist, person) } }) { Text("Send privately") }
-                Row { Text("Allow edits", Modifier.weight(1f)); Switch(person in (store.state.playlists[playlist.key] ?: playlist).editors, { allowed -> send { store.setEditor(person, playlist, allowed) } }) }
+                Row { Text("Allow edits", Modifier.weight(1f)); Switch(person in (store.state.playlists[playlist.key] ?: playlist).editors, { allowed -> send { store.setEditor(person, playlist, allowed) } }, modifier = Modifier.semantics { contentDescription = "Allow ${store.state.profiles[person]?.name ?: "Friend ${person.take(8)}"} to edit" }) }
             }
             if (people.isEmpty()) Text("Follow someone in Friends to send a private share.")
             message?.let { Text(it) }

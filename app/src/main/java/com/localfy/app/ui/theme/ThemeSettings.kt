@@ -18,6 +18,7 @@ enum class TextSize(val label: String, val scale: Float) { Small("Small", 0.9f),
 @Immutable
 data class ThemeSettings(
     val mode: ThemeMode = ThemeMode.Dark,
+    val backdrop: Long? = null,
     val accentSource: AccentSource = AccentSource.Preset,
     val accent: Long = AccentPresets.first().second,
     val artworkTint: Boolean = true,
@@ -54,6 +55,7 @@ class ThemeRepository(context: Context) {
         _settings.value = next
         prefs.edit {
             putString("mode", next.mode.name)
+            if (next.backdrop == null) remove("backdrop") else putLong("backdrop", next.backdrop)
             putString("accentSource", next.accentSource.name)
             putLong("accent", next.accent)
             putBoolean("artworkTint", next.artworkTint)
@@ -75,6 +77,7 @@ class ThemeRepository(context: Context) {
             prefs.getString(key, null)?.let { n -> values.firstOrNull { it.name == n } } ?: default
         return ThemeSettings(
             mode = enum("mode", ThemeMode.entries.toTypedArray(), d.mode),
+            backdrop = if (prefs.contains("backdrop")) prefs.getLong("backdrop", 0) else null,
             accentSource = enum("accentSource", AccentSource.entries.toTypedArray(), d.accentSource),
             accent = prefs.getLong("accent", d.accent),
             artworkTint = prefs.getBoolean("artworkTint", d.artworkTint),

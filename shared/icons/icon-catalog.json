@@ -1,0 +1,127 @@
+[
+  {
+    "id": "not_for_rent",
+    "name": "Not for rent",
+    "group": "Attitude"
+  },
+  {
+    "id": "no_landlords",
+    "name": "No music landlords",
+    "group": "Attitude"
+  },
+  {
+    "id": "skip_fees",
+    "name": "No fees",
+    "group": "Attitude"
+  },
+  {
+    "id": "no_ads",
+    "name": "No ads, just tracks",
+    "group": "Attitude"
+  },
+  {
+    "id": "your_music",
+    "name": "Your music, your rules",
+    "group": "Attitude"
+  },
+  {
+    "id": "green",
+    "name": "Classic green",
+    "group": "Artwork"
+  },
+  {
+    "id": "moon",
+    "name": "Moonlight",
+    "group": "Artwork"
+  },
+  {
+    "id": "sun",
+    "name": "Sunshine",
+    "group": "Artwork"
+  },
+  {
+    "id": "mountain",
+    "name": "Mountains",
+    "group": "Artwork"
+  },
+  {
+    "id": "ocean",
+    "name": "Ocean",
+    "group": "Artwork"
+  },
+  {
+    "id": "flower",
+    "name": "Daisy",
+    "group": "Artwork"
+  },
+  {
+    "id": "lightning",
+    "name": "Lightning",
+    "group": "Artwork"
+  },
+  {
+    "id": "cassette",
+    "name": "Mixtape",
+    "group": "Artwork"
+  },
+  {
+    "id": "fire",
+    "name": "Fire",
+    "group": "Artwork"
+  },
+  {
+    "id": "aurora",
+    "name": "Aurora",
+    "group": "Artwork"
+  },
+  {
+    "id": "rocket",
+    "name": "Space crew",
+    "group": "Kids"
+  },
+  {
+    "id": "dino",
+    "name": "Dino park",
+    "group": "Kids"
+  },
+  {
+    "id": "race",
+    "name": "Race day",
+    "group": "Kids"
+  },
+  {
+    "id": "butterfly",
+    "name": "Butterfly",
+    "group": "Kids"
+  },
+  {
+    "id": "unicorn",
+    "name": "Unicorn",
+    "group": "Kids"
+  },
+  {
+    "id": "cat",
+    "name": "Little cat",
+    "group": "Kids"
+  },
+  {
+    "id": "robot",
+    "name": "Robot",
+    "group": "Kids"
+  },
+  {
+    "id": "rainbow",
+    "name": "Rainbow",
+    "group": "Kids"
+  },
+  {
+    "id": "soccer",
+    "name": "Goal!",
+    "group": "Kids"
+  },
+  {
+    "id": "frog",
+    "name": "Happy frog",
+    "group": "Kids"
+  }
+]

@@ -28,6 +28,34 @@ final class ImageTests: XCTestCase {
         }
     }
 
+    @MainActor func testVinylKeepsArtworkColoursAndTheSpindleHoleClear() async throws {
+        let song = Song(id: "vinyl-preview", title: "Paper Label", artist: "Spitify", album: UUID().uuidString, albumArtist: "Spitify",
+                        durationMs: 180000, track: 1, disc: 1, year: 2026, location: "vinyl.flac", kind: .file,
+                        dateAdded: Date(), sizeBytes: 1, fileExtension: "flac")
+        let artwork = UIGraphicsImageRenderer(size: CGSize(width: 200, height: 200)).image { context in
+            UIColor(red: 0.88, green: 0.15, blue: 0.16, alpha: 1).setFill(); context.fill(CGRect(x: 0, y: 0, width: 100, height: 200))
+            UIColor(red: 0.12, green: 0.22, blue: 0.88, alpha: 1).setFill(); context.fill(CGRect(x: 100, y: 0, width: 100, height: 200))
+            ("SIDE A" as NSString).draw(at: CGPoint(x: 68, y: 28), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 18), .foregroundColor: UIColor.white])
+        }
+        ArtCache.shared.storeEmbedded(try XCTUnwrap(artwork.pngData()), key: song.albumKey)
+        let app = AppModel()
+        let host = UIHostingController(rootView: Vinyl(song: song).frame(width: 320, height: 320).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(white: 0.15)).ignoresSafeArea().environment(app))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let oldKey = scene.keyWindow
+        let window = UIWindow(windowScene: scene); window.rootViewController = host; window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil; oldKey?.makeKeyAndVisible(); try? FileManager.default.removeItem(at: ArtCache.shared.embeddedURL(song.albumKey)); ArtCache.shared.invalidate(song.albumKey) }
+        try await Task.sleep(for: .milliseconds(500))
+        let shot = UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true) }
+        let image = try XCTUnwrap(shot.cgImage)
+        let cx = image.width / 2, cy = image.height / 2
+        let offset = Int(shot.scale * 30)
+        let left = pixel(image, cx - offset, cy), right = pixel(image, cx + offset, cy), hole = pixel(image, cx, cy)
+        XCTAssertGreaterThan(Int(left.r) - Int(left.b), 70, "The print effect must keep the original red artwork visible")
+        XCTAssertGreaterThan(Int(right.b) - Int(right.r), 70, "The print effect must keep the original blue artwork visible")
+        XCTAssertLessThan(hole.r, 45); XCTAssertLessThan(hole.b, 45)
+        let attachment = XCTAttachment(image: shot); attachment.name = "Vinyl paper label"; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
     /// A camera-style JPEG: pixels stored landscape (left red, right blue) with EXIF orientation 6
     /// ("rotate 90° clockwise to display"), so it should display as a portrait image, red on top.
     private func rotatedJPEG() -> Data {

@@ -105,7 +105,7 @@ struct AddToPlaylistSheet: View {
                 Button { creating = true } label: { Label("New playlist", systemImage: "plus") }
                 ForEach(app.library.playlists) { pl in
                     Button { app.library.add(songs, to: pl.id); Haptics.success(); dismiss() } label: {
-                        HStack { ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4).frame(width: 44, height: 44); VStack(alignment: .leading) { Text(pl.name); Text(songCount(pl.songIds.count)).font(.caption).foregroundStyle(.secondary) } }
+                        HStack { ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4).frame(width: 44, height: 44); VStack(alignment: .leading) { Text(pl.name); Text(songCount(pl.songIds.count)).font(.caption).foregroundStyle(.secondary) }; Spacer() }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }
                 }
             }
@@ -202,7 +202,7 @@ struct MetadataEditor: View {
                                     }
                                     Spacer()
                                     Text("Use").font(.caption.bold())
-                                }
+                                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                             }.buttonStyle(.plain)
                         }
                     }

@@ -52,4 +52,31 @@ class LibraryTest {
         val lib = Library.from(listOf(song(1, "a", "x", "l", 1, folder = "Music/A/"), song(2, "b", "x", "l", 1, folder = "Download/")))
         assertEquals(listOf("Download", "A"), lib.folders.map { it.name })
     }
+    @Test
+    fun featuredArtistsHaveSeparatePagesAndKeepFullSongCredits() {
+        val duet = song(1, "Tomorrow Never Came", "Lana Del Rey, Sean Ono Lennon", "Lust for Life", 1)
+            .copy(albumArtist = "Lana Del Rey", artistNames = listOf("Lana Del Rey", "Sean Ono Lennon"))
+        val lib = Library.from(listOf(duet))
+        assertEquals(setOf("Lana Del Rey", "Sean Ono Lennon"), lib.artists.map { it.name }.toSet())
+        assertEquals(listOf(1L), lib.artistByName.getValue("Sean Ono Lennon").songs.map { it.id })
+        assertEquals("Lana Del Rey", lib.albums.single().artist)
+        assertEquals("Lana Del Rey, Sean Ono Lennon", lib.songs.single().artist)
+    }
+
+    @Test
+    fun olderCreditsUseKnownNamesAndDoNotSplitBands() {
+        val lib = Library.from(listOf(
+            song(1, "Solo", "Lana Del Rey", "A", 1),
+            song(2, "Duet", "Lana Del Rey, Sean Ono Lennon", "B", 2),
+            song(3, "Band", "Earth, Wind & Fire", "C", 3),
+            song(4, "Rapper", "Tyler, The Creator", "D", 4),
+            song(5, "Feature", "Lana Del Rey (feat. Father John Misty)", "E", 5).copy(albumArtist = "Lana Del Rey"),
+        ))
+        assertEquals(3, lib.artistByName.getValue("Lana Del Rey").songs.size)
+        assertEquals(setOf("Lana Del Rey", "Sean Ono Lennon", "Earth, Wind & Fire", "Tyler, The Creator", "Father John Misty"), lib.artistByName.keys)
+        assertEquals("Lana Del Rey, Sean Ono Lennon", lib.songById.getValue(2L).artist)
+        assertEquals(listOf("Broadcast (UK)"), ArtistCredits.names("Broadcast (UK)"))
+        assertEquals(listOf("Simon & Garfunkel"), ArtistCredits.names("Simon & Garfunkel"))
+    }
+
 }

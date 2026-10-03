@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,13 +43,13 @@ fun SharedPlaylistEditor(playlist: SharedPlaylist) {
             if (playlist.kind == "mix") Text("Pick up to 100 songs. Sending replaces your previous contribution. The mix takes turns between each person's songs and skips repeats.")
             OutlinedTextField(query, { query = it }, label = { Text("Find a song") })
             results.forEach { track ->
-                Row { Checkbox("remote:${track.id}" in selected, { checked -> selected = if (!checked) selected - "remote:${track.id}" else if (selected.size < 100) selected + ("remote:${track.id}" to SharedTrack(title = track.title, artist = track.artist, album = track.album, durationMs = track.durationMs, sourceID = track.id, releaseID = track.releaseId, artwork = track.artwork)) else selected }); Column { Text(track.title); Text(track.artist) } }
+                Row { Checkbox("remote:${track.id}" in selected, { checked -> selected = if (!checked) selected - "remote:${track.id}" else if (selected.size < 100) selected + ("remote:${track.id}" to SharedTrack(title = track.title, artist = track.artist, album = track.album, durationMs = track.durationMs, sourceID = track.id, releaseID = track.releaseId, artwork = track.artwork)) else selected }, modifier = Modifier.semantics { contentDescription = "Select ${track.title} by ${track.artist}" }); Column { Text(track.title); Text(track.artist) } }
             }
             Text("${selected.size} selected")
             if (selected.isNotEmpty()) TextButton(onClick = { selected = emptyMap() }) { Text("Clear selection") }
             library.songs.filter { query.isBlank() || SearchMatch.score(query, it.title, it.artist, it.album) != null }.take(30).forEach { song ->
                 Row {
-                    Checkbox("local:${song.id}" in selected, { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams)) else selected })
+                    Checkbox("local:${song.id}" in selected, { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams)) else selected }, modifier = Modifier.semantics { contentDescription = "Select ${song.title} by ${song.artist}" })
                     Column { Text(song.title); Text("Your library · ${song.artist}") }
                 }
             }

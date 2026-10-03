@@ -47,10 +47,10 @@ internal fun savedSong(track: OnlineTrack, songs: List<Song>, jobs: List<MusicDo
 }
 
 @Composable
-private fun DownloadMark(complete: Boolean, active: Boolean, progress: Float = 0f) {
+private fun DownloadMark(complete: Boolean, active: Boolean, progress: Float? = null) {
     Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
         if (active) {
-            if (progress > 0) {
+            if (progress != null) {
                 CircularProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxSize(), strokeWidth = 2.dp)
                 Icon(androidx.compose.material.icons.Icons.Rounded.Download, null, Modifier.size(12.dp))
             } else CircularProgressIndicator(Modifier.fillMaxSize(), strokeWidth = 2.dp)
@@ -69,6 +69,8 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
     val library by actions.repo.library.collectAsStateWithLifecycle()
     val job = jobs.firstOrNull { it.id == track.id }
     val song = savedSong(track, library.songs, jobs)
+    val complete = song != null || job?.state == "complete"
+    val fraction = DownloadProgress.fraction(job?.state, progress[track.id])
     var preparing by remember(track.id) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     if (onPlay != null) {
@@ -79,11 +81,11 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
             SongRow(song = playable, modifier = Modifier.weight(1f), trackNumber = trackNumber, subtitle = track.artist, downloaded = song != null,
                 isCurrent = player.currentId == playable.id, isPlaying = player.isPlaying,
                 onClick = { streams.register(track); onPlay(playable) }, onMore = { streams.register(track); actions.openSongMenu(playable, SongMenuExtras()) })
-            if (song == null) IconButton(onClick = {
+            if (song == null) IconButton(enabled = !complete, onClick = {
                 if (job?.active == true) downloads.cancel(track.id)
                 else { streams.save(listOf(track)); scope.launch { downloads.enqueue(listOf(track)) } }
-            }, modifier = Modifier.semantics { contentDescription = if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
-                DownloadMark(false, job?.active == true, progress[track.id] ?: 0f)
+            }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
+                DownloadMark(complete, job?.active == true, fraction)
             }
         }
         return
@@ -101,7 +103,7 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
                 Text(track.artist, style = MaterialTheme.typography.bodySmall, color = textColor)
             }
         }
-        IconButton(enabled = song == null && !preparing, onClick = {
+        IconButton(enabled = !complete && !preparing, onClick = {
             if (job?.active == true) downloads.cancel(track.id)
             else {
                 preparing = true
@@ -114,8 +116,8 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
                     } finally { preparing = false }
                 }
             }
-        }, modifier = Modifier.semantics { contentDescription = if (song != null) "Downloaded" else if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
-            DownloadMark(song != null, preparing || job?.active == true, progress[track.id] ?: 0f)
+        }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
+            DownloadMark(complete, preparing || job?.active == true, fraction)
         }
     }
 }
@@ -164,7 +166,13 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
     val inLibrary = tracks.isNotEmpty() && tracks.all { track -> saved.any { it.id == MusicStreams.streamId(track.id) } }
     val albumJobs = jobs.filter { j -> tracks.any { it.id == j.id } }
     val active = albumJobs.any { it.active }
-    val complete = tracks.isNotEmpty() && downloaded == tracks.size
+    val complete = tracks.isNotEmpty() && tracks.all { track ->
+        savedSong(track, library.songs, jobs) != null || albumJobs.any { it.id == track.id && it.state == "complete" }
+    }
+    val albumProgress = DownloadProgress.album(tracks.map { track ->
+        if (savedSong(track, library.songs, jobs) != null) 1f
+        else DownloadProgress.fraction(albumJobs.firstOrNull { it.id == track.id }?.state, progress[track.id])
+    })
     val art = songs.firstOrNull()?.artKey ?: ArtKey(album.id.hashCode().toLong(), album.id.hashCode().toLong(), single?.artwork ?: album.artwork)
     CollectionScreen(title = single?.title ?: album.title, kindLabel = if (single == null) "Album" else "Song", subtitle = album.artist,
         art = art, songs = songs, trackNumbers = single == null, catalogTracks = tracks,
@@ -177,7 +185,7 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
                 if (active) albumJobs.filter { it.active }.forEach { downloads.cancel(it.id) }
                 else { streams.save(tracks); adding = true; scope.launch { try { downloads.enqueue(tracks) } finally { adding = false } } }
             }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (active) "Cancel downloads" else if (single == null) "Download album" else "Download song" }) {
-                DownloadMark(complete, active || adding, if (tracks.isEmpty()) 0f else (downloaded + albumJobs.filter { it.active }.sumOf { (progress[it.id] ?: 0f).toDouble() }).toFloat() / tracks.size)
+                DownloadMark(complete, active || adding, albumProgress)
             }
             if (downloaded > 0) IconButton(onClick = { actions.editMetadata(songs.filter { it.sourceUri?.scheme != "spitify" }, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
         }, beforeSongs = {

@@ -11,9 +11,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,6 +78,7 @@ val CircleArt: Shape = CircleShape
  * The artwork shrinks and fades as you scroll, then a compact bar with the title and a play
  * button pins to the top (Spotify's collapsing header). [hero] gives artists a full-bleed photo.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CollectionScreen(
     title: String,
@@ -90,7 +92,7 @@ fun CollectionScreen(
     trackNumbers: Boolean = false,
     songSubtitle: (Song) -> String = { "${it.artist} • ${it.album}" },
     extrasFor: (Int, Song) -> SongMenuExtras = { _, _ -> SongMenuExtras() },
-    headerActions: @Composable RowScope.() -> Unit = {},
+    headerActions: @Composable () -> Unit = {},
     beforeSongs: LazyListScope.() -> Unit = {},
     afterSongs: LazyListScope.() -> Unit = {},
     emptyText: String = "Nothing here yet.",
@@ -188,15 +190,16 @@ fun CollectionScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        headerActions()
-                        if (songs.isNotEmpty() && songs.none { it.isPodcast || it.isAudiobook }) ShareMusicButton(title, songs, if (kindLabel == "Album") "album" else if (kindLabel == "Song") "song" else "playlist")
-                        IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
-                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)
+                        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            headerActions()
+                            if (songs.isNotEmpty() && songs.none { it.isPodcast || it.isAudiobook }) ShareMusicButton(title, songs, if (kindLabel == "Album") "album" else if (kindLabel == "Song") "song" else "playlist")
+                            IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
+                                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)
+                            }
+                            if (catalogTracks == null) IconButton(onClick = { app.player.addToQueue(songs) }, enabled = songs.isNotEmpty()) {
+                                Icon(Icons.Rounded.AddToQueue, "Add all to queue", tint = LocalfyColors.TextSecondary)
+                            }
                         }
-                        if (catalogTracks == null) IconButton(onClick = { app.player.addToQueue(songs) }, enabled = songs.isNotEmpty()) {
-                            Icon(Icons.Rounded.AddToQueue, "Add all to queue", tint = LocalfyColors.TextSecondary)
-                        }
-                        Spacer(Modifier.weight(1f))
                         IconButton(onClick = { app.player.playSongs(songs, shuffle = true, source = title) }, enabled = songs.isNotEmpty()) {
                             Icon(Icons.Rounded.Shuffle, "Shuffle play", tint = if (player.shuffle) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary, modifier = Modifier.size(28.dp))
                         }

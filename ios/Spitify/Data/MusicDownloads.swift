@@ -139,6 +139,7 @@ final class MusicDownloads {
             }
             guard (try? MonochromeClient.audioURL(track.id)) != nil else { continue }
             jobs.removeAll { $0.id == track.id }
+            progress[track.id] = nil
             let folder = MonochromeClient.id(track.releaseID) ?? "Singles"
             let job = MusicDownload(track: track, attempt: UUID().uuidString, state: .queued,
                                     relativePath: "Music/Monochrome/\(folder)/\(track.id).\(track.audioExtension ?? "flac")", wifiOnly: wifiOnly)
@@ -210,7 +211,7 @@ final class MusicDownloads {
     func updated(attempt: String, received: Int64, total: Int64) {
         guard let i = jobs.firstIndex(where: { $0.attempt == attempt && ($0.state == .downloading || $0.state == .waiting) }) else { return }
         if jobs[i].state == .waiting { jobs[i].state = .downloading; jobs[i].retryAt = nil; jobs[i].error = nil; persist() }
-        progress[jobs[i].id] = total > 0 ? min(1, Double(received) / Double(total)) : 0
+        progress[jobs[i].id] = DownloadProgress.measured(previous: progress[jobs[i].id], received: received, total: total)
     }
 
     func received(attempt: String, file: URL) async {
@@ -219,11 +220,17 @@ final class MusicDownloads {
         guard let index = jobs.firstIndex(where: { $0.attempt == attempt && $0.state.active }) else { return }
         scheduledAttempts.remove(attempt)
         jobs[index].state = .checking
+        progress[jobs[index].id] = 1
         persist()
         var audioChecked = false
         do {
             let track = jobs[index].track
-            if let ext = track.audioExtension, ["m4a", "mp3"].contains(ext) {
+            let reader = try FileHandle(forReadingFrom: file)
+            let header = try reader.read(upToCount: 512) ?? Data(); try reader.close()
+            guard let ext = MusicResourceLoader.audioExtension(header) else {
+                throw MusicSourceError.message("The download did not contain a supported audio file.")
+            }
+            if file.pathExtension.lowercased() != ext {
                 audioFile = file.deletingPathExtension().appendingPathExtension(ext)
                 try FileManager.default.moveItem(at: file, to: audioFile)
             }
@@ -235,9 +242,11 @@ final class MusicDownloads {
                 artwork = data
             }
             try await FileTags.shared.write(audioFile, edit: MetadataOverride(title: track.title, artist: track.artist,
-                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? Song.albumArtist(track.artist),
+                album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? track.primaryArtist,
                 track: track.trackNumber > 0 ? track.trackNumber : nil, disc: track.discNumber, source: "online"), artwork: artwork)
             guard let currentIndex = jobs.firstIndex(where: { $0.attempt == attempt && $0.state == .checking }) else { throw CancellationError() }
+            jobs[currentIndex].track.audioExtension = ext
+            jobs[currentIndex].relativePath = (jobs[currentIndex].relativePath as NSString).deletingPathExtension + "." + ext
             let destination = root.appendingPathComponent(jobs[currentIndex].relativePath)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: destination.path) {
@@ -255,15 +264,35 @@ final class MusicDownloads {
         finishBackgroundEventsIfReady()
     }
 
-    private func validateAudio(_ file: URL, track: OnlineTrack) async throws -> String {
-        if !["m4a", "mp3"].contains(track.audioExtension ?? "flac") { return try FLACInfo.read(file, expectedDurationMs: track.durationMs).label }
-        let asset = AVURLAsset(url: file)
-        let duration = try await asset.load(.duration).seconds
-        let audio = try await asset.loadTracks(withMediaType: .audio)
-        guard !audio.isEmpty, duration.isFinite, duration > 0, abs(duration * 1000 - Double(track.durationMs)) <= 5000 else {
+    private func validateAudio(_ url: URL, track: OnlineTrack) async throws -> String {
+        let file = try AVAudioFile(forReading: url)
+        let rate = file.processingFormat.sampleRate
+        guard rate > 0, file.length > 0 else { throw MusicSourceError.message("The download contains no audio.") }
+        let duration = Double(file.length) / rate
+        guard duration.isFinite, track.durationMs <= 0 || abs(duration * 1000 - Double(track.durationMs)) <= 5000 else {
             throw MusicSourceError.message("The downloaded audio does not match this song.")
         }
-        return track.audioExtension == "mp3" ? "MP3" : "M4A"
+        // Opening a container alone does not prove its audio decodes. Check samples at both ends.
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 4096) else {
+            throw MusicSourceError.message("This audio format could not be decoded.")
+        }
+        for position in Set([AVAudioFramePosition(0), max(0, file.length - 4096)]) {
+            file.framePosition = position
+            try file.read(into: buffer)
+            guard buffer.frameLength > 0 else { throw MusicSourceError.message("The audio download is incomplete.") }
+        }
+        let codec = file.fileFormat.streamDescription.pointee.mFormatID
+        if codec == kAudioFormatFLAC { return try FLACInfo.read(url, expectedDurationMs: track.durationMs).label }
+        let label: String
+        switch codec {
+        case kAudioFormatOpus: label = "Opus"
+        case kAudioFormatMPEGLayer3: label = "MP3"
+        case kAudioFormatMPEG4AAC, kAudioFormatMPEG4AAC_HE, kAudioFormatMPEG4AAC_HE_V2: label = "AAC"
+        case kAudioFormatAppleLossless: label = "Apple Lossless"
+        case kAudioFormatLinearPCM: label = "PCM"
+        default: label = "Audio"
+        }
+        return "\(label) · \(Int(rate / 1000)) kHz"
     }
 
     func failed(attempt: String, error: Error, audioFailure: Bool = false) {
@@ -289,6 +318,7 @@ final class MusicDownloads {
                     jobs[index].track = replacement
                     jobs[index].relativePath = (jobs[index].relativePath as NSString).deletingPathExtension + "." + (replacement.audioExtension ?? "flac")
                     jobs[index].attempt = UUID().uuidString
+                    progress[jobs[index].id] = nil
                     jobs[index].retryCount = 0
                     jobs[index].state = .queued; jobs[index].error = nil
                 } else if temporary {

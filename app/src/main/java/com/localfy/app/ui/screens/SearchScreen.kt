@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -148,23 +150,20 @@ fun SearchScreen() {
 
 @Composable
 private fun BrowseTile(title: String, count: Int, art: com.localfy.app.ui.art.ArtKey, color: Color, onClick: () -> Unit) {
-    Box(
+    Column(
         Modifier
             .padding(6.dp)
             .fillMaxWidth()
-            .height(100.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(color)
-            .clickable(onClick = onClick),
+            .background(lerp(color, Color.Black, 0.4f))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(110.dp))
-            Text(songCount(count), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.8f))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text(songCount(count), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = Color.White)
+            Artwork(art, Modifier.size(56.dp).rotate(15f), RoundedCornerShape(4.dp))
         }
-        Artwork(
-            art,
-            Modifier.align(Alignment.BottomEnd).padding(end = 0.dp).size(64.dp).rotate(25f),
-            RoundedCornerShape(4.dp),
-        )
     }
 }

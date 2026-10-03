@@ -140,12 +140,28 @@ fun OnlineArtistScreen(encoded: String) {
 
 @Composable
 fun ArtistLandingScreen(name: String) {
+    val actions = LocalApp.current
+    val library by actions.repo.library.collectAsStateWithLifecycle()
     var artist by remember(name) { mutableStateOf<OnlineArtist?>(null) }
-    LaunchedEffect(name) {
+    var loading by remember(name) { mutableStateOf(true) }
+    var failed by remember(name) { mutableStateOf(false) }
+    var retry by remember(name) { mutableIntStateOf(0) }
+    LaunchedEffect(name, retry) {
+        loading = true; failed = false
         try { artist = Monochrome.searchAll(name).artists.firstOrNull { SearchMatch.fold(it.name) == SearchMatch.fold(name) } }
-        catch (e: Exception) { if (e is CancellationException) throw e }
+        catch (e: Exception) { if (e is CancellationException) throw e; failed = true }
+        finally { loading = false }
     }
     val found = artist
-    if (found == null) ArtistScreen(name)
-    else OnlineArtistScreen(JSONObject().put("id", found.id).put("name", found.name).put("artwork", found.artwork).toString())
+    when {
+        found != null -> OnlineArtistScreen(JSONObject().put("id", found.id).put("name", found.name).put("artwork", found.artwork).toString())
+        library.artistByName[name] != null -> ArtistScreen(name)
+        loading -> Column(Modifier.fillMaxSize(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            CircularProgressIndicator(); Text("Finding artist…", Modifier.padding(16.dp))
+        }
+        else -> Column(Modifier.fillMaxSize(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            com.localfy.app.ui.components.EmptyState(if (failed) "Couldn't load artist" else "No artist page found", if (failed) "Check your connection and try again." else "Try searching for the artist by name.")
+            TextButton(onClick = { retry += 1 }) { Text("Try again") }
+        }
+    }
 }

@@ -72,11 +72,11 @@ class PodcastRepository(
         watchDownloads()
     }
 
-    suspend fun search(term: String): List<PodcastSearchResult> = withContext(Dispatchers.IO) { runCatching { PodcastDirectory.search(term) }.getOrDefault(emptyList()) }
+    suspend fun search(term: String): List<PodcastSearchResult> = withContext(Dispatchers.IO) { PodcastDirectory.search(term) }
+
+    suspend fun searchBooks(term: String): List<BookSearchResult> = withContext(Dispatchers.IO) { LibriVox.search(term) }
 
     /** Subscribe by feed URL; returns the podcast id or null if the feed couldn't be read. */
-    suspend fun searchBooks(term: String): List<BookSearchResult> = withContext(Dispatchers.IO) { runCatching { LibriVox.search(term) }.getOrDefault(emptyList()) }
-
     suspend fun subscribe(feedUrl: String, artworkHint: String? = null, kind: String = KIND_PODCAST, titleHint: String? = null, authorHint: String? = null, descriptionHint: String? = null, follow: Boolean = true): Long? = withContext(Dispatchers.IO) {
         dao.byFeed(feedUrl)?.let {
             if (follow && it.subscribedAt == 0L) dao.setFollowing(it.id, System.currentTimeMillis())

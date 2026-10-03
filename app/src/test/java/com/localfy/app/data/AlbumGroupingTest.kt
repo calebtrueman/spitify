@@ -15,4 +15,13 @@ class AlbumGroupingTest {
     @Test fun commasInsideArtistNamesStayIntact() {
         assertEquals("Tyler, The Creator", AlbumGrouping.merge(listOf(song(1, "Tyler, The Creator"))).single().albumArtist)
     }
+    @Test fun structuredCreditsGroupAGuestSongWithTheMainAlbum() {
+        val tracks = listOf(song(1, "Lana Del Rey"), song(2, "Lana Del Rey, Sean Ono Lennon")
+            .copy(artistNames = listOf("Lana Del Rey", "Sean Ono Lennon")))
+        val merged = AlbumGrouping.merge(tracks)
+        assertEquals(listOf(1L, 1L), merged.map { it.albumId })
+        assertEquals(listOf("Lana Del Rey", "Lana Del Rey"), merged.map { it.albumArtist })
+        assertEquals(listOf("Lana Del Rey", "Sean Ono Lennon"), merged.last().creditedArtists)
+    }
+
 }
