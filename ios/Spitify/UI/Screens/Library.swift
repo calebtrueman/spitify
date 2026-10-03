@@ -7,7 +7,7 @@ struct LibraryView: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @State private var filter: Filter?
-    @State private var sort: Sort = .recents
+    @AppStorage("librarySort") private var sort: Sort = .recents
     @State private var creating = false
     @State private var newName = ""
 
@@ -58,7 +58,7 @@ struct LibraryView: View {
                     ForEach(entries) { e in
                         Button { router.go(e.route) } label: {
                             HStack(spacing: 12) {
-                                ArtworkView(e.song, cornerRadius: 4, circle: e.circle).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                                Group { if e.circle { ArtistPicture(name: e.title, fallback: e.song) } else { ArtworkView(e.song, cornerRadius: 4) } }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                                 MediaRowText(title: e.title, subtitle: e.subtitle)
                                 Spacer()
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
@@ -119,7 +119,7 @@ struct LibraryView: View {
             all += lib.library.albums.map { a in Entry(id: a.id, title: a.title, subtitle: "Album • \(a.artist)", song: a.cover, date: a.songs.map(\.dateAdded).max() ?? .distantPast, plays: plays(a.songs), route: .album(a.id)) }
         }
         if filter == nil || filter == .artists {
-            all += lib.library.artists.map { a in Entry(id: "ar" + a.name, title: a.name, subtitle: "Artist", song: a.cover, circle: true, date: a.songs.map(\.dateAdded).max() ?? .distantPast, plays: plays(a.songs), route: .artist(a.name)) }
+            all += lib.library.artists.filter { !ArtistChoices.shared.contains($0.name) }.map { a in Entry(id: "ar" + a.name, title: a.name, subtitle: "Artist", song: a.cover, circle: true, date: a.songs.map(\.dateAdded).max() ?? .distantPast, plays: plays(a.songs), route: .artist(a.name)) }
         }
         if filter == .genres { all += lib.library.genres.map { g in Entry(id: "g" + g.name, title: g.name, subtitle: "Genre • \(songCount(g.songs.count))", song: g.songs.first, date: .distantPast, plays: plays(g.songs), route: .genre(g.name)) } }
         if filter == .folders { all += lib.library.folders.map { f in Entry(id: "f" + f.path, title: f.name, subtitle: "Folder • /\(f.path)", song: f.songs.first, date: .distantPast, plays: plays(f.songs), route: .folder(f.path)) } }

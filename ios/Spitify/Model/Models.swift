@@ -37,7 +37,7 @@ struct Song: Identifiable, Hashable, Codable {
     var artistNames: [String]? = nil
 
     var creditedArtists: [String] { ArtistCredits.names(artist, explicit: artistNames, albumArtist: albumArtist) }
-    var primaryArtist: String { artistNames?.first ?? creditedArtists.first ?? artist }
+    var primaryArtist: String { ArtistCredits.primary(artist, explicit: artistNames, albumArtist: albumArtist) }
 
     var albumKey: String { Song.albumKey(album: album, artist: albumArtist) }
     var isSpoken: Bool { isPodcast || isAudiobook }
@@ -183,8 +183,26 @@ struct Library {
 
 /// Never split commas or ampersands without a known artist boundary: they can be part of a band name.
 enum ArtistCredits {
+    static func primary(_ credit: String, explicit: [String]? = nil, albumArtist: String? = nil) -> String {
+        let album = (albumArtist ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !album.isEmpty, !["various artists", "unknown artist", "unknown", "various"].contains(album.lowercased()),
+           album.caseInsensitiveCompare(credit) != .orderedSame,
+           [" feat", " ft.", " featuring ", " (feat", " & ", " and ", ", ", ";", " with "].contains(where: { credit.lowercased().hasPrefix(album.lowercased() + $0) }) { return album }
+        return names(credit, explicit: explicit, albumArtist: albumArtist).first ?? credit
+    }
+
     static func names(_ credit: String, explicit: [String]? = nil, albumArtist: String? = nil, known: [String] = []) -> [String] {
-        if let explicit, !explicit.isEmpty { return unique(explicit) }
+        if let explicit, explicit.count > 1 { return unique(explicit) }
+        let separators = [" & ", " and ", " AND ", ", ", " x ", " with "]
+        let anchors = unique([albumArtist ?? ""] + known).filter { !$0.isEmpty && $0.lowercased() != "various artists" }.sorted { $0.count > $1.count }
+        for anchor in anchors {
+            for separator in separators where credit.lowercased().hasPrefix((anchor + separator).lowercased()) {
+                let remainder = String(credit.dropFirst(anchor.count + separator.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if albumArtist?.caseInsensitiveCompare(anchor) == .orderedSame || anchors.contains(where: { $0.caseInsensitiveCompare(remainder) == .orderedSame }) {
+                    return unique([anchor] + names(remainder, known: anchors.filter { $0 != anchor }))
+                }
+            }
+        }
         let lower = credit.lowercased()
         if !credit.contains(";"), !credit.contains(", "), !lower.contains("feat"), !lower.contains("ft."), !lower.contains("ft ") { return unique([credit]) }
         let hasFeatureParenthesis = credit.range(of: "(?i)\\(\\s*(?:feat\\.?|ft\\.?|featuring)\\s+", options: .regularExpression) != nil

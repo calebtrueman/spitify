@@ -26,8 +26,9 @@ struct CollectionView<Extra: View>: View {
         let count = catalogTracks?.count ?? songs.count
         let length = catalogTracks?.reduce(Int64(0)) { $0 + $1.durationMs } ?? songs.reduce(Int64(0)) { $0 + $1.durationMs }
         CollectionLayout(title: title, subtitle: subtitle, metadata: "\(kind) • \(songCount(count)), \(length.formattedLong)",
-                         artKey: art?.albumKey ?? remoteArt ?? "none", remoteArt: art?.artURL ?? remoteArt) {
-            if let mix { MixCover(mix: mix) }
+                         artKey: kind == "Artist" ? ArtistChoices.key(title) : art?.albumKey ?? remoteArt ?? "none", remoteArt: art?.artURL ?? remoteArt) {
+            if kind == "Artist" { ArtistPicture(name: title, fallback: art, remote: remoteArt) }
+            else if let mix { MixCover(mix: mix) }
             else if art == nil, let remoteArt { ArtworkView(key: remoteArt, remote: remoteArt, cornerRadius: 8, circle: hero) }
             else { ArtworkView(art, cornerRadius: 8, circle: hero) }
         } actions: {
@@ -36,6 +37,7 @@ struct CollectionView<Extra: View>: View {
                 if isThis && app.player.hasMedia { app.player.toggle() }
                 else { app.player.play(songs, shuffle: false, source: title) }
             }) {
+                if kind == "Artist" { ArtistOptions(name: title) }
                 if let toolbarExtra { toolbarExtra }
                 if !songs.isEmpty && songs.allSatisfy({ !$0.isSpoken }) {
                     IconControl(title: "Share with friends", symbol: "square.and.arrow.up") {
@@ -84,11 +86,6 @@ struct AlbumView: View {
     @Environment(Router.self) private var router
     var body: some View {
         if let a = app.library.library.albumById[id] {
-            if let track = (app.musicDownloads.jobs.map(\.track) + Array(app.musicStreams.tracks.values)).first(where: {
-                SearchMatch.fold($0.album) == SearchMatch.fold(a.title) && SearchMatch.fold($0.albumArtist ?? $0.primaryArtist) == SearchMatch.fold(a.artist) && !$0.releaseID.isEmpty
-            }) {
-                OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: a.title, artist: a.artist, artwork: track.artwork))
-            } else {
             let more = (app.library.library.artistByName[a.artist]?.albums ?? []).filter { $0.id != a.id }
             CollectionView(title: a.title, kind: "Album", subtitle: [a.artist, a.year > 0 ? String(a.year) : nil].compactMap { $0 }.joined(separator: " • "), art: a.cover, songs: a.songs,
                            trackNumbers: true, songSubtitle: { $0.artist },
@@ -96,7 +93,6 @@ struct AlbumView: View {
                 EmptyView()
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { if !more.isEmpty { Menu { ForEach(more) { m in Button(m.title) { router.go(.album(m.id)) } } } label: { Image(systemName: "square.stack") } } } }
-            }
         } else { EmptyState(title: "Album not found", message: "It may have been removed.") }
     }
 }
@@ -113,8 +109,9 @@ struct ArtistView: View {
                            songSubtitle: { s in (counts[s.id] ?? 0) > 0 ? "\(counts[s.id]!) plays • \(s.album)" : s.album },
                            toolbarExtra: AnyView(Button { app.player.play(app.artistRadio(a.name).isEmpty ? a.songs : app.artistRadio(a.name), shuffle: false, source: "\(a.name) Radio") } label: {
                                IconControlLabel(symbol: "dot.radiowaves.left.and.right") })) {
+                Button("View online artist") { router.go(.onlineArtistName(a.name)) }.padding(.horizontal, 20)
                 if !a.albums.isEmpty {
-                    TileShelf(title: "Discography", tiles: a.albums.map { al in Tile(id: al.id, title: al.title, subtitle: al.year > 0 ? String(al.year) : "Album", song: al.cover) { router.go(.album(al.id)) } })
+                    TileShelf(title: "Saved albums", tiles: a.albums.map { al in Tile(id: al.id, title: al.title, subtitle: al.year > 0 ? String(al.year) : "Album", song: al.cover) { router.go(.album(al.id)) } })
                     SectionHeader(title: "Popular in your library")
                 }
             }
@@ -157,7 +154,7 @@ struct MixView: View {
 
 struct SmartView: View {
     var kind: SmartKind
-    @AppStorage("allSongsSort") private var sort = "Title"
+    @AppStorage("allSongsSort") private var sort = "Recently Added"
     @Environment(AppModel.self) private var app
     var body: some View {
         let lib = app.library

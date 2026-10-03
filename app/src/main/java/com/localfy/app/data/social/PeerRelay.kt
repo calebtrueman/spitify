@@ -31,15 +31,25 @@ object PeerIdentity {
             cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
             return Keys.parse(String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8))
         }
+        val keys = Keys.generate()
+        store(context, keys)
+        return keys
+    }
+    fun restore(context: Context, secret: String) {
+        require(Regex("[0-9a-f]{64}").matches(secret))
+        store(context, Keys.parse(secret))
+    }
+    private fun store(context: Context, keys: Keys) {
+        val prefs = context.getSharedPreferences("peer_identity", Context.MODE_PRIVATE)
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val alias = "spitify.peer.identity"
         if (!store.containsAlias(alias)) {
             KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
                 init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
             }.generateKey()
         }
-        val keys = Keys.generate()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, store.getKey(alias, null))
         check(prefs.edit().putString("key", Base64.getEncoder().encodeToString(cipher.iv + cipher.doFinal(keys.secretKey().toHex().toByteArray()))).commit()) { "Your friend identity could not be saved." }
-        return keys
     }
 }
 
@@ -113,6 +123,7 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
     }
     private fun subscribe(socket: WebSocket) {
         val req = JSONArray().put("REQ").put("spitify-v1")
+            .put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("authors", JSONArray((known + publicKey).sorted().take(129))).put("#d", JSONArray(listOf("spitify:v1:profile"))).put("limit", 129))
             .put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("authors", JSONArray((known + publicKey).sorted().take(129))).put("#t", JSONArray(listOf("spitify"))).put("limit", 500))
             .put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("#p", JSONArray(listOf(publicKey))).put("#t", JSONArray(listOf("spitify"))).put("limit", 500))
         requestedPlaylists.values.forEach { link ->
@@ -130,7 +141,9 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
         require(packet.v == 1 && logical.length <= 220 && (recipient == null || SocialRules.key(recipient))) { "That friend code is not valid." }
         val data = packet.json().toString().toByteArray(); require(data.size <= 1_000_000) { "This share is too large. Try a smaller playlist." }
         val transfer = UUID.randomUUID().toString(); val digest = SocialRules.hash(data)
-        val chunks = data.toList().chunked(9000).map { it.toByteArray() }
+        val chunkSize = if (logical == "profile") 36000 else 9000
+        require(logical != "profile" || data.size <= chunkSize) { "Your profile photo is too large." }
+        val chunks = data.toList().chunked(chunkSize).map { it.toByteArray() }
         val prefix = "$logical:${recipient ?: "public"}"
         check(outgoing.count { it.logical != prefix } + chunks.size <= 1000) { "There are many shares waiting to send. Connect before adding more." }
         val created = maxOf(SocialRules.now / 1000, (stamps[prefix] ?: 0) + 1)
@@ -140,7 +153,7 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
             val contentPacket = if (chunks.size == 1) packet else SocialPacket("part", JSONObject().put("transfer", transfer).put("index", index).put("total", chunks.size).put("digest", digest).put("content", Base64.getEncoder().encodeToString(bytes)))
             val raw = contentPacket.json().toString()
             val content = if (recipient == null) raw else keys.nip44Encrypt(PublicKey.parse(recipient), raw)
-            val identifier = if (logical == "profile") "spitify:v1:profile" else "spitify:v1:$prefix:$index"
+            val identifier = if (logical == "profile" && recipient == null) "spitify:v1:profile" else "spitify:v1:$prefix:$index"
             val tags = mutableListOf(listOf("d", identifier), listOf("t", "spitify"), listOf("expiration", ((SocialRules.now + expiresIn) / 1000).toString()))
             if (recipient != null) { tags += listOf("p", recipient); tags += listOf("encrypted", "nip44") }
             val event = EventBuilder(Kind(30078u), content).tags(tags.map(Tag::parse)).customCreatedAt(Timestamp.fromSecs(created.toULong())).finalize(keys)

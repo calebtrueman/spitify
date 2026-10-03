@@ -87,8 +87,11 @@ struct SharedPlaylistView: View {
     @Environment(\.palette) private var p
     @State private var message: String?
     @State private var ownCopy: SharedPlaylist?
+    @State private var replacing: SharedTrack?
+    private var missing: [SharedTrack] { playlist.tracks.filter { PlaylistMatches.shared.failed.contains(PlaylistMatches.key($0)) } }
     @State private var playback: Task<Void, Never>?
     private var playlist: SharedPlaylist { app.social.state.playlists[initial.key] ?? initial }
+    private var matchingRevision: String { playlist.key + ":" + String(playlist.revision) + ":" + app.library.library.songs.map { $0.id + $0.title + $0.artist }.joined(separator: "|") }
     private var saved: Bool { app.social.state.playlists[initial.key] != nil }
 
     var body: some View {
@@ -121,10 +124,15 @@ struct SharedPlaylistView: View {
             if let message { Text(message).text(.bodyS).foregroundStyle(p.secondary).padding(.horizontal, MediaLayout.inset).padding(.bottom, 12) }
             LazyVStack(spacing: 0) {
                 ForEach(Array(playlist.tracks.enumerated()), id: \.element.id) { index, track in
-                    SharedPlaylistTrackRow(track: track, onPlay: { play(from: index) }, onError: { message = $0 })
+                    if !PlaylistMatches.shared.failed.contains(PlaylistMatches.key(track)) {
+                        SharedPlaylistTrackRow(track: track, onPlay: { play(from: index) }, onError: { message = $0 })
+                    }
                 }
             }
+            failedMatches
+
         }
+        .sheet(item: $replacing) { track in NavigationStack { LocalMatchPicker(track: track) } }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if saved || playlist.owner != app.social.publicKey { Menu {
@@ -141,9 +149,22 @@ struct SharedPlaylistView: View {
                     .accessibilityLabel("Playlist options") }
             }
         }
-        .task(id: playlist.key + ":" + String(playlist.revision)) { SharedSongMatch.prepare(playlist, app: app) }
+        .task(id: matchingRevision) { SharedSongMatch.prepare(playlist, app: app) }
         .navigationDestination(item: $ownCopy) { SharedPlaylistView(initial: $0) }
 
+    }
+
+    @ViewBuilder private var failedMatches: some View {
+            if !missing.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Failed matches (\(missing.count))").text(.title)
+                    Text("Add your own files to Spitify. Matching songs return to their original places automatically, or choose a copy below.").text(.bodyS)
+                    Button("Try matching again") { PlaylistMatches.shared.retry(playlist.tracks); SharedSongMatch.prepare(playlist, app: app) }
+                    ForEach(missing) { track in
+                        HStack { VStack(alignment: .leading) { Text(track.title); Text(track.artist).text(.caption) }; Spacer(); Button("Choose copy") { replacing = track } }
+                    }
+                }.padding(MediaLayout.inset)
+            }
     }
 
     private var saveButton: some View {
@@ -276,5 +297,24 @@ struct SpotifyImportView: View {
     private func open() {
         guard valid else { return }
         focused = false; submitted = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct LocalMatchPicker: View {
+    var track: SharedTrack
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    var body: some View {
+        AppList {
+            Section { Text("Choose your copy of “\(track.title)” by \(track.artist). Its place in the playlist stays the same.") }
+            ForEach(app.library.library.songs.filter { query.isEmpty || SearchMatch.score(query, title: $0.title, artist: $0.artist, album: $0.album) != nil }) { song in
+                Button { PlaylistMatches.shared.choose(song, for: track); dismiss() } label: {
+                    VStack(alignment: .leading) { Text(song.title); Text(song.artist).text(.caption) }
+                }
+            }
+            if app.library.library.songs.isEmpty { Text("Import your music in Library first, then return here.") }
+        }.searchable(text: $query).navigationTitle("Choose a local song")
+            .toolbar { Button("Cancel") { dismiss() } }
     }
 }

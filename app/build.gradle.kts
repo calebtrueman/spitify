@@ -16,8 +16,8 @@ android {
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        versionCode = 22
-        versionName = "1.0.18"
+        versionCode = 23
+        versionName = "1.0.19"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -58,6 +58,7 @@ ksp {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
     implementation("org.nostrdevkit:nostr-sdk:0.45.1")
     implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("androidx.work:work-runtime-ktx:2.12.0")

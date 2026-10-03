@@ -221,7 +221,7 @@ fun MetadataEditor(songs: List<Song>, albumMode: Boolean, onDismiss: () -> Unit)
                 if (!albumMode) item { Field(if (book) "Chapter title" else "Title", title) { title = it } }
                 item { Field(if (book) "Author" else "Artist", artist) { artist = it } }
                 item { Field(if (book) "Book" else "Album", album) { album = it } }
-                if (!book) item { Field("Album artist", albumArtist) { albumArtist = it } }
+                if (!book) item { Field("Main artist (album artist)", albumArtist) { albumArtist = it } }
                 item { Field("Genre", genre) { genre = it } }
                 item {
                     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

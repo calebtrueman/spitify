@@ -10,6 +10,7 @@ final class SocialStore {
     var rooms = RoomState()
     var onRoomUpdate: ((ListeningRoom) -> Void)?
     var onRoomRequest: ((IncomingRoomRequest) -> Void)?
+    var publicProfile = UserDefaults.standard.object(forKey: "socialPublicProfile") as? Bool ?? true
     var message: String?
     var enabled = UserDefaults.standard.bool(forKey: "socialEnabled")
     var discovery = UserDefaults.standard.bool(forKey: "socialDiscovery")
@@ -31,6 +32,7 @@ final class SocialStore {
         if let relays { relayAddresses = relays }
         UserDefaults.standard.set(enabled, forKey: "socialEnabled"); UserDefaults.standard.set(discovery, forKey: "socialDiscovery")
         UserDefaults.standard.set(relayAddresses, forKey: "socialRelays"); refreshConnection()
+        if enabled { Task { await syncProfile(force: true) } }
     }
     private func refreshConnection() {
         if enabled { relay?.start(relays: relayAddresses, authors: state.following, discover: discovery) } else { relay?.stop() }
@@ -39,7 +41,8 @@ final class SocialStore {
         try prepare()
         guard let link = SocialLink.parse(input), link.type != "room", link.owner != publicKey else { throw MusicSourceError.message("Paste another person's friend code or playlist link.") }
         guard state.following.count < 128 || state.following.contains(link.owner) else { throw MusicSourceError.message("You can follow up to 128 people.") }
-        state.following.insert(link.owner); persist(); relay?.requestPlaylist(link); refreshConnection()
+        state.following.insert(link.owner); persist(); relay?.requestPlaylist(link); configure(enabled: true, discovery: discovery)
+        Task { await syncProfile() }
     }
     func unfollow(_ id: String) { state.following.remove(id); persist(); refreshConnection() }
     func save(_ playlist: SharedPlaylist) throws {
@@ -59,11 +62,36 @@ final class SocialStore {
     }
     func remove(_ playlist: SharedPlaylist) { state.playlists.removeValue(forKey: playlist.key); persist() }
     func publishProfile(name: String, about: String) async throws {
-        try requireConnection()
-        let profile = FriendProfile(id: publicKey, name: name.trimmingCharacters(in: .whitespacesAndNewlines), about: about)
-        guard profile.valid() else { throw MusicSourceError.message("Use a name of 1–80 characters and a bio under 500 characters.") }
-        state.profiles[publicKey] = profile; persist()
-        try await relay?.send(.make("profile", profile), logical: "profile")
+        AppModel.shared.profile.name = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        UserDefaults.standard.set(String(about.prefix(500)), forKey: "socialAbout")
+        await syncProfile()
+    }
+    func setPublicProfile(_ value: Bool) {
+        publicProfile = value; UserDefaults.standard.set(value, forKey: "socialPublicProfile")
+        Task { await syncProfile(force: true) }
+    }
+    func syncProfile(force: Bool = false) async {
+        do {
+            try prepare()
+            let app = AppModel.shared
+            let name = app.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return }
+            let photo = (try? Data(contentsOf: AppModel.photoURL)).flatMap { ArtCache.squareJPEG($0, side: 96) }.flatMap { $0.count <= 16000 ? $0.base64EncodedString() : nil }
+            let old = state.profiles[publicKey]
+            let about = UserDefaults.standard.string(forKey: "socialAbout") ?? old?.about ?? ""
+            let profile = FriendProfile(photo: photo, isPublic: publicProfile, id: publicKey, name: String(name.prefix(80)), about: String(about.prefix(500)))
+            let changed = old?.name != profile.name || old?.about != profile.about || old?.photo != profile.photo || old?.isPublic != profile.isPublic
+            if changed { state.profiles[publicKey] = profile; persist() }
+            guard enabled, changed || force || UserDefaults.standard.double(forKey: "socialProfileSent") < Date().timeIntervalSince1970 - 86400 else { return }
+            if publicProfile { try await relay?.send(.make("profile", profile), logical: "profile") }
+            else {
+                // Replace the public entry with a notice containing no profile details.
+                try await relay?.send(.make("profileHidden", ["id": publicKey]), logical: "profile")
+                for person in state.following { try await relay?.send(.make("profile", profile), logical: "profile", to: person) }
+            }
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "socialProfileSent")
+            message = nil
+        } catch { message = "Profile saved on this phone. Sharing will retry when connected. " + error.localizedDescription }
     }
     func share(_ playlist: SharedPlaylist, with person: String? = nil) async throws {
         try requireConnection()
@@ -155,6 +183,8 @@ final class SocialStore {
                 guard encrypted else { return }
                 let request = try packet.decode(RoomRequest.self)
                 if rooms.receive(request, author: author, me: publicKey), let incoming = rooms.requests.last { onRoomRequest?(incoming) }
+            case "profileHidden":
+                if !encrypted, author != publicKey, state.profiles[author]?.isPublic != false { state.profiles.removeValue(forKey: author); persist() }
             case "profile":
                 if state.acceptProfile(try packet.decode(FriendProfile.self), author: author) { persist() }
             case "playlist":
@@ -188,6 +218,18 @@ enum SharedSongMatch {
         }
     }
     static func resolve(_ track: SharedTrack, app: AppModel) async throws -> Song {
+        do {
+            let song = try await resolveCopy(track, app: app)
+            PlaylistMatches.shared.found(song, for: track)
+            return song
+        } catch {
+            if !Task.isCancelled { PlaylistMatches.shared.missing(track) }
+            throw error
+        }
+    }
+    private static func resolveCopy(_ track: SharedTrack, app: AppModel) async throws -> Song {
+        if let chosen = PlaylistMatches.shared.manual(track, app: app) { return chosen }
+
         func same(_ title: String, _ artist: String, _ duration: Int64) -> Bool {
             SearchMatch.fold(title) == SearchMatch.fold(track.title) && SearchMatch.fold(artist) == SearchMatch.fold(track.artist)
             && (track.durationMs == 0 || abs(duration - track.durationMs) < 5000)
@@ -197,12 +239,15 @@ enum SharedSongMatch {
             return app.musicStreams.register(OnlineTrack(id: id, title: track.title, artist: track.artist, album: track.album, releaseID: track.releaseID ?? "", durationMs: track.durationMs, trackNumber: 0, discNumber: 1, artwork: track.artwork, playable: true))
         }
         if let cached = app.musicStreams.tracks.values.first(where: { same($0.title, $0.artist, $0.durationMs) }) { return MusicStreams.song(cached) }
+        if PlaylistMatches.shared.failed.contains(PlaylistMatches.key(track)) { throw MusicSourceError.message("Choose a local copy or try matching again.") }
         let key = SearchMatch.fold(track.title) + "|" + SearchMatch.fold(track.artist) + "|" + String(track.durationMs)
         if let task = pending[key] { return try await task.value }
         let task = Task { @MainActor in
-            let results = try await MonochromeClient().search(track.title + " " + track.artist)
-            guard let match = results.first(where: { same($0.title, $0.artist, $0.durationMs) }) else { throw MusicSourceError.message("No matching copy of “\(track.title)” was found.") }
-            return app.musicStreams.register(match)
+            let results = (try? await MonochromeClient().search(track.title + " " + track.artist)) ?? []
+            if let match = results.first(where: { $0.playable && same($0.title, $0.artist, $0.durationMs) }) { return app.musicStreams.register(match) }
+            let seed = OnlineTrack(id: "external-" + SocialRules.hash(Data(PlaylistMatches.key(track).utf8)), title: track.title, artist: track.artist, album: track.album, releaseID: "", durationMs: track.durationMs, trackNumber: 0, discNumber: 1, artwork: track.artwork, playable: false)
+            if var alternate = try? await AudioFallback.resolve(seed) { alternate.playable = true; return app.musicStreams.register(alternate) }
+            throw MusicSourceError.message("No matching copy of “\(track.title)” was found.")
         }
         pending[key] = task
         defer { pending.removeValue(forKey: key) }

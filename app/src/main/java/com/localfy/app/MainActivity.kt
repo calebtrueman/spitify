@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         val uri = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data ?: return
+        if (uri.scheme == "spitify" && uri.host == "widget") { handleWidget(uri.lastPathSegment.orEmpty()); return }
         if (uri.scheme == "spitify") { if (com.localfy.app.data.social.SocialLink.parse(uri.toString()) != null) app.incomingSocialLink.value = uri.toString(); return }
         lifecycleScope.launch {
             val id = if (uri.authority == MediaStore.AUTHORITY) uri.lastPathSegment?.toLongOrNull() else null
@@ -146,6 +147,27 @@ class MainActivity : ComponentActivity() {
             app.player.connect()
             withTimeoutOrNull(5_000) { app.player.state.first { it.connected } }
             app.player.playSongs(listOf(song), source = "Opened file")
+        }
+    }
+    private fun handleWidget(action: String) {
+        val route = when (action) { "library" -> "library"; "recent" -> com.localfy.app.ui.Routes.smart(com.localfy.app.data.SmartCollection.Kind.RecentlyAdded); "search" -> "search"; "friends" -> "friends"; "code" -> "friend-code"; "rooms" -> "rooms"; else -> null }
+        if (route != null) { app.incomingSocialLink.value = "widget-route:" + route; return }
+        if (action !in listOf("toggle", "next", "shuffle", "liked")) return
+        lifecycleScope.launch {
+            app.player.connect()
+            if (withTimeoutOrNull(8000) { app.player.state.first { it.connected } } == null) return@launch
+            when (action) {
+                "toggle" -> if (app.player.state.value.hasMedia) app.player.togglePlay() else {
+                    val library = withTimeoutOrNull(8000) { app.library.library.first { !it.isEmpty } }
+                    library?.let { app.player.playSongs(it.songs, source = "All songs") }
+                }
+                "next" -> app.player.next()
+                "shuffle", "liked" -> {
+                    val library = withTimeoutOrNull(8000) { app.library.library.first { !it.isEmpty } } ?: return@launch
+                    val songs = if (action == "liked") library.songs.filter { it.id in app.library.likedIds.value } else library.songs
+                    app.player.playSongs(songs, shuffle = action == "shuffle", source = if (action == "liked") "Liked Songs" else "All songs")
+                }
+            }
         }
     }
     private fun playVoiceRequest(intent: Intent) {

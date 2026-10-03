@@ -77,6 +77,7 @@ private data class Entry(val key: String, val title: String, val subtitle: Strin
 @Composable
 fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     val container = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp
+    val artistRevision by ArtistChoices.revision.collectAsStateWithLifecycle()
     val socialRevision by container.social.revision.collectAsStateWithLifecycle()
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
@@ -86,7 +87,8 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     val liked by app.repo.likedIds.collectAsStateWithLifecycle()
     val player = rememberPlayerState()
     var filter by rememberSaveable { mutableStateOf<Filter?>(null) }
-    var sort by rememberSaveable { mutableStateOf(Sort.Recent) }
+    val sortPrefs = remember { container.getSharedPreferences("sorting", android.content.Context.MODE_PRIVATE) }
+    var sort by remember { mutableStateOf(runCatching { Sort.valueOf(sortPrefs.getString("library", "Recent")!!) }.getOrDefault(Sort.Recent)) }
     var grid by rememberSaveable { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
     var addMenu by remember { mutableStateOf(false) }
@@ -95,7 +97,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     fun lastPlayed(ids: List<Long>) = ids.maxOfOrNull { stats[it]?.lastPlayed ?: 0 } ?: 0
 
     val rounded = RoundedCornerShape(4.dp)
-    val entries: List<Entry> = remember(library, playlists, stats, filter, sort) {
+    val entries: List<Entry> = remember(library, playlists, stats, filter, sort, artistRevision) {
         val all = buildList {
             if (filter == null || filter == Filter.Playlists) playlists.forEach { p ->
                 val ids = p.songs.map { it.id }
@@ -105,9 +107,9 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
                 val ids = a.songs.map { it.id }
                 add(Entry("a${a.id}", a.title, "Album • ${a.artist}", a.cover.artKey, rounded, lastPlayed(ids).takeIf { it > 0 } ?: (a.songs.maxOf { it.dateAddedSec } * 1000), plays(ids)) { app.navigate(Routes.album(a.id)) })
             }
-            if (filter == null || filter == Filter.Artists) library.artists.forEach { a ->
+            if (filter == null || filter == Filter.Artists) library.artists.filter { it.name !in ArtistChoices.hidden(container) }.forEach { a ->
                 val ids = a.songs.map { it.id }
-                add(Entry("ar${a.name}", a.name, "Artist", a.cover.artKey, CircleShape, lastPlayed(ids), plays(ids)) { app.navigate(Routes.artist(a.name)) })
+                add(Entry("ar${a.name}", a.name, "Artist", ArtistChoices.art(container, a.name, a.cover.artKey), CircleShape, lastPlayed(ids), plays(ids)) { app.navigate(Routes.artist(a.name)) })
             }
             if (filter == Filter.Genres) library.genres.forEach { g ->
                 val ids = g.songs.map { it.id }
@@ -126,7 +128,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
     }
     val songs = remember(library, stats, sort, filter) {
         if (filter != Filter.Songs) emptyList() else when (sort) {
-            Sort.Recent -> library.songs.sortedByDescending { stats[it.id]?.lastPlayed?.takeIf { t -> t > 0 } ?: (it.dateAddedSec * 1000) }
+            Sort.Recent -> library.songs.sortedByDescending { it.dateAddedSec * 1000 }
             Sort.Alpha -> library.songs
             Sort.Plays -> library.songs.sortedByDescending { stats[it.id]?.playCount ?: 0 }
         }
@@ -168,7 +170,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
                             Text(sort.label, style = MaterialTheme.typography.labelLarge)
                         }
                         DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }) {
-                            Sort.entries.forEach { s -> DropdownMenuItem(text = { Text(s.label) }, onClick = { sort = s; sortMenu = false }) }
+                            Sort.entries.forEach { s -> DropdownMenuItem(text = { Text(s.label) }, onClick = { sort = s; sortPrefs.edit().putString("library", s.name).apply(); sortMenu = false }) }
                         }
                     }
                     Spacer(Modifier.weight(1f))

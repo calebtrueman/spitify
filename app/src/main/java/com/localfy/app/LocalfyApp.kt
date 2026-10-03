@@ -25,6 +25,8 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         CrashReport.install(this)
+        appScope.launch { profiles.profile.collect { social.syncProfile() } }
+        android.app.backup.BackupManager(this).dataChanged()
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
         appScope.launch {

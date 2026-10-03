@@ -135,6 +135,8 @@ fun SettingsScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
         item { BackHeader("Settings") }
+        item { SettingRow("Friends", "Profile privacy and connections") { app.navigate("friends-settings") } }
+        item { SettingRow("Hidden artists", "Show artists you hid from Library") { app.navigate("hidden-artists") } }
         item { SettingRow("Appearance", "Theme, accent colour, typeface, text size, artwork and player style") { app.navigate(Routes.APPEARANCE) } }
         item { SettingRow("Equaliser & sound", "10 presets, custom curve, bass boost, surround, loudness") { app.navigate(Routes.EQUALIZER) } }
         item { SectionHeader("Home") }
@@ -202,6 +204,8 @@ fun SettingsScreen() {
             }
             SettingRow("Clear downloaded artwork", "${onlineArt.downloadedCount()} covers saved — they'll be fetched again as needed") { onlineArt.clear() }
         }
+        item { SectionHeader("Automatic backup") }
+        item { Text("Settings, playlists, profiles and custom covers use Android's automatic backup and device transfer. Restore depends on device backup being enabled and using the same app signing key. Music files are separate.", Modifier.padding(horizontal = 16.dp)) }
         item { SectionHeader("Library") }
         item {
             SettingRow("Rescan device", if (scanning) "Scanning…" else "${library.songs.size} songs • ${library.albums.size} albums • ${library.artists.size} artists") { app.repo.refresh() }

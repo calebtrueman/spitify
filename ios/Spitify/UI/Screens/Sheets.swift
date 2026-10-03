@@ -213,7 +213,8 @@ struct MetadataEditor: View {
                     if !albumMode { TextField(book ? "Chapter title" : "Title", text: $title) }
                     TextField(book ? "Author" : "Artist", text: $artist)
                     TextField(book ? "Book" : "Album", text: $album)
-                    if !book { TextField("Album artist", text: $albumArtist) }
+                    if !book { TextField("Main artist (album artist)", text: $albumArtist)
+                        Text("Use the main artist here. Keep featured artists in the Artist credit above.").text(.caption) }
                     TextField("Genre", text: $genre)
                     HStack {
                         TextField("Year", text: $year).keyboardType(.numberPad)

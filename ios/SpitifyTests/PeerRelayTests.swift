@@ -10,6 +10,18 @@ final class PeerRelayTests: XCTestCase {
     private func relay(_ keys: Keys) -> PeerRelay { PeerRelay(keys: keys, storage: "relay-test-" + UUID().uuidString, testMode: true) }
     private func wire(_ json: String) -> String { "[\"EVENT\",\"test\",\(json)]" }
 
+    func testProfilePhotoUsesOneReplaceableEvent() async throws {
+        let a = relay(try sender()), b = relay(try receiver())
+        let profile = FriendProfile(photo: Data(repeating: 7, count: 16000).base64EncodedString(), isPublic: true, id: a.publicKey, name: "Alex")
+        var received: FriendProfile?
+        b.onPacket = { _, packet, _ in received = try? packet.decode(FriendProfile.self) }
+        try await a.send(.make("profile", profile), logical: "profile")
+        XCTAssertEqual(a.outgoing.count, 1)
+        b.receive(wire(a.outgoing[0].json)); XCTAssertEqual(received, profile)
+        try await a.send(.make("profile", profile), logical: "profile", to: b.publicKey)
+        XCTAssertEqual(a.outgoing.count, 2)
+    }
+
     func testPrivateMessagesVerifySignatureRecipientAndDuplicateDelivery() async throws {
         let a = relay(try sender()), b = relay(try receiver()), other = relay(Keys.generate())
         let playlist = SharedPlaylist(id: "wire-small", owner: a.publicKey, name: "Private test", tracks: [.init(id: "one", title: "One", artist: "Artist")])

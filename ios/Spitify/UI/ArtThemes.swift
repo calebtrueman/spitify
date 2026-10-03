@@ -61,40 +61,42 @@ struct ThemeScene: View {
     }
 }
 
-/// Decoration stays in the outer eight points, away from text and touch targets.
+private struct ThemeBorderMotif: Decodable {
+    var id: String
+    var colors: [String]
+    var rows: [String]
+    static let all: [String: ThemeBorderMotif] = {
+        guard let url = Bundle.main.url(forResource: "border-motifs", withExtension: "json", subdirectory: "themes"),
+              let data = try? Data(contentsOf: url), let drawings = try? JSONDecoder().decode([ThemeBorderMotif].self, from: data) else { return [:] }
+        return Dictionary(uniqueKeysWithValues: drawings.map { ($0.id, $0) })
+    }()
+}
+
+/// Tiny theme-specific drawings leave the middle of the screen clear for music.
 struct ThemeFrame: View {
     @Environment(\.themeSettings) private var settings
-    @Environment(\.palette) private var palette
     var body: some View {
-        if settings.hideThemeArt != true, let theme = ArtTheme.selected(settings) {
+        if settings.hideThemeArt != true, let theme = ArtTheme.selected(settings), let motif = ThemeBorderMotif.all[theme.id] {
             Canvas { context, size in
-                let ink = palette.accent.opacity(theme.border == "deco" ? 0.38 : 0.25)
-                var edge = Path()
-                for x in [CGFloat(3), size.width - 3] {
-                    edge.move(to: CGPoint(x: x, y: 20)); edge.addLine(to: CGPoint(x: x, y: size.height - 20))
-                }
-                context.stroke(edge, with: .color(ink.opacity(0.55)), lineWidth: 1)
-                for y in stride(from: CGFloat(28), to: size.height - 20, by: 68) {
-                    for x in [CGFloat(4), size.width - 4] {
-                        var mark = Path()
-                        switch theme.border {
-                        case "stars", "crystals":
-                            mark.move(to: CGPoint(x: x, y: y - 5)); mark.addLine(to: CGPoint(x: x + 3, y: y)); mark.addLine(to: CGPoint(x: x, y: y + 5)); mark.addLine(to: CGPoint(x: x - 3, y: y)); mark.closeSubpath()
-                        case "petals", "leaves":
-                            mark.addEllipse(in: CGRect(x: x - 3, y: y - 6, width: 6, height: 9))
-                            mark.addEllipse(in: CGRect(x: x - 2, y: y + 4, width: 4, height: 5))
-                        case "paws":
-                            mark.addEllipse(in: CGRect(x: x - 2, y: y, width: 4, height: 4))
-                            for dx in [-2.0, 1.0] { mark.addEllipse(in: CGRect(x: x + dx, y: y - 4, width: 2, height: 2)) }
-                        case "waves", "rain":
-                            for dy in [0.0, 4.0, 8.0] { mark.addRect(CGRect(x: x - 2 + (dy == 4 ? 1 : 0), y: y + dy, width: 3, height: 2)) }
-                        case "dots", "gears":
-                            mark.addEllipse(in: CGRect(x: x - 3, y: y - 3, width: 6, height: 6))
-                        default:
-                            mark.addRect(CGRect(x: x - 2, y: y - 5, width: 4, height: theme.border == "deco" ? 10 : 5))
-                            if theme.border == "circuit" || theme.border == "steps" { mark.addRect(CGRect(x: x - 1, y: y + 2, width: 3, height: 4)) }
+                let pixel: CGFloat = 1.35
+                let width = CGFloat(motif.rows.first?.count ?? 0) * pixel
+                let colors = motif.colors.map { Color(hex: UInt32($0, radix: 16) ?? theme.accentHex).opacity(theme.light ? 0.66 : 0.72) }
+                let rows = motif.rows.map(Array.init)
+                // Stagger the opposite edges so the drawings feel scattered, not boxed in.
+                for side in 0..<2 {
+                    let start: CGFloat = side == 0 ? 22 : 67
+                    for top in stride(from: start, to: size.height - 28, by: 112) {
+                        for colorIndex in colors.indices {
+                            var shape = Path()
+                            for (y, row) in rows.enumerated() {
+                                for (x, value) in row.enumerated() where value.wholeNumberValue == colorIndex + 1 {
+                                    let dx = side == 0 ? 1 + CGFloat(x) * pixel : size.width - 1 - width + CGFloat(row.count - 1 - x) * pixel
+                                    let dy = top + CGFloat(y) * pixel
+                                    if dy + pixel <= size.height - 12 { shape.addRect(CGRect(x: dx, y: dy, width: pixel, height: pixel)) }
+                                }
+                            }
+                            context.fill(shape, with: .color(colors[colorIndex]))
                         }
-                        context.fill(mark, with: .color(ink))
                     }
                 }
             }.allowsHitTesting(false).accessibilityHidden(true)

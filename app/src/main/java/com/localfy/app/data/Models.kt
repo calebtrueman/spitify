@@ -38,7 +38,7 @@ data class Song(
     val artistNames: List<String>? = null,
 ) {
     val creditedArtists: List<String> get() = ArtistCredits.names(artist, artistNames, albumArtist)
-    val primaryArtist: String get() = artistNames?.firstOrNull() ?: creditedArtists.firstOrNull() ?: artist
+    val primaryArtist: String get() = ArtistCredits.primary(artist, artistNames, albumArtist)
 
     val uri: Uri get() = sourceUri ?: ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 

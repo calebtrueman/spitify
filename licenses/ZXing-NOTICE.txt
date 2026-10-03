@@ -1,0 +1,4 @@
+ZXing core 3.5.3
+Copyright ZXing authors. https://github.com/zxing/zxing
+Licensed under the Apache License, Version 2.0. See Apache-2.0.txt.
+Used to create and read Spitify friend picture codes on Android.

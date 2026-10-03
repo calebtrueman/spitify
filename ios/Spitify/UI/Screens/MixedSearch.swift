@@ -210,14 +210,15 @@ struct OnlineArtistView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
     var body: some View {
-        CollectionLayout(title: artist.name, subtitle: "Artist", metadata: "", artKey: artist.artwork ?? artist.id, remoteArt: artist.artwork) {
-            ArtworkView(key: artist.artwork ?? artist.id, remote: artist.artwork, circle: true)
+        CollectionLayout(title: artist.name, subtitle: "Artist", metadata: "", artKey: ArtistChoices.key(artist.name), remoteArt: artist.artwork) {
+            ArtistPicture(name: artist.name, remote: artist.artwork)
         } actions: {
             CollectionActionBar(playing: app.player.source == artist.name && app.player.isPlaying,
                                 enabled: !result.tracks.isEmpty, shuffle: { play(shuffle: true) }, play: {
                 if app.player.source == artist.name && app.player.hasMedia { app.player.toggle() }
                 else { play(shuffle: false) }
             }) {
+                ArtistOptions(name: artist.name)
                 IconControl(title: app.artistFollows.contains(artist.id) ? "Unfollow artist" : "Follow artist",
                             symbol: app.artistFollows.contains(artist.id) ? "checkmark.circle.fill" : "plus.circle",
                             selected: app.artistFollows.contains(artist.id)) {

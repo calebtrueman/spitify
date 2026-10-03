@@ -20,7 +20,7 @@ struct SharedTrack: Codable, Hashable, Identifiable {
     @MainActor static func from(_ song: Song) -> SharedTrack {
         let remote = MusicStreams.shared.track(song)
         return SharedTrack(title: song.title, artist: song.artist, album: song.album, durationMs: song.durationMs,
-                           sourceID: remote?.id, releaseID: remote?.releaseID, artwork: song.artURL.flatMap { SocialRules.publicURL($0) ? $0 : nil })
+                           sourceID: remote.flatMap { MonochromeClient.id($0.id) }, releaseID: remote?.releaseID, artwork: song.artURL.flatMap { SocialRules.publicURL($0) ? $0 : nil })
     }
 }
 
@@ -51,12 +51,14 @@ struct SharedPlaylist: Codable, Hashable, Identifiable {
 }
 
 struct FriendProfile: Codable, Hashable, Identifiable {
+    var photo: String? = nil
+    var isPublic: Bool? = nil
     var id: String
     var name: String
     var about: String = ""
     var image: String? = nil
     var updatedAt: Int64 = SocialRules.now
-    func valid() -> Bool { SocialRules.key(id) && !name.isEmpty && name.count <= 80 && about.count <= 500 && (image == nil || SocialRules.publicURL(image!)) }
+    func valid() -> Bool { SocialRules.key(id) && !name.isEmpty && name.count <= 80 && about.count <= 500 && (photo == nil || photo!.count <= 22000 && Data(base64Encoded: photo!) != nil) && (image == nil || SocialRules.publicURL(image!)) }
 }
 
 struct SharedEdit: Codable, Identifiable {

@@ -63,32 +63,45 @@ fun ThemeScene(compact: Boolean = false) {
     }
 }
 
-/** All marks stay at the edge, outside the space used by labels and controls. */
+private data class ThemeBorderMotif(val colors: List<Color>, val rows: List<String>)
+private object ThemeBorderDrawings {
+    private var cached: Map<String, ThemeBorderMotif>? = null
+    fun all(context: Context): Map<String, ThemeBorderMotif> = cached ?: run {
+        val data = JSONArray(context.assets.open("border-motifs.json").bufferedReader().use { it.readText() })
+        buildMap {
+            repeat(data.length()) { index ->
+                val item = data.getJSONObject(index)
+                val colors = item.getJSONArray("colors")
+                val rows = item.getJSONArray("rows")
+                put(item.getString("id"), ThemeBorderMotif(List(colors.length()) { Color(0xFF000000 or colors.getString(it).toLong(16)) }, List(rows.length()) { rows.getString(it) }))
+            }
+        }.also { cached = it }
+    }
+}
+
+/** Theme drawings stay in the outer margin, away from text and controls. */
 @Composable
 fun ThemeFrame(modifier: Modifier = Modifier) {
     val settings = LocalThemeSettings.current
-    val theme = ArtThemes.all(LocalContext.current).firstOrNull { it.id == settings.artThemeID }
-    val accent = MaterialTheme.colorScheme.primary
-    if (!settings.hideThemeArt && theme != null) Canvas(modifier) {
-        val ink = accent.copy(alpha = if (theme.border == "deco") 0.38f else 0.25f)
-        for (x in listOf(3.dp.toPx(), size.width - 3.dp.toPx())) {
-            drawLine(ink.copy(alpha = ink.alpha * .55f), Offset(x, 20.dp.toPx()), Offset(x, size.height - 20.dp.toPx()), 1.dp.toPx())
-        }
-        var y = 28.dp.toPx()
-        while (y < size.height - 20.dp.toPx()) {
-            for (x in listOf(4.dp.toPx(), size.width - 4.dp.toPx())) {
-                fun rect(dx: Float, dy: Float, w: Float, h: Float) = drawRect(ink, Offset(x + dx.dp.toPx(), y + dy.dp.toPx()), Size(w.dp.toPx(), h.dp.toPx()))
-                fun oval(dx: Float, dy: Float, w: Float, h: Float) = drawOval(ink, Offset(x + dx.dp.toPx(), y + dy.dp.toPx()), Size(w.dp.toPx(), h.dp.toPx()))
-                when (theme.border) {
-                    "stars", "crystals" -> drawPath(Path().apply { moveTo(x, y-5.dp.toPx()); lineTo(x+3.dp.toPx(), y); lineTo(x, y+5.dp.toPx()); lineTo(x-3.dp.toPx(), y); close() }, ink)
-                    "petals", "leaves" -> { oval(-3f,-6f,6f,9f); oval(-2f,4f,4f,5f) }
-                    "paws" -> { oval(-2f,0f,4f,4f); oval(-2f,-4f,2f,2f); oval(1f,-4f,2f,2f) }
-                    "waves", "rain" -> { rect(-2f,0f,3f,2f); rect(-1f,4f,3f,2f); rect(-2f,8f,3f,2f) }
-                    "dots", "gears" -> oval(-3f,-3f,6f,6f)
-                    else -> { rect(-2f,-5f,4f,if (theme.border == "deco") 10f else 5f); if (theme.border in listOf("circuit", "steps")) rect(-1f,2f,3f,4f) }
-                }
+    val context = LocalContext.current
+    val theme = ArtThemes.all(context).firstOrNull { it.id == settings.artThemeID }
+    val motif = theme?.let { ThemeBorderDrawings.all(context)[it.id] }
+    if (!settings.hideThemeArt && theme != null && motif != null) Canvas(modifier) {
+        val pixel = 1.35.dp.toPx()
+        val width = (motif.rows.firstOrNull()?.length ?: 0) * pixel
+        for (side in 0..1) {
+            var top = (if (side == 0) 22 else 67).dp.toPx()
+            while (top < size.height - 28.dp.toPx()) {
+                motif.rows.forEachIndexed { y, row -> row.forEachIndexed { x, value ->
+                    val color = value.digitToIntOrNull()?.minus(1)?.let { motif.colors.getOrNull(it) }
+                    val dy = top + y * pixel
+                    if (color != null && dy + pixel <= size.height - 12.dp.toPx()) {
+                        val dx = if (side == 0) 1.dp.toPx() + x * pixel else size.width - 1.dp.toPx() - width + (row.length - 1 - x) * pixel
+                        drawRect(color.copy(alpha = if (theme.light) .66f else .72f), Offset(dx, dy), Size(pixel, pixel))
+                    }
+                } }
+                top += 112.dp.toPx()
             }
-            y += 68.dp.toPx()
         }
     }
 }

@@ -4,7 +4,8 @@ import Observation
 enum Route: Hashable {
     case album(String), artist(String), playlist(String), mix(String), smart(SmartKind), genre(String), folder(String)
     case show(String), book(String), localBook(String)
-    case settings, appearance, equalizer, profile, stats, releases
+    case settings, appearance, equalizer, profile, stats, releases, friends, rooms, friendCode
+    case onlineArtistName(String)
     case catalogAlbum(OnlineAlbum), catalogSong(OnlineTrack)
 }
 

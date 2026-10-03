@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <include domain="sharedpref" path="." />
+    <include domain="database" path="." />
+    <include domain="file" path="profile.jpg" />
+    <include domain="file" path="custom_art/" />
+    <include domain="file" path="artist_covers/" />
+    <include domain="file" path="os_backup/" requireFlags="clientSideEncryption|deviceToDeviceTransfer" />
+    <!-- Keystore wrapping keys do not survive reinstall. The agent safely rewraps the identity. -->
+    <exclude domain="sharedpref" path="peer_identity.xml" />
+    <exclude domain="sharedpref" path="peer_outbox.xml" />
+</full-backup-content>

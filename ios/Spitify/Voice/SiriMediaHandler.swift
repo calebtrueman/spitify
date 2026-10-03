@@ -23,7 +23,7 @@ final class SiriMediaHandler: NSObject, INPlayMediaIntentHandling {
             await VoiceLibrary.ready()
             let matches = await Self.matches(intent)
             var success = false
-            if let media = matches.first { success = VoiceLibrary.play(media.id) }
+            if let media = matches.first { success = await VoiceLibrary.playMedia(media.id) }
             else if intent.resumePlayback == true || Self.query(intent).isEmpty {
                 if app.player.hasMedia { app.player.resume(); success = true }
                 else { success = VoiceLibrary.play("allSongs") }
@@ -60,6 +60,7 @@ final class SiriMediaHandler: NSObject, INPlayMediaIntentHandling {
         let type = intent.mediaSearch?.mediaType ?? .unknown
         let matches = VoiceLibrary.match(query, in: items).filter { type == .unknown || Self.type($0.id) == type }
         if !matches.isEmpty { return matches }
+        if type == .artist { return await VoiceLibrary.search(query).filter { $0.id.hasPrefix("artist:") || $0.id.hasPrefix("onlineArtist:") } }
         guard type == .song || type == .unknown, let tracks = try? await MonochromeClient().search(query) else { return [] }
         return tracks.filter { track in
             guard track.playable else { return false }
@@ -78,7 +79,7 @@ final class SiriMediaHandler: NSObject, INPlayMediaIntentHandling {
         switch id.split(separator: ":", maxSplits: 1).first {
         case "song": return .song
         case "album": return .album
-        case "artist": return .artist
+        case "artist", "onlineArtist": return .artist
         case "playlist", "allSongs", "liked": return .playlist
         case "episode": return .podcastEpisode
         case "show": return .podcastShow

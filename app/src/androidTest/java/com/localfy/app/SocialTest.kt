@@ -25,6 +25,32 @@ class SocialTest {
     private fun events(storage: String) = JSONArray(context.getSharedPreferences(storage, Context.MODE_PRIVATE).getString("events", "[]"))
     private fun scope() = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    @Test fun friendPictureCodeReadsBackItsOwnImage() {
+        val link = SocialLink(type = "person", owner = host).url
+        val image = FriendPictureCode.make(link)
+        try { assertEquals(link, FriendPictureCode.decode(image)) } finally { image.recycle() }
+    }
+
+    @Test fun profilePhotoStaysInOneReplaceableEvent() = runBlocking {
+        withContext(Dispatchers.Main) {
+            val scope = scope(); val storage = "photo-test-${UUID.randomUUID()}"
+            try {
+                val sender = PeerRelay(context, Keys.parse("1".repeat(64)), scope, storage, true)
+                val receiver = PeerRelay(context, Keys.parse("2".repeat(64)), scope, "photo-receiver-${UUID.randomUUID()}", true)
+                val photo = android.util.Base64.encodeToString(ByteArray(16000) { 42 }, android.util.Base64.NO_WRAP)
+                val body = JSONObject().put("id", sender.publicKey).put("name", "Photo test").put("photo", photo).put("isPublic", true).put("updatedAt", 1)
+                var received: String? = null
+                receiver.onPacket = { _, packet, _ -> received = packet.body.optString("photo") }
+                sender.send(SocialPacket("profile", body), "profile")
+                val saved = events(storage); assertEquals(1, saved.length())
+                receiver.receive(wire(JSONObject(saved.getJSONObject(0).getString("json"))))
+                assertEquals(photo, received)
+                sender.send(SocialPacket("profile", body), "profile", receiver.publicKey)
+                assertEquals(2, events(storage).length())
+            } finally { scope.cancel(); context.deleteSharedPreferences(storage) }
+        }
+    }
+
     @Test fun importedPlaylistPreservesSafeSongArtworkAndSourceOrder() {
         val rows = JSONArray()
             .put(JSONObject().put("id", "first").put("title", "One").put("artist", "Singer").put("artwork", "https://images.example.com/one.jpg"))

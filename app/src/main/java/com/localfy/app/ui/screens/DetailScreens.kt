@@ -46,17 +46,6 @@ fun AlbumScreen(albumId: Long) {
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
     val album = library.albumById[albumId] ?: return EmptyState("Album not found", "It may have been removed from this device.")
-    val downloads = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicDownloads
-    val jobs by downloads.jobs.collectAsStateWithLifecycle()
-    val streams = (androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp).musicStreams
-    val catalog = (album.songs.mapNotNull(streams::track) + jobs.map { com.localfy.app.data.music.Monochrome.parseTrack(org.json.JSONObject(it.trackJson)) }.filterNotNull()).firstOrNull {
-        com.localfy.app.data.music.SearchMatch.fold(it.album) == com.localfy.app.data.music.SearchMatch.fold(album.title) &&
-            com.localfy.app.data.music.SearchMatch.fold(it.albumArtist ?: it.primaryArtist) == com.localfy.app.data.music.SearchMatch.fold(album.artist) && it.releaseId.isNotEmpty()
-    }
-    if (catalog != null) {
-        CatalogAlbumScreen(com.localfy.app.data.music.OnlineAlbum(catalog.releaseId, album.title, album.artist, catalog.artwork))
-        return
-    }
     val more = library.artistByName[album.artist]?.albums?.filter { it.id != album.id }.orEmpty()
     CollectionScreen(
         title = album.title,
@@ -86,6 +75,8 @@ fun AlbumScreen(albumId: Long) {
 
 @Composable
 fun ArtistScreen(name: String) {
+    val artistContext = androidx.compose.ui.platform.LocalContext.current
+    val coverRevision by ArtistChoices.revision.collectAsStateWithLifecycle()
     val app = LocalApp.current
     val library by app.repo.library.collectAsStateWithLifecycle()
     val stats by app.repo.stats.collectAsStateWithLifecycle()
@@ -96,19 +87,21 @@ fun ArtistScreen(name: String) {
         title = artist.name,
         kindLabel = "Artist",
         subtitle = "${artist.albums.size} ${if (artist.albums.size == 1) "album" else "albums"} • ${songCount(artist.songs.size)}",
-        art = artist.ownCover?.artKey,
+        art = remember(coverRevision, artist) { ArtistChoices.art(artistContext, artist.name, artist.ownCover?.artKey) },
         hero = true,
         songs = popular,
         headerActions = {
+            ArtistOptions(artist.name)
             IconButton(onClick = { app.player.playSongs(app.taste.artistRadio(artist.name).ifEmpty { artist.songs }, 0, shuffle = false, source = "${artist.name} Radio") }) {
                 Icon(Icons.Rounded.Radio, "${artist.name} Radio", tint = LocalfyColors.TextSecondary)
             }
         },
         songSubtitle = { s -> stats[s.id]?.playCount?.takeIf { it > 0 }?.let { "$it plays • ${s.album}" } ?: s.album },
         beforeSongs = {
+            item { TextButton(onClick = { app.navigate("artist-online/${android.net.Uri.encode(artist.name)}") }) { Text("View online artist") } }
             if (artist.albums.isNotEmpty()) item(key = "albums") {
                 Column {
-                    SectionHeader("Discography")
+                    SectionHeader("Saved albums")
                     FittedTileRow(artist.albums, key = { it.id }, tileWidth = 148.dp) { a ->
                             TileData("a${a.id}", a.title, a.year.takeIf { it > 0 }?.toString() ?: "Album", a.cover.artKey) {
                                 app.navigate(Routes.album(a.id))
@@ -177,7 +170,9 @@ fun SmartScreen(kindName: String) {
     val app = LocalApp.current
     val smart by app.repo.smart.collectAsStateWithLifecycle()
     val kind = runCatching { SmartCollection.Kind.valueOf(kindName) }.getOrNull() ?: return
-    var sort by rememberSaveable { mutableStateOf("Title") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sortPrefs = remember { context.getSharedPreferences("sorting", android.content.Context.MODE_PRIVATE) }
+    var sort by remember { mutableStateOf(sortPrefs.getString("allSongs", "Recently Added") ?: "Recently Added") }
     var sortOpen by remember { mutableStateOf(false) }
     val stats by app.repo.stats.collectAsStateWithLifecycle()
     val songs = smart[kind]?.songs.orEmpty().let { source ->
@@ -200,7 +195,7 @@ fun SmartScreen(kindName: String) {
                 TextButton(onClick = { sortOpen = true }) { Text("Sort: $sort") }
                 androidx.compose.material3.DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
                     listOf("Title", "Artist", "Album", "Recently Added", "Most Played").forEach { choice ->
-                        androidx.compose.material3.DropdownMenuItem(text = { Text(choice) }, onClick = { sort = choice; sortOpen = false })
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(choice) }, onClick = { sort = choice; sortPrefs.edit().putString("allSongs", choice).apply(); sortOpen = false })
                     }
                 }
             }

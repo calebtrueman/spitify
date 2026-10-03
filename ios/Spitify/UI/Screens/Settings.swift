@@ -16,6 +16,8 @@ struct SettingsView: View {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
+                NavigationLink { FriendsSettingsView() } label: { Label("Friends", systemImage: "person.2") }
+                NavigationLink { HiddenArtistsView() } label: { Label("Hidden artists", systemImage: "eye.slash") }
                 NavigationLink(value: Route.profile) { Label("Profile", systemImage: "person.crop.circle") }
                 NavigationLink { VoiceHelpView() } label: { Label("Siri & Shortcuts", systemImage: "waveform") }
             }
@@ -45,6 +47,10 @@ struct SettingsView: View {
                 LabeledContent("Songs", value: "\(app.library.library.songs.count)")
                 LabeledContent("Albums", value: "\(app.library.library.albums.count)")
             } header: { Text("Library") } footer: { Text("Spitify plays files in Files › On My iPhone › Spitify, plus downloaded, DRM-free songs from the Music app. Apple Music streaming tracks are protected and can't be played by other apps.") }
+            Section("Automatic backup") {
+                Text("Settings, profiles, playlists and custom covers are included in your iPhone's device backup when it is enabled. Spitify does not need an account.")
+                Text("To remove the app and keep its data on this phone, choose Offload App in iPhone Storage. Delete App removes local data; reinstalling alone does not restore a device backup.").text(.caption)
+            }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
                 Link("Source code on GitHub", destination: URL(string: "https://github.com/calebtrueman/spitify")!)
@@ -61,6 +67,7 @@ struct VoiceHelpView: View {
     var body: some View {
         AppForm {
             Section {
+                Text("This build supports Shortcuts. Apple's built-in “Play … in Spitify” music command also needs a Siri-enabled signing profile.")
                 Text("Hey Siri, resume in Spitify player")
                 Text("Hey Siri, pause Spitify player")
                 Text("Hey Siri, play Liked Songs in Spitify player")

@@ -7,13 +7,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-class SocialRepository(context: Context, private val scope: CoroutineScope) {
+class SocialRepository(private val context: Context, private val scope: CoroutineScope) {
     private val prefs = context.getSharedPreferences("social_library", Context.MODE_PRIVATE)
     val state = runCatching { SocialState.parse(JSONObject(prefs.getString("state", "{}")!!)) }.getOrElse { SocialState() }
     private val changes = MutableStateFlow(0L)
     val revision = changes.asStateFlow()
     private val relay = PeerRelay(context, PeerIdentity.load(context), scope)
     val publicKey get() = relay.publicKey
+    var publicProfile = prefs.getBoolean("publicProfile", true); private set
     var enabled = prefs.getBoolean("enabled", false); private set
     var discovery = prefs.getBoolean("discovery", false); private set
     var relayAddresses = prefs.getStringSet("relays", PeerRelay.DEFAULTS.toSet())!!.toList(); private set
@@ -36,13 +37,13 @@ class SocialRepository(context: Context, private val scope: CoroutineScope) {
     fun configure(enabled: Boolean, discovery: Boolean = this.discovery, relays: List<String>? = null) {
         if (relays != null) { relayAddresses = relays; prefs.edit().putStringSet("relays", relays.toSet()).apply() }
         this.enabled = enabled; this.discovery = discovery
-        prefs.edit().putBoolean("enabled", enabled).putBoolean("discovery", discovery).apply(); refresh(); changed()
+        prefs.edit().putBoolean("enabled", enabled).putBoolean("discovery", discovery).apply(); refresh(); changed(); if (enabled) scope.launch { syncProfile(true) }
     }
     fun follow(input: String) {
         val link = SocialLink.parse(input) ?: error("Paste a friend code or Spitify playlist link.")
         require(link.type != "room" && link.owner != publicKey) { "Paste another person's friend code." }
         check(state.following.size < 128 || link.owner in state.following) { "You can follow up to 128 people." }
-        state.following += link.owner; persist(); relay.requestPlaylist(link); refresh()
+        state.following += link.owner; persist(); relay.requestPlaylist(link); configure(true)
     }
     fun unfollow(id: String) { state.following -= id; persist(); refresh() }
     fun save(playlist: SharedPlaylist) {
@@ -60,10 +61,39 @@ class SocialRepository(context: Context, private val scope: CoroutineScope) {
     }
     fun remove(playlist: SharedPlaylist) { state.playlists.remove(playlist.key); persist() }
     suspend fun publishProfile(name: String, about: String) {
-        requireConnection()
-        val profile = FriendProfile(publicKey, name.trim(), about)
-        require(profile.valid()) { "Use a name of 1–80 characters and a bio under 500 characters." }
-        state.profiles[publicKey] = profile; persist(); relay.send(SocialPacket("profile", profile.json()), "profile")
+        (context.applicationContext as com.localfy.app.LocalfyApp).profiles.setName(name.take(80))
+        prefs.edit().putString("about", about.take(500)).apply()
+        syncProfile()
+    }
+    fun setPublicProfile(value: Boolean) {
+        publicProfile = value; prefs.edit().putBoolean("publicProfile", value).apply(); changed()
+        scope.launch { syncProfile(true) }
+    }
+    suspend fun syncProfile(force: Boolean = false) {
+        try {
+            val app = context.applicationContext as com.localfy.app.LocalfyApp
+            val name = app.profiles.profile.value.name.trim().take(80)
+            if (name.isEmpty()) return
+            val photo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                android.graphics.BitmapFactory.decodeFile(app.profiles.photoFile.path)?.let { original ->
+                    val small = android.graphics.Bitmap.createScaledBitmap(original, 96, 96, true)
+                    val output = java.io.ByteArrayOutputStream(); small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, output)
+                    if (small !== original) small.recycle(); original.recycle()
+                    output.toByteArray().takeIf { it.size <= 16000 }?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+                }
+            }
+            val old = state.profiles[publicKey]
+            val profile = FriendProfile(publicKey, name, prefs.getString("about", old?.about.orEmpty()).orEmpty().take(500), photo = photo, isPublic = publicProfile)
+            val different = old?.name != name || old.about != profile.about || old.photo != photo || old.isPublic != publicProfile
+            if (different) { state.profiles[publicKey] = profile; persist() }
+            if (!enabled || !different && !force && prefs.getLong("profileSent", 0) > SocialRules.now - 86400000) return
+            if (publicProfile) relay.send(SocialPacket("profile", profile.json()), "profile")
+            else {
+                relay.send(SocialPacket("profileHidden", JSONObject().put("id", publicKey)), "profile")
+                state.following.forEach { relay.send(SocialPacket("profile", profile.json()), "profile", it) }
+            }
+            prefs.edit().putLong("profileSent", SocialRules.now).apply(); message = null; changed()
+        } catch (e: Exception) { if (e is kotlinx.coroutines.CancellationException) throw e; message = "Profile saved on this phone. Sharing will retry when connected. ${e.message}"; changed() }
     }
     suspend fun share(playlist: SharedPlaylist, person: String? = null) {
         requireConnection(); require(playlist.owner == publicKey) { "Make your own copy before sharing this playlist." }
@@ -132,6 +162,7 @@ class SocialRepository(context: Context, private val scope: CoroutineScope) {
             when (packet.type) {
                 "room" -> { val room = ListeningRoom.parse(packet.body); if (rooms.accept(room, author, publicKey, encrypted)) { changed(); onRoomUpdate?.invoke(room) } }
                 "roomRequest" -> if (encrypted) { val request = RoomRequest.parse(packet.body); if (rooms.receive(request, author, publicKey)) { changed(); onRoomRequest?.invoke(rooms.requests.last()) } }
+                "profileHidden" -> if (!encrypted && author != publicKey && state.profiles[author]?.isPublic != false) { state.profiles.remove(author); persist() }
                 "profile" -> if (state.acceptProfile(FriendProfile.parse(packet.body), author)) persist()
                 "playlist" -> if (state.acceptPlaylist(SharedPlaylist.parse(packet.body), author, publicKey, encrypted)) persist()
                 "edit" -> if (encrypted) state.apply(SharedEdit.parse(packet.body), author, publicKey)?.let { updated ->

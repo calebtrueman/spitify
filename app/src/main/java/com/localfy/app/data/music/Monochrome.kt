@@ -122,7 +122,7 @@ object Monochrome {
 
     fun parseTrack(item: JSONObject, album: JSONObject? = null): OnlineTrack? {
         val id = item.optString("trackId", item.optString("id"))
-        if (!validId(id) || !item.has("title")) return null
+        if ((!validId(id) && !(Regex("external-[0-9a-f]{64}").matches(id) && AudioFallback.validAudioURL(item.optString("audioURL")))) || !item.has("title")) return null
         val artist = artist(item).let { if (it == "Unknown artist" && album != null) artist(album) else it }
         val names = artistNames(item).ifEmpty { album?.let(::artistNames).orEmpty() }
         // Old saved entries flattened the whole credit into one array item.

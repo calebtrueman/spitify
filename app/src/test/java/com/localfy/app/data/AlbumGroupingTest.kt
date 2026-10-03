@@ -25,3 +25,18 @@ class AlbumGroupingTest {
     }
 
 }
+
+class PrimaryArtistCreditsTest {
+    @org.junit.Test fun albumArtistSeparatesAnAndCredit() {
+        org.junit.Assert.assertEquals(listOf("Justin Bieber", "Glup Shitto"), ArtistCredits.names("Justin Bieber AND Glup Shitto", albumArtist = "Justin Bieber"))
+        org.junit.Assert.assertEquals("Justin Bieber", ArtistCredits.primary("Justin Bieber AND Glup Shitto", albumArtist = "Justin Bieber"))
+    }
+    @org.junit.Test fun bandNamesStayWholeWithoutEvidence() {
+        listOf("Florence and the Machine", "Earth, Wind & Fire", "Simon & Garfunkel").forEach { org.junit.Assert.assertEquals(listOf(it), ArtistCredits.names(it)) }
+        org.junit.Assert.assertEquals("Foobar", ArtistCredits.primary("Foobar", albumArtist = "Foo"))
+    }
+    @org.junit.Test fun explicitGuestsRemainInTheCredit() {
+        org.junit.Assert.assertEquals(listOf("Main", "Guest"), ArtistCredits.names("Main feat. Guest"))
+        org.junit.Assert.assertEquals("Main", ArtistCredits.primary("Main feat. Guest"))
+    }
+}

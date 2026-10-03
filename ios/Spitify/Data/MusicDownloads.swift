@@ -132,12 +132,13 @@ final class MusicDownloads {
         var added = 0, saved = 0, active = 0
         for requested in tracks {
             var track = requested
-            track.audioURL = nil; track.audioExtension = nil; track.fallbackTried = nil; track.attemptedSources = nil
+            if !track.id.hasPrefix("external-") { track.audioURL = nil; track.audioExtension = nil }
+            track.fallbackTried = nil; track.attemptedSources = nil
             if let old = jobs.first(where: { $0.id == track.id }) {
                 if old.state.active { active += 1; continue }
                 if old.state == .complete && FileManager.default.fileExists(atPath: root.appendingPathComponent(old.relativePath).path) { saved += 1; continue }
             }
-            guard (try? MonochromeClient.audioURL(track.id)) != nil else { continue }
+            guard (try? MonochromeClient.audioURL(track.id)) != nil || track.id.range(of: "^external-[0-9a-f]{64}$", options: .regularExpression) != nil && track.audioURL.map(AudioFallback.validAudioURL) == true else { continue }
             jobs.removeAll { $0.id == track.id }
             progress[track.id] = nil
             let folder = MonochromeClient.id(track.releaseID) ?? "Singles"

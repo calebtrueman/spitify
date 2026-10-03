@@ -43,6 +43,11 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
     val app = context.applicationContext as LocalfyApp
     val actions = LocalApp.current
     val revision by app.social.revision.collectAsStateWithLifecycle()
+    val library by app.library.library.collectAsStateWithLifecycle()
+    val failed by PlaylistMatches.failed.collectAsStateWithLifecycle()
+    var replacing by remember { mutableStateOf<SharedTrack?>(null) }
+    var localQuery by remember { mutableStateOf("") }
+
     var attempt by remember(input) { mutableStateOf(0) }
     var initial by remember(input) { mutableStateOf<SharedPlaylist?>(null) }
     var message by remember(input) { mutableStateOf<String?>(null) }
@@ -56,7 +61,7 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
         catch (e: Exception) { if (e is CancellationException) throw e; message = e.message }
     }
     val playlist = remember(initial, revision) { initial?.let { app.social.state.playlists[it.key] ?: it } }
-    LaunchedEffect(playlist?.key, playlist?.revision) { playlist?.let { PlaylistMatches.prepare(it, app) } }
+    LaunchedEffect(playlist?.key, playlist?.revision, library.songs) { playlist?.let { PlaylistMatches.prepare(it, app) } }
     fun play(from: Int, shuffle: Boolean = false) {
         val list = playlist ?: return
         work?.cancel()
@@ -121,10 +126,34 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
         if (showSharing && list.owner == app.social.publicKey && isSaved) item { Box(Modifier.padding(16.dp)) { PlaylistSharingControls(list) } }
         if (showEditor && isSaved && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) item { Box(Modifier.padding(16.dp)) { SharedPlaylistEditor(list, initiallyExpanded = true) } }
         itemsIndexed(list.tracks, key = { _, track -> track.id }) { index, track ->
-            SharedPlaylistTrackRow(track, onPlay = { play(index) }, onError = { message = it })
+            if (PlaylistMatches.key(track) !in failed) SharedPlaylistTrackRow(track, onPlay = { play(index) }, onError = { message = it })
+        }
+        val missing = list.tracks.filter { PlaylistMatches.key(it) in failed }
+        if (missing.isNotEmpty()) {
+            item { Column(Modifier.padding(16.dp)) {
+                Text("Failed matches (${missing.size})", style = MaterialTheme.typography.titleLarge)
+                Text("Add your files to Spitify. Matching songs return to their original places automatically, or choose a copy below.")
+                TextButton(onClick = { PlaylistMatches.retry(list, app) }) { Text("Try matching again") }
+            } }
+            items(missing, key = { "missing:${it.id}" }) { track -> Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { Text(track.title); Text(track.artist, style = MaterialTheme.typography.bodySmall) }
+                TextButton(onClick = { replacing = track; localQuery = "" }) { Text("Choose copy") }
+            } }
         }
         if (list.tracks.isEmpty()) item { EmptyState("No songs yet", "Add songs from the playlist options.") }
     }
+    replacing?.let { track -> AlertDialog(onDismissRequest = { replacing = null }, title = { Text("Choose your copy") }, text = {
+        Column {
+            Text("${track.title} · ${track.artist}")
+            OutlinedTextField(localQuery, { localQuery = it }, label = { Text("Search your files") })
+            LazyColumn(Modifier.heightIn(max = 350.dp)) {
+                items(library.songs.filter { localQuery.isBlank() || SearchMatch.score(localQuery, it.title, it.artist, it.album) != null }) { song ->
+                    TextButton(onClick = { PlaylistMatches.choose(track, song, app); replacing = null }) { Text("${song.title} · ${song.artist}") }
+                }
+                if (library.songs.isEmpty()) item { Text("Import your music in Library first, then return here.") }
+            }
+        }
+    }, confirmButton = {}, dismissButton = { TextButton(onClick = { replacing = null }) { Text("Cancel") } }) }
 }
 
 @Composable
@@ -167,6 +196,8 @@ internal fun SharedTrackCover(track: SharedTrack, matched: Song? = null, modifie
 
 @Composable
 fun OnlineArtistScreen(encoded: String) {
+    val artistContext = LocalContext.current
+    val coverRevision by ArtistChoices.revision.collectAsStateWithLifecycle()
     val actions = LocalApp.current
     val artist = remember(encoded) { runCatching { JSONObject(encoded) }.getOrNull() }
     val name = artist?.optString("name").orEmpty()
@@ -205,11 +236,12 @@ fun OnlineArtistScreen(encoded: String) {
     val followed = remember(followRevision, artistID) { app.artistFollows.contains(artistID) }
     CollectionPage(
         title = name, kindLabel = "Artist", subtitle = if (followed) "Following" else "", summary = "",
-        art = ArtKey(artistID.hashCode().toLong(), artistID.hashCode().toLong(), artist?.optString("artwork")), hero = true,
+        art = remember(coverRevision, artist) { ArtistChoices.art(artistContext, name, ArtKey(artistID.hashCode().toLong(), artistID.hashCode().toLong(), artist?.optString("artwork"))) }, hero = true,
         playing = player.source == name && player.isPlaying, playEnabled = result.tracks.isNotEmpty(),
         onPlay = { if (player.source == name && player.hasMedia) actions.player.togglePlay() else playArtist() },
         onShuffle = { playArtist(true) }, shuffleActive = player.shuffle,
         headerActions = {
+            ArtistOptions(name)
             IconButton(enabled = loaded, onClick = { runCatching { if (followed) app.artistFollows.unfollow(artistID) else app.artistFollows.follow(OnlineArtist(artistID, name, artist?.optString("artwork")), result.albums) }.onFailure { message = it.message } }) {
                 Icon(if (followed) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, if (followed) "Unfollow artist" else "Follow artist", tint = if (followed) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary)
             }

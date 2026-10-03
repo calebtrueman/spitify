@@ -16,8 +16,9 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.18"
-    CURRENT_PROJECT_VERSION: "22"
+    MARKETING_VERSION: "1.0.19"
+    CURRENT_PROJECT_VERSION: "23"
+    SPITIFY_BUNDLE_ID: "com.calebtrueman.spitify"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
@@ -43,13 +44,15 @@ targets:
       - path: ../shared/video/video-controls.js
         buildPhase: resources
     dependencies:
+      - target: SpitifyWidgets
+        embed: true
       - package: TagLibSwift
       - package: NostrSDK
         product: NostrSDK
     settings:
       base:
         SWIFT_OBJC_BRIDGING_HEADER: Spitify/Data/FileTagsBridge.h
-        PRODUCT_BUNDLE_IDENTIFIER: com.calebtrueman.spitify
+        PRODUCT_BUNDLE_IDENTIFIER: "$(SPITIFY_BUNDLE_ID)"
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "Vinyl_no_landlords Vinyl_skip_fees Vinyl_no_ads Vinyl_your_music Vinyl_green Vinyl_moon Vinyl_sun Vinyl_mountain Vinyl_ocean Vinyl_flower Vinyl_lightning Vinyl_cassette Vinyl_fire Vinyl_aurora Vinyl_rocket Vinyl_dino Vinyl_race Vinyl_butterfly Vinyl_unicorn Vinyl_cat Vinyl_robot Vinyl_rainbow Vinyl_soccer Vinyl_frog"
@@ -58,6 +61,19 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Spitify/Resources/Info.plist
         ENABLE_PREVIEWS: YES
+  SpitifyWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [SpitifyWidgets]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(SPITIFY_BUNDLE_ID).widgets"
+        INFOPLIST_FILE: SpitifyWidgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: ""
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
   SpitifyTests:
     type: bundle.unit-test
     platform: iOS

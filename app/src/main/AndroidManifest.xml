@@ -21,6 +21,11 @@
     <application
         android:name=".LocalfyApp"
         android:allowBackup="true"
+        android:backupAgent=".data.DeviceBackupAgent"
+        android:fullBackupOnly="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:restoreAnyVersion="false"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/spitify_launcher"
         android:roundIcon="@mipmap/spitify_launcher"
@@ -198,5 +203,17 @@
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.codephotos" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/spotify_code_paths" />
         </provider>
+        <receiver android:name=".widgets.MusicWidgetProvider" android:exported="false" android:label="Spitify · Quick play">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_widget" />
+        </receiver>
+        <receiver android:name=".widgets.LibraryWidgetProvider" android:exported="false" android:label="Spitify · Your Library">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
+        </receiver>
+        <receiver android:name=".widgets.FriendsWidgetProvider" android:exported="false" android:label="Spitify · Friends">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/friends_widget" />
+        </receiver>
     </application>
 </manifest>

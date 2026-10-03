@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.19",
+          "buildVersion": "23",
+          "date": "2026-10-03T16:59:41Z",
+          "localizedDescription": "Friends profiles and picture codes, saved playlist repairs, artist covers and hiding, three widgets, OS backup support, better Shortcuts lookup, and new borders for all 25 themes.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.19/Spitify-1.0.19-unsigned.ipa",
+          "size": 120222855,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.18",
           "buildVersion": "22",
           "date": "2026-10-03T15:06:14Z",

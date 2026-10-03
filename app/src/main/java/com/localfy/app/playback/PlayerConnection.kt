@@ -264,6 +264,14 @@ class PlayerConnection(
             speed = c.playbackParameters.speed,
         )
         _position.value = c.currentPosition
+        val prefs = context.getSharedPreferences("widget_state", 0)
+        val song = _state.value.currentId?.let(resolve)
+        val title = song?.title ?: "Ready when you are"
+        val artist = song?.artist ?: "Open Spitify and start listening"
+        if (prefs.getString("title", null) != title || prefs.getString("artist", null) != artist || prefs.getBoolean("playing", false) != c.isPlaying) {
+            prefs.edit().putString("title", title).putString("artist", artist).putBoolean("playing", c.isPlaying).apply()
+            com.localfy.app.widgets.MusicWidgetProvider.refresh(context)
+        }
     }
 
     private fun startTicker() {

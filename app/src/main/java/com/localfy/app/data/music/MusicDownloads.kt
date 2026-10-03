@@ -68,8 +68,8 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     suspend fun enqueue(tracks: List<OnlineTrack>): String = withContext(Dispatchers.IO) {
         var added = 0; var saved = 0; var active = 0
         mutex.withLock {
-            for (requested in tracks.filter { Monochrome.validId(it.id) }) {
-                val track = requested.copy(audioURL = null, audioExtension = "flac", fallbackTried = false, attemptedSources = emptyList(), retryCount = 0, retryAtMillis = 0)
+            for (requested in tracks.filter { Monochrome.validId(it.id) || Regex("external-[0-9a-f]{64}").matches(it.id) && it.audioURL?.let(AudioFallback::validAudioURL) == true }) {
+                val track = requested.copy(audioURL = if (requested.id.startsWith("external-")) requested.audioURL else null, audioExtension = if (requested.id.startsWith("external-")) requested.audioExtension else "flac", fallbackTried = false, attemptedSources = emptyList(), retryCount = 0, retryAtMillis = 0)
                 val old = dao.get(track.id)
                 if (old?.active == true) { active++; continue }
                 if (old?.state == "complete" && exists(old.localUri)) { saved++; continue }

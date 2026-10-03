@@ -108,6 +108,23 @@ struct RootView: View {
 
     /// "Open in Spitify" from Files/AirDrop: copy into the Music folder and play it.
     private func openExternal(_ url: URL) async {
+        if url.scheme == "spitify", url.host == "widget" {
+            await VoiceLibrary.ready()
+            switch url.lastPathComponent {
+            case "resume": if app.player.hasMedia { app.player.resume() } else { _ = VoiceLibrary.play("allSongs") }
+            case "shuffle": app.player.play(app.library.library.songs, shuffle: true, source: "All songs")
+            case "liked": _ = VoiceLibrary.play("liked")
+            case "recent-play": app.player.play(app.library.recentlyAdded, source: "Recently added")
+            case "library": router.tab = .library; router.go(.smart(.allSongs))
+            case "recent": router.tab = .library; router.go(.smart(.recentlyAdded))
+            case "search": router.tab = .search
+            case "friends": router.go(.friends)
+            case "code": router.go(.friendCode)
+            case "rooms": router.go(.rooms)
+            default: break
+            }
+            return
+        }
         if url.scheme == "spitify" { if SocialLink.parse(url.absoluteString) != nil { incomingLink = url.absoluteString }; return }
         _ = await app.library.importItems([url], asAudiobooks: url.pathExtension.lowercased() == "m4b")
         if let s = app.library.library.songs.first(where: { $0.fileName == url.lastPathComponent }) { app.player.play([s], source: "Opened file") }
@@ -122,7 +139,11 @@ struct RouteView: View {
         case .album(let id): AlbumView(id: id)
         case .catalogAlbum(let album): OnlineAlbumView(album: album)
         case .catalogSong(let track): OnlineAlbumView(album: OnlineAlbum(id: track.releaseID, title: track.album, artist: track.artist, artwork: track.artwork), single: track)
-        case .artist(let name): ArtistLandingView(name: name)
+        case .artist(let name): ArtistView(name: name)
+        case .onlineArtistName(let name): ArtistLandingView(name: name)
+        case .friends: FriendsView()
+        case .rooms: RoomsView()
+        case .friendCode: FriendCodeView()
         case .playlist(let id): PlaylistView(id: id)
         case .mix(let id): MixView(id: id)
         case .smart(let k): SmartView(kind: k)

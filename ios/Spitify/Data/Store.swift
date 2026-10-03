@@ -5,6 +5,8 @@ enum Store {
     static let directory: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Spitify", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var backedUp = dir; var values = URLResourceValues(); values.isExcludedFromBackup = false
+        try? backedUp.setResourceValues(values)
         return dir
     }()
 

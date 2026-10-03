@@ -75,7 +75,8 @@ try “Play [song, album, artist, playlist, or show] in Spitify,” “Resume Sp
 “Pause Spitify,” “Next song in Spitify,” “Previous song in Spitify,”
 “Turn shuffle on in Spitify,” or “Set repeat to song in Spitify.”
 These actions also appear in Apple's Shortcuts app. Named shortcuts use your library,
-followed shows, and current queue.
+followed shows, and current queue. When a name has no local match, **Play in Spitify**
+also searches online artists and songs.
 
 If Siri hears “Spotify,” pronounce Spitify as “spit-if-eye” and try
 “Resume in Spitify player” or “Play Liked Songs in Spitify player.” The app includes
@@ -85,7 +86,10 @@ Speech recognition still depends on Siri and your device.
 For a name that sounds completely different, open **Settings › Siri & Shortcuts** in
 Spitify. In Apple's Shortcuts app, create a shortcut with the **Resume Spitify** action
 and name it **Pocket music**. Then say **“Hey Siri, Pocket music.”** You can do the same
-for Pause, Next song, or Play in Spitify with a chosen playlist. Apple documents
+for Pause, Next song, or **Play in Spitify**. For an artist shortcut, choose the
+**Play in Spitify** action, search for **Lana Del Rey**, select the artist, and name
+the shortcut **Play Lana**. Then say **“Hey Siri, Play Lana.”** This route does not
+need the separate Siri signing permission. Apple documents
 [running a shortcut by its name](https://support.apple.com/guide/shortcuts/run-shortcuts-with-siri-apd07c25bb38/ios).
 
 The app also handles Siri's built-in music requests directly. That path needs a
@@ -156,3 +160,15 @@ result is found. Existing file tags and artwork stay in place. Local files recei
 the missing values directly; Music app library files remain read-only. If a match
 is uncertain, Spitify leaves the field alone. “Find online” remains available for
 choosing a replacement yourself.
+
+## Widgets and automatic backup
+
+The IPA includes Quick play, Your Library and Friends widgets in three sizes. Keep
+the `SpitifyWidgets` extension when signing the IPA. An Xcode install needs a profile
+for both the app and its widget extension. A build signed only for the app cannot
+install those widgets.
+
+Settings and custom covers are included in device backups. The friend identity stays
+in Keychain and can be restored from an encrypted device backup. Offloading keeps
+app data on the phone. Deleting and reinstalling the app by itself does not restore
+all settings; this app has no separate backup account.

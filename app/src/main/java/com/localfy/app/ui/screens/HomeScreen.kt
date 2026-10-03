@@ -99,6 +99,9 @@ fun HomeScreen() {
     val mixes = if (showRecommendations) savedMixes else emptyList()
     val player = rememberPlayerState()
     val current = rememberCurrentSong()
+    val artistContext = androidx.compose.ui.platform.LocalContext.current
+    val artistRevision by ArtistChoices.revision.collectAsStateWithLifecycle()
+    val visibleArtists = remember(library, artistRevision) { library.artists.filter { it.name !in ArtistChoices.hidden(artistContext) } }
     val artTheme = com.localfy.app.ui.theme.LocalThemeSettings.current.artThemeID
     val glow = if (artTheme == null) rememberPlayerTint(current) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
     var filter by rememberSaveable { mutableStateOf(HomeFilter.All) }
@@ -116,7 +119,7 @@ fun HomeScreen() {
     ModalNavigationDrawer(drawerState = drawer, drawerContent = {
         ModalDrawerSheet {
             Text("Spitify", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(24.dp))
-            listOf("Profile" to Routes.PROFILE, "Settings" to Routes.SETTINGS).forEach { (label, route) ->
+            listOf("Profile" to Routes.PROFILE, "Friends" to Routes.FRIENDS, "Settings" to Routes.SETTINGS).forEach { (label, route) ->
                 NavigationDrawerItem(label = { Text(label) }, selected = false, onClick = {
                     scope.launch { drawer.close(); app.navigate(route) }
                 }, modifier = Modifier.padding(horizontal = 12.dp))
@@ -179,7 +182,7 @@ fun HomeScreen() {
                     return@LazyVerticalGrid
                 }
                 HomeFilter.Artists -> {
-                    items(library.artists, key = { "gr${it.name}" }) { a ->
+                    items(visibleArtists, key = { "gr${it.name}" }) { a ->
                         MediaTile(TileData("gr${a.name}", a.name, songCount(a.songs.size), a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     return@LazyVerticalGrid
@@ -270,7 +273,7 @@ fun HomeScreen() {
                 }, tileWidth, action = "Show all") { app.navigate(Routes.smart(SmartCollection.Kind.RecentlyAdded)) }
             }
             if (showRecommendations) full("artists") {
-                val top = library.artists.sortedByDescending { a -> a.songs.sumOf { stats[it.id]?.playCount ?: 0 } * 10 + a.songs.size }.take(12)
+                val top = visibleArtists.sortedByDescending { a -> a.songs.sumOf { stats[it.id]?.playCount ?: 0 } * 10 + a.songs.size }.take(12)
                 TileShelf("Your top artists", top.map { a ->
                     TileData("ar${a.name}", a.name, "Artist", a.cover.artKey, circle = true) { app.navigate(Routes.artist(a.name)) }
                 }, tileWidth)

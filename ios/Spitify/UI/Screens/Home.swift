@@ -34,7 +34,7 @@ struct HomeView: View {
                     switch filter {
                     case .all: allContent
                     case .albums: grid(lib.albums.map { a in Tile(id: a.id, title: a.title, subtitle: a.artist, song: a.cover) { router.go(.album(a.id)) } })
-                    case .artists: grid(lib.artists.map { a in Tile(id: a.name, title: a.name, subtitle: songCount(a.songs.count), song: a.cover, circle: true) { router.go(.artist(a.name)) } })
+                    case .artists: grid(lib.artists.filter { !ArtistChoices.shared.contains($0.name) }.map { a in Tile(id: a.name, title: a.name, subtitle: songCount(a.songs.count), song: a.cover, circle: true) { router.go(.artist(a.name)) } })
                     case .playlists: grid(playlistTiles)
                     }
                 }
@@ -61,6 +61,7 @@ struct HomeView: View {
                                 Button { withAnimation { sidebarOpen = false } } label: { Image(systemName: "xmark") }.accessibilityLabel("Close menu")
                             }
                             menuItem("Profile", icon: "person.crop.circle", route: .profile)
+                            menuItem("Friends", icon: "person.2", route: .friends)
                             menuItem("Settings", icon: "gearshape", route: .settings)
                             Spacer()
                         }.padding(24).frame(width: min(320, geometry.size.width * 0.85), height: geometry.size.height)

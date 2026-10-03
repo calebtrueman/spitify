@@ -14,11 +14,16 @@ struct SpitifyMediaQuery: EntityStringQuery {
     @MainActor func entities(for identifiers: [String]) async throws -> [SpitifyMedia] {
         await VoiceLibrary.ready()
         let indexed = Dictionary(VoiceLibrary.items().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return identifiers.compactMap { indexed[$0] }
+        var result = identifiers.compactMap { indexed[$0] }
+        for id in identifiers where indexed[id] == nil {
+            if id.hasPrefix("song:"), let song = AppModel.shared.musicStreams.lookup(String(id.dropFirst(5))) { result.append(SpitifyMedia(id: id, title: song.title, subtitle: song.artist)) }
+            else if id.hasPrefix("onlineArtist:"), let page = try? await MonochromeClient().artistPage(String(id.dropFirst(13))), let track = page.tracks.first { result.append(SpitifyMedia(id: id, title: track.primaryArtist, subtitle: "Artist")) }
+        }
+        return result
     }
     @MainActor func entities(matching string: String) async throws -> [SpitifyMedia] {
         await VoiceLibrary.ready()
-        return VoiceLibrary.match(string, in: VoiceLibrary.items())
+        return await VoiceLibrary.search(string)
     }
     @MainActor func suggestedEntities() async throws -> [SpitifyMedia] {
         await VoiceLibrary.ready()
@@ -27,6 +32,29 @@ struct SpitifyMediaQuery: EntityStringQuery {
 }
 
 @MainActor enum VoiceLibrary {
+    static func search(_ query: String) async -> [SpitifyMedia] {
+        let local = match(query, in: items())
+        if !local.isEmpty { return local }
+        guard let found = try? await MonochromeClient().searchAll(query) else { return [] }
+        let artists = found.artists.filter { SearchMatch.fold($0.name) == SearchMatch.fold(query) }.prefix(3).map {
+            SpitifyMedia(id: "onlineArtist:" + $0.id, title: $0.name, subtitle: "Artist")
+        }
+        if !artists.isEmpty { return artists }
+        return found.tracks.filter(\.playable).prefix(6).map { track in
+            let song = AppModel.shared.musicStreams.register(track)
+            return SpitifyMedia(id: "song:" + song.id, title: track.title, subtitle: "Song by " + track.artist)
+        }
+    }
+    static func playMedia(_ id: String) async -> Bool {
+        if id.hasPrefix("onlineArtist:") {
+            guard let page = try? await MonochromeClient().artistPage(String(id.dropFirst(13))) else { return false }
+            let songs = page.tracks.filter(\.playable).prefix(40).map { AppModel.shared.musicStreams.register($0) }
+            guard !songs.isEmpty else { return false }
+            AppModel.shared.player.play(songs, shuffle: false, source: songs.first?.primaryArtist ?? "Artist")
+            return true
+        }
+        return play(id)
+    }
     static func ready() async {
         guard AppModel.shared.profile.onboarded else { return }
         await AppModel.shared.start()
@@ -110,7 +138,7 @@ struct PlaySpitifyMedia: AudioPlaybackIntent {
     @MainActor func perform() async throws -> some IntentResult & ProvidesDialog {
         guard AppModel.shared.profile.onboarded else { return .result(dialog: "Open Spitify on your iPhone to finish setup first.") }
         await VoiceLibrary.ready()
-        guard VoiceLibrary.play(media.id) else { return .result(dialog: "I couldn't find that in your Spitify library.") }
+        guard await VoiceLibrary.playMedia(media.id) else { return .result(dialog: "I couldn't find that in your Spitify library.") }
         return .result(dialog: "Playing \(media.title) in Spitify.")
     }
 }

@@ -1,72 +1,173 @@
 import SwiftUI
+import PhotosUI
+import CoreImage.CIFilterBuiltins
+import Vision
 
 struct FriendsView: View {
     @Environment(AppModel.self) private var app
-    @State private var friendCode = ""
-    @State private var name = ""
-    @State private var about = ""
+    @Environment(\.palette) private var p
+    @State private var adding = false
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Music is better together.").text(.headlineL)
+                HStack {
+                    NavigationLink { FriendProfileView(person: app.social.publicKey) } label: {
+                        FriendPortrait(profile: app.social.state.profiles[app.social.publicKey]).frame(width: 64, height: 64)
+                        VStack(alignment: .leading) { Text(app.profile.name.isEmpty ? "Your profile" : app.profile.name).text(.title); Text("View your profile & friend code").text(.bodyS) }
+                    }.buttonStyle(.plain)
+                    Spacer()
+                }
+                HStack {
+                    Button("Add friend", systemImage: "person.badge.plus") { adding = true }.buttonStyle(.borderedProminent)
+                    NavigationLink { RoomsView() } label: { Label("Listen together", systemImage: "headphones") }.buttonStyle(.bordered)
+                }
+                Text("Your friends").text(.title)
+                if app.social.state.following.isEmpty { Text("Add a friend's picture code or link to start sharing music.").foregroundStyle(p.secondary) }
+                ForEach(app.social.state.following.sorted { displayName($0) < displayName($1) }, id: \.self) { person in
+                    NavigationLink { FriendProfileView(person: person) } label: {
+                        HStack(spacing: 14) {
+                            FriendPortrait(profile: app.social.state.profiles[person]).frame(width: 60, height: 60)
+                            VStack(alignment: .leading, spacing: 4) { Text(displayName(person)).text(.title); Text(app.social.state.profiles[person]?.about ?? "Waiting for their profile…").text(.bodyS).lineLimit(2).foregroundStyle(p.secondary) }
+                            Spacer(); Image(systemName: "chevron.right")
+                        }.padding(12).background(p.surface, in: RoundedRectangle(cornerRadius: 16))
+                    }.buttonStyle(.plain)
+                }
+                NavigationLink("Create a shared playlist or mix") { CreateSharedPlaylistView() }
+                if !app.social.enabled { Text("Sharing is paused. Turn it on in Friends settings.").text(.bodyS) }
+                if let message = app.social.message { Text(message).text(.bodyS) }
+            }.padding(20)
+        }.navigationTitle("Friends")
+            .toolbar { NavigationLink { FriendsSettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Friends settings") }
+            .sheet(isPresented: $adding) { NavigationStack { AddFriendView() } }
+            .task { try? app.social.prepare(); await app.social.syncProfile() }
+    }
+    private func displayName(_ person: String) -> String { app.social.state.profiles[person]?.name ?? "Profile not loaded" }
+}
+
+struct FriendPortrait: View {
+    var profile: FriendProfile?
+    var body: some View {
+        Group {
+            if let photo = profile?.photo, let data = Data(base64Encoded: photo), let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill() }
+            else if let url = profile?.image { AsyncImage(url: URL(string: url)) { image in image.resizable().scaledToFill() } placeholder: { placeholder } }
+            else { placeholder }
+        }.clipShape(Circle())
+    }
+    private var placeholder: some View { ZStack { Color.gray.opacity(0.2); Image(systemName: "person.fill").resizable().scaledToFit().padding(20).foregroundStyle(.secondary) } }
+}
+
+struct FriendProfileView: View {
+    var person: String
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var removing = false
+    private var own: Bool { person == app.social.publicKey }
+    private var profile: FriendProfile? { app.social.state.profiles[person] }
+    private var shared: [SharedPlaylist] { app.social.playlists.filter { $0.owner == person || app.social.state.recipients[$0.key]?.contains(person) == true || $0.editors.contains(person) } }
+    var body: some View {
+        CollectionLayout(title: profile?.name ?? "Profile not loaded", subtitle: profile?.about ?? "Their name and photo will appear when their profile arrives.", metadata: own ? "Your profile" : "Friend", artKey: "friend:" + person, remoteArt: profile?.image) {
+            FriendPortrait(profile: profile)
+        } actions: {
+            HStack {
+                if own {
+                    NavigationLink("Edit profile") { ProfileView() }.buttonStyle(.bordered)
+                    NavigationLink("Your picture code") { FriendCodeView() }.buttonStyle(.borderedProminent)
+                } else if app.social.state.following.contains(person) {
+                    Menu { Button("Unfollow", role: .destructive) { removing = true } } label: { Label("Following", systemImage: "checkmark") }.buttonStyle(.bordered)
+                } else { Button("Follow") { try? app.social.follow(person) }.buttonStyle(.borderedProminent) }
+            }.padding(.horizontal, 20)
+        } content: {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(own ? "Your shared music" : "Music you share").text(.title)
+                if shared.isEmpty { Text("Shared playlists will appear here. Open one of your playlists and choose Share with friends.").text(.bodyS) }
+                ForEach(shared) { list in NavigationLink { SharedPlaylistView(initial: list) } label: {
+                    HStack(spacing: 12) { PlaylistCover(url: list.image).frame(width: 64, height: 64); VStack(alignment: .leading) { Text(list.name); Text(list.owner == app.social.publicKey ? "Shared by you" : "Shared by them").text(.caption) }; Spacer(); Image(systemName: "chevron.right") }
+                }.buttonStyle(.plain) }
+            }.padding(20)
+        }.confirmationDialog("Unfollow this friend?", isPresented: $removing, titleVisibility: .visible) { Button("Unfollow", role: .destructive) { app.social.unfollow(person); dismiss() } } message: { Text("Your saved playlists stay on this phone.") }
+    }
+}
+
+struct FriendsSettingsView: View {
+    @Environment(AppModel.self) private var app
+    @AppStorage("socialAbout") private var about = ""
     @State private var relays = ""
     @State private var message: String?
     var body: some View {
         AppForm {
-            Section("Sharing") {
-                Toggle("Connect with friends", isOn: Binding(get: { app.social.enabled }, set: { app.social.configure(enabled: $0, discovery: app.social.discovery) }))
-                Text("Friends connect through public relays. Public profiles and public playlists can be read by anyone. Direct shares are encrypted. Your audio files stay on your device.")
-                if app.social.enabled { Text("\(app.social.connected) relays connected · \(app.social.pending) messages waiting") }
-                if !app.social.publicKey.isEmpty {
-                    ShareLink("Share your friend code", item: SocialLink(type: "person", owner: app.social.publicKey).url)
-                }
-            }
-            Section { NavigationLink("Rooms — listen together") { RoomsView() } }
-            Section { NavigationLink("Create a shared playlist or mix") { CreateSharedPlaylistView() } }
-            Section("Connection services") {
-                TextField("Relay addresses, one per line", text: $relays, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Save relay addresses") {
-                    let addresses = relays.split(whereSeparator: \.isWhitespace).map(String.init)
-                    if !addresses.isEmpty && addresses.count <= 4 && addresses.allSatisfy({ URLComponents(string: $0)?.scheme == "wss" }) { app.social.configure(enabled: app.social.enabled, discovery: app.social.discovery, relays: addresses); message = "Connection services saved." }
-                    else { message = "Enter one to four secure wss:// relay addresses." }
-                }
-            }
-            Section("Follow a friend") {
-                TextField("Friend code or Spitify link", text: $friendCode).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button("Follow") { run { try app.social.follow(friendCode); friendCode = "" } }.disabled(friendCode.isEmpty)
-            }
-            Section("Your public profile") {
-                TextField("Name", text: $name)
+            Section("Your profile") {
+                NavigationLink("Change name or photo") { ProfileView() }
                 TextField("About you", text: $about, axis: .vertical)
-                Button("Publish profile") { Task { do { try await app.social.publishProfile(name: name, about: about); message = "Profile published." } catch { message = error.localizedDescription } } }.disabled(!app.social.enabled)
+                Toggle("Public profile", isOn: Binding(get: { app.social.publicProfile }, set: { app.social.setPublicProfile($0) }))
+                Text(app.social.publicProfile ? "Anyone with your code can see your name, photo and bio. Changes share automatically." : "Only people you follow receive your name, photo and bio. A private notice replaces your public profile. Copies already saved elsewhere may remain.").text(.caption)
+            }
+            Section("Connection") {
+                Toggle("Connect with friends", isOn: Binding(get: { app.social.enabled }, set: { app.social.configure(enabled: $0, discovery: app.social.discovery) }))
+                Text(app.social.enabled ? "\(app.social.connected) connections · \(app.social.pending) updates waiting" : "Sharing is paused. Your changes stay saved here.")
                 Toggle("Discover public profiles", isOn: Binding(get: { app.social.discovery }, set: { app.social.configure(enabled: app.social.enabled, discovery: $0) }))
             }
-            Section("Following") {
-                ForEach(app.social.state.following.sorted(), id: \.self) { id in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(app.social.state.profiles[id]?.name ?? "Friend " + id.prefix(8))
-                            if let about = app.social.state.profiles[id]?.about, !about.isEmpty { Text(about).text(.caption) }
-                        }
-                        Spacer()
-                        Button("Unfollow", role: .destructive) { app.social.unfollow(id) }
-                    }
+            Section { DisclosureGroup("Advanced connection settings") {
+                TextField("Relay addresses", text: $relays, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Save connections") {
+                    let addresses = relays.split(whereSeparator: \.isWhitespace).map(String.init)
+                    if !addresses.isEmpty && addresses.count <= 4 && addresses.allSatisfy({ URLComponents(string: $0)?.scheme == "wss" }) { app.social.configure(enabled: app.social.enabled, discovery: app.social.discovery, relays: addresses); message = "Connections saved." }
+                    else { message = "Enter one to four wss:// addresses." }
                 }
-            }
-            if app.social.discovery {
-                Section("Public profiles") {
-                    ForEach(app.social.state.profiles.values.filter { $0.id != app.social.publicKey && !app.social.state.following.contains($0.id) }.sorted { $0.name < $1.name }) { profile in
-                        HStack { Text(profile.name); Spacer(); Button("Follow") { run { try app.social.follow(profile.id) } } }
-                    }
-                }
-            }
-            if let message { Section { Text(message) } }
-            if let message = app.social.message { Section { Text(message) } }
-        }.navigationTitle("Friends")
-        .task {
-            run { try app.social.prepare() }
-            relays = app.social.relayAddresses.joined(separator: "\n")
-            name = app.social.state.profiles[app.social.publicKey]?.name ?? ""
-            about = app.social.state.profiles[app.social.publicKey]?.about ?? ""
-        }
+            } }
+            if let message { Text(message) }
+            if let message = app.social.message { Text(message) }
+        }.navigationTitle("Friends settings").onAppear { relays = app.social.relayAddresses.joined(separator: "\n") }
+            .task(id: about) { do { try await Task.sleep(for: .milliseconds(650)); await app.social.syncProfile() } catch {} }
     }
-    private func run(_ action: () throws -> Void) { do { try action() } catch { message = error.localizedDescription } }
+}
+
+struct FriendCodeView: View {
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        VStack(spacing: 24) {
+            Text(app.profile.name).text(.headlineL)
+            if let image = FriendPictureCode.make(SocialLink(type: "person", owner: app.social.publicKey).url.absoluteString) {
+                Image(uiImage: image).interpolation(.none).resizable().scaledToFit().frame(maxWidth: 300)
+                ShareLink(item: Image(uiImage: image), preview: SharePreview("Spitify friend code", image: Image(uiImage: image))) { Label("Share picture code", systemImage: "square.and.arrow.up") }.buttonStyle(.borderedProminent)
+            }
+            Text("Your friend can import this image in Friends → Add friend.").multilineTextAlignment(.center)
+        }.padding(24).navigationTitle("Your friend code")
+    }
+}
+
+struct AddFriendView: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var code = ""
+    @State private var photo: PhotosPickerItem?
+    @State private var message: String?
+    var body: some View {
+        AppForm {
+            Section { PhotosPicker(selection: $photo, matching: .images) { Label("Import friend code image", systemImage: "qrcode") } }
+            Section("Or paste a link") { TextField("Friend code or Spitify link", text: $code).textInputAutocapitalization(.never).autocorrectionDisabled(); Button("Add friend") { follow() }.disabled(code.isEmpty) }
+            if let message { Text(message) }
+        }.navigationTitle("Add friend").toolbar { Button("Cancel") { dismiss() } }
+            .task(id: photo) { guard let photo else { return }; if let data = try? await photo.loadTransferable(type: Data.self), let value = FriendPictureCode.read(data) { code = value; message = "Code found. Tap Add friend to follow." } else { message = "No Spitify friend code found in this image." } }
+    }
+    private func follow() { do { try app.social.follow(code); dismiss() } catch { message = error.localizedDescription } }
+}
+
+enum FriendPictureCode {
+    static func make(_ text: String) -> UIImage? {
+        guard SocialLink.parse(text)?.type == "person" else { return nil }
+        let filter = CIFilter.qrCodeGenerator(); filter.message = Data(text.utf8); filter.correctionLevel = "M"
+        guard let output = filter.outputImage, let cg = CIContext().createCGImage(output.transformed(by: CGAffineTransform(scaleX: 10, y: 10)), from: output.extent.applying(CGAffineTransform(scaleX: 10, y: 10))) else { return nil }
+        let size = CGFloat(cg.width + 80)
+        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { ctx in UIColor.white.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: size, height: size)); UIImage(cgImage: cg).draw(in: CGRect(x: 40, y: 40, width: cg.width, height: cg.height)) }
+    }
+    static func read(_ data: Data) -> String? {
+        let request = VNDetectBarcodesRequest(); request.symbologies = [.qr]
+        try? VNImageRequestHandler(data: data).perform([request])
+        if let value = request.results?.compactMap(\.payloadStringValue).first(where: { SocialLink.parse($0)?.type == "person" }) { return value }
+        guard let image = CIImage(data: data), let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: CIContext(), options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]) else { return nil }
+        return detector.features(in: image).compactMap { ($0 as? CIQRCodeFeature)?.messageString }.first { SocialLink.parse($0)?.type == "person" }
+    }
 }
 
 struct PlaylistSharingView: View {

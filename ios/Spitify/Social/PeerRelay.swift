@@ -9,10 +9,14 @@ enum PeerIdentity {
         var read = query; read[kSecReturnData as String] = true
         var result: CFTypeRef?
         let status = SecItemCopyMatching(read as CFDictionary, &result)
-        if status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) { return try Keys.parse(secretKey: value) }
+        if status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) {
+            // Encrypted device backups may restore the same friend identity.
+            SecItemUpdate(query as CFDictionary, [kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock] as CFDictionary)
+            return try Keys.parse(secretKey: value)
+        }
         guard status == errSecItemNotFound else { throw MusicSourceError.message("Your friend identity could not be opened. Unlock the phone and try again.") }
         let keys = Keys.generate()
-        var write = query; write[kSecValueData as String] = Data(keys.secretKey().toHex().utf8); write[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        var write = query; write[kSecValueData as String] = Data(keys.secretKey().toHex().utf8); write[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         guard SecItemAdd(write as CFDictionary, nil) == errSecSuccess else { throw MusicSourceError.message("Your friend identity could not be saved.") }
         return keys
     }
@@ -98,6 +102,7 @@ struct RelayOutgoing: Codable {
     private func subscribe(_ socket: URLSessionWebSocketTask) async throws {
         var request: [Any] = ["REQ", "spitify-v1"]
         let authors = Array(known.union([publicKey])).sorted().prefix(129)
+        request.append(["kinds": [30078], "authors": Array(authors), "#d": ["spitify:v1:profile"], "limit": 129] as [String: Any])
         request.append(["kinds": [30078], "authors": Array(authors), "#t": ["spitify"], "limit": 500] as [String: Any])
         request.append(["kinds": [30078], "#p": [publicKey], "#t": ["spitify"], "limit": 500] as [String: Any])
         for link in requestedPlaylists.values {
@@ -121,7 +126,9 @@ struct RelayOutgoing: Codable {
         let data = try JSONEncoder().encode(packet)
         guard data.count <= 1_000_000 else { throw MusicSourceError.message("This share is too large. Try a smaller playlist.") }
         let transfer = UUID().uuidString.lowercased(); let digest = SocialRules.hash(data)
-        let chunks = stride(from: 0, to: data.count, by: 9_000).map { data.subdata(in: $0..<min($0 + 9_000, data.count)) }
+        let chunkSize = logical == "profile" ? 36_000 : 9_000
+        guard logical != "profile" || data.count <= chunkSize else { throw MusicSourceError.message("Your profile photo is too large.") }
+        let chunks = stride(from: 0, to: data.count, by: chunkSize).map { data.subdata(in: $0..<min($0 + chunkSize, data.count)) }
         let prefix = "\(logical):\(recipient ?? "public")"
         guard outgoing.filter({ $0.logical != prefix }).count + chunks.count <= 1_000 else { throw MusicSourceError.message("There are many shares waiting to send. Connect before adding more.") }
         let created = max(UInt64(Date().timeIntervalSince1970), (stamp[prefix] ?? 0) + 1)
@@ -131,7 +138,7 @@ struct RelayOutgoing: Codable {
             let contentPacket = chunks.count == 1 ? packet : try SocialPacket.make("part", SocialPart(transfer: transfer, index: index, total: chunks.count, digest: digest, content: bytes))
             let raw = String(data: try JSONEncoder().encode(contentPacket), encoding: .utf8)!
             let content = try recipient.map { try keys.nip44Encrypt(publicKey: PublicKey.parse(publicKey: $0), content: raw) } ?? raw
-            let identifier = logical == "profile" ? "spitify:v1:profile" : "spitify:v1:\(prefix):\(index)"
+            let identifier = logical == "profile" && recipient == nil ? "spitify:v1:profile" : "spitify:v1:\(prefix):\(index)"
             var tags = [["d", identifier], ["t", "spitify"], ["expiration", String((SocialRules.now + expiresIn) / 1000)]]
             if let recipient { tags.append(["p", recipient]); tags.append(["encrypted", "nip44"]) }
             let event = try EventBuilder(kind: Kind(kind: 30078), content: content)
