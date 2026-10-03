@@ -36,7 +36,7 @@ fun SearchSubtitle(type: String, creator: String, explicit: Boolean = false) {
         if (explicit) Box(Modifier.size(13.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)), contentAlignment = Alignment.Center) {
             Text("E", color = MaterialTheme.colorScheme.surface, fontSize = 9.sp, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
         }
-        Text(type + if (creator.isEmpty()) "" else " · $creator", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(type + if (creator.isEmpty()) "" else " · $creator", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
@@ -128,7 +128,7 @@ fun MixedSearchPanel(query: String) {
         } }
         result.sortedWith(compareByDescending<MixedResult> { it.score }.thenBy { it.title.lowercase() }).take(100)
     }
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (pending > 0) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (failed) TextButton(onClick = { retry += 1 }) { Text("Some results couldn't load. Try again") }
         message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -146,11 +146,11 @@ fun MixedSearchPanel(query: String) {
                         else actions.navigate(if (row.book != null) Routes.book(id) else Routes.show(id))
                     }
                 }
-            }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (row.local != null) Artwork(row.local.artKey, Modifier.size(56.dp), RoundedCornerShape(8.dp))
-                else AsyncImage(row.artwork, null, Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)))
+            }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (row.local != null) Artwork(row.local.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
+                else AsyncImage(row.artwork, null, Modifier.size(50.dp).clip(RoundedCornerShape(6.dp)))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(row.title, color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+                    Text(row.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     SearchSubtitle(row.type, row.creator, row.explicit)
                 }
             }

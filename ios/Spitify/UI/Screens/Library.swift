@@ -25,20 +25,17 @@ struct LibraryView: View {
                         Label(sort.rawValue, systemImage: "arrow.up.arrow.down").text(.label).foregroundStyle(p.text)
                     }
                     Spacer()
-                    ImportButton().scaleEffect(0.85)
+                    ImportButton()
                 }.padding(.horizontal, 16).padding(.bottom, 6)
 
                 if filter == nil || filter == .playlists {
                     ForEach(app.social.playlists, id: \.key) { playlist in
                         NavigationLink { SharedPlaylistView(initial: playlist) } label: {
                             HStack(spacing: 12) {
-                                PlaylistCover(url: playlist.image).frame(width: 60, height: 60)
-                                VStack(alignment: .leading) {
-                                    Text(playlist.name).text(.body).foregroundStyle(p.text)
-                                    Text("Playlist · \(playlist.tracks.count) songs").text(.bodyS).foregroundStyle(p.secondary)
-                                }
+                                PlaylistCover(url: playlist.image).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                                MediaRowText(title: playlist.name, subtitle: "Playlist · \(playlist.tracks.count) songs")
                                 Spacer()
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                     pinned("All Songs", "Pinned • \(songCount(lib.library.songs.count))", "music.note.list", [Color(hex: 0x4B2BD6), Color(hex: 0x9AB8F0)]) { router.go(.smart(.allSongs)) }
@@ -56,10 +53,10 @@ struct LibraryView: View {
                     ForEach(entries) { e in
                         Button { router.go(e.route) } label: {
                             HStack(spacing: 12) {
-                                ArtworkView(e.song, cornerRadius: 4, circle: e.circle).frame(width: 60, height: 60)
-                                VStack(alignment: .leading, spacing: 2) { Text(e.title).text(.body).foregroundStyle(p.text).lineLimit(1); Text(e.subtitle).text(.bodyS).foregroundStyle(p.secondary).lineLimit(1) }
+                                ArtworkView(e.song, cornerRadius: 4, circle: e.circle).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                                MediaRowText(title: e.title, subtitle: e.subtitle)
                                 Spacer()
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+                            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
                         }.buttonStyle(.pressable(0.98))
                     }
                 }
@@ -83,11 +80,11 @@ struct LibraryView: View {
     private func pinned(_ title: String, _ sub: String, _ icon: String, _ colors: [Color], action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing).frame(width: 60, height: 60).clipShape(RoundedRectangle(cornerRadius: 4))
+                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt).clipShape(RoundedRectangle(cornerRadius: 4))
                     .overlay(Image(systemName: icon).font(.system(size: 22, weight: .bold)).foregroundStyle(.white))
-                VStack(alignment: .leading, spacing: 2) { Text(title).text(.body).foregroundStyle(p.text); Text(sub).text(.bodyS).foregroundStyle(p.secondary) }
+                MediaRowText(title: title, subtitle: sub)
                 Spacer()
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
         }.buttonStyle(.pressable(0.98))
     }
 

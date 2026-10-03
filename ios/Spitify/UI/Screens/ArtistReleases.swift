@@ -4,10 +4,10 @@ struct ArtistReleasesView: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
     var body: some View {
-        List {
+        AppList {
             Section {
                 Toggle("Release notifications", isOn: Binding(get: { app.artistFollows.notifications }, set: { enabled in Task { await app.artistFollows.setNotifications(enabled) } }))
-                Text("Spitify checks followed artists when you open the app. New releases appear here; alerts need notification permission.").font(.caption).foregroundStyle(.secondary)
+                Text("Spitify checks followed artists when you open the app. New releases appear here; alerts need notification permission.").text(.caption).foregroundStyle(.secondary)
             }
             if app.artistFollows.artists.isEmpty { Text("Follow an artist from search to see their releases here.") }
             Section("Following") {
@@ -17,10 +17,10 @@ struct ArtistReleasesView: View {
                 ForEach(app.artistFollows.releases) { notice in
                     Button { router.go(.catalogAlbum(notice.album)) } label: {
                         HStack(spacing: 12) {
-                            PlaylistCover(url: notice.album.artwork).frame(width: 56, height: 56)
-                            VStack(alignment: .leading) { Text(notice.album.title).foregroundStyle(.primary); SearchSubtitle(type: "Album", creator: notice.artist.name, explicit: notice.album.explicit == true) }
+                            PlaylistCover(url: notice.album.artwork).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                            MediaRowText(title: notice.album.title, subtitle: "Album · " + notice.artist.name, explicit: notice.album.explicit == true)
                             Spacer(minLength: 0)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4).contentShape(Rectangle())
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }
             }

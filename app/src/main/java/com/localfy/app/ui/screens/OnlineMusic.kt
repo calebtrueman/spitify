@@ -1,5 +1,7 @@
 package com.localfy.app.ui.screens
 
+import com.localfy.app.ui.components.MediaRow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -90,7 +92,7 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
         }
         return
     }
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable {
             actions.navigate(Routes.catalogSong(track))
@@ -99,8 +101,8 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
             if (trackNumber != null) Text(trackNumber.toString(), Modifier.width(26.dp), color = textColor)
             else SearchCover("track:${track.id}", track.album.ifBlank { track.title }, track.artist, track.artwork)
             Column(Modifier.weight(1f)) {
-                Text(track.title, style = MaterialTheme.typography.titleSmall, color = textColor)
-                Text(track.artist, style = MaterialTheme.typography.bodySmall, color = textColor)
+                Text(track.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = textColor, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = com.localfy.app.ui.theme.LocalfyColors.TextSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
         IconButton(enabled = !complete && !preparing, onClick = {
@@ -206,5 +208,5 @@ private fun SearchCover(id: String, album: String, artist: String, artwork: Stri
             app.onlineArt.fetch(("search:$artist:$album").hashCode().toLong() - 20_000_000_000L, artist, album)?.toURI()?.toString()
         }
     }
-    Artwork(ArtKey(id.hashCode().toLong(), id.hashCode().toLong(), source), Modifier.size(52.dp), RoundedCornerShape(6.dp))
+    Artwork(ArtKey(id.hashCode().toLong(), id.hashCode().toLong(), source), Modifier.size(50.dp), RoundedCornerShape(6.dp))
 }

@@ -1,5 +1,6 @@
 package com.localfy.app.ui.screens
 
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.Alignment
@@ -83,10 +84,10 @@ private fun SharedTrackChoice(track: SharedTrack, matched: Song? = null, selecte
     }
     val click = if (selected != null && onToggle != null) Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = onToggle) else Modifier
     Row(Modifier.fillMaxWidth().then(click).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        SharedTrackCover(track, matched ?: resolved, Modifier.size(48.dp))
+        SharedTrackCover(track, matched ?: resolved, Modifier.size(50.dp))
         Column(Modifier.weight(1f)) {
-            Text(track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(track.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(track.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (selected != null) Checkbox(selected, null)
     }

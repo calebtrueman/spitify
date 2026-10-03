@@ -1,5 +1,11 @@
 package com.localfy.app.ui.screens
 
+import com.localfy.app.ui.components.*
+import com.localfy.app.ui.theme.LocalfyColors
+import com.localfy.app.ui.art.ArtKey
+import com.localfy.app.ui.art.Artwork
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,9 +33,10 @@ fun ArtistReleasesScreen() {
     val artists = remember(revision) { follows.artists }
     val releases = remember(revision) { follows.releases }
     LaunchedEffect(Unit) { follows.refresh() }
-    LazyColumn(contentPadding = PaddingValues(16.dp, 24.dp, 16.dp, 100.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { TextButton(onClick = { actions.nav.popBackStack() }) { Text("Back") }; Text("New releases", style = MaterialTheme.typography.headlineMedium); Text("Spitify checks followed artists when you open the app."); TextButton(onClick = { scope.launch { follows.refresh() } }) { Text("Refresh") } }
-        item {
+    LazyColumn(contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { PageHeader("New releases", onBack = { actions.nav.popBackStack() }) }
+        insetItem { Text("Spitify checks followed artists when you open the app.", color = LocalfyColors.TextSecondary); TextButton(onClick = { scope.launch { follows.refresh() } }) { Text("Refresh") } }
+        insetItem {
             Row {
                 Text("Release notifications", Modifier.weight(1f))
                 Switch(follows.notifications, { enabled ->
@@ -39,20 +46,15 @@ fun ArtistReleasesScreen() {
             }
             Text("Alerts appear when Spitify checks for releases. They are not instant push alerts.")
         }
-        if (artists.isEmpty()) item { Text("Follow an artist from search to see their releases here.") }
-        item { Text("Following", style = MaterialTheme.typography.titleLarge) }
+        if (artists.isEmpty()) insetItem { Text("Follow an artist from search to see their releases here.") }
+        item { SectionHeader("Following") }
         items(artists, key = { "artist:${it.id}" }) { artist ->
-            Row(Modifier.fillMaxWidth().clickable { actions.navigate(Routes.onlineArtist(artist)) }.padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(artist.artwork, null, Modifier.size(48.dp))
-                Text(artist.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            }
+            MediaRow(artist.name, "Artist", artwork = { Artwork(ArtKey(artist.id.hashCode().toLong(), artist.id.hashCode().toLong(), artist.artwork), it, CircleShape) }, onClick = { actions.navigate(Routes.onlineArtist(artist)) })
         }
-        item { Text("Latest releases", style = MaterialTheme.typography.titleLarge) }
+        item { SectionHeader("Latest releases") }
         items(releases, key = { "${it.artist.id}:${it.album.id}" }) { notice ->
-            Row(Modifier.fillMaxWidth().clickable { actions.navigate(Routes.catalogAlbum(notice.album)) }, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(notice.album.artwork, null, Modifier.size(56.dp)); Column { Text(notice.album.title); SearchSubtitle("Album", notice.artist.name, notice.album.explicit == true) }
-            }
+            MediaRow(notice.album.title, notice.artist.name, artwork = { Artwork(ArtKey(notice.album.id.hashCode().toLong(), notice.album.id.hashCode().toLong(), notice.album.artwork), it, RoundedCornerShape(6.dp)) }, onClick = { actions.navigate(Routes.catalogAlbum(notice.album)) }, subtitleContent = { SearchSubtitle("Album", notice.artist.name, notice.album.explicit == true) })
         }
-        follows.message?.let { item { Text(it) } }
+        follows.message?.let { insetItem { Text(it) } }
     }
 }

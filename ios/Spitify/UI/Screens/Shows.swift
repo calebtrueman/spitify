@@ -102,20 +102,16 @@ struct PodcastsView: View {
         HStack(spacing: 12) {
             Button { openShow(r, follow: false) } label: {
                 HStack(spacing: 12) {
-                    ArtworkView(key: r.feedURL, remote: r.artworkURL, cornerRadius: 8).frame(width: 64, height: 64)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(r.title).text(.titleS).foregroundStyle(p.text).lineLimit(2)
-                        Text([r.author, r.genre].compactMap { $0 }.joined(separator: " • ")).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
-                    }
+                    ArtworkView(key: r.feedURL, remote: r.artworkURL, cornerRadius: 8).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                    MediaRowText(title: r.title, subtitle: [r.author, r.genre].compactMap { $0 }.joined(separator: " • "))
                     Spacer()
                 }.contentShape(Rectangle())
             }.buttonStyle(.pressable(0.98))
             if openingShows.contains(r.id) { ProgressView().accessibilityLabel("Opening show") }
             Button { openShow(r, follow: true) } label: {
-                Text(following ? "Following" : "Follow").text(.label).foregroundStyle(following ? p.text : p.onAccent)
-                    .padding(.horizontal, 14).padding(.vertical, 7).background(following ? p.tint : p.accent, in: Capsule()).frame(minHeight: 44)
-            }.buttonStyle(.plain)
-        }.disabled(openingShows.contains(r.id)).padding(.horizontal, 16).padding(.vertical, 6)
+                IconControlLabel(symbol: following ? "checkmark.circle.fill" : "plus.circle", selected: following)
+            }.buttonStyle(.plain).accessibilityLabel(following ? "Following" : "Follow show")
+        }.disabled(openingShows.contains(r.id)).padding(.horizontal, MediaLayout.inset).padding(.vertical, MediaLayout.rowPadding)
             if failedShows.contains(r.id) { Text("Couldn't open this show. Tap to try again.").text(.caption).foregroundStyle(p.secondary).padding(.horizontal, 16).padding(.bottom, 8) }
         }
     }
@@ -159,19 +155,24 @@ struct EpisodeRow: View {
         let dur = song.durationMs > 0 ? song.durationMs : (r?.durationMs ?? 0)
         let meta = [relative(episode?.published), r?.played == true ? "Played" : (r.map { $0.positionMs > 0 && dur > 0 } == true ? "\((dur - r!.positionMs).formattedLong) left" : (dur > 0 ? dur.formattedLong : ""))].filter { !$0.isEmpty }.joined(separator: " • ")
         let play = onPlay ?? { app.player.playEpisode(song) }
-        Button(action: play) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: play) {
+                VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 12) {
-                    if showArt { ArtworkView(song, cornerRadius: 8).frame(width: 56, height: 56) }
+                    if showArt { ArtworkView(song, cornerRadius: 8).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
                     VStack(alignment: .leading, spacing: 2) {
-                        if showArt { Text(song.album).text(.labelS).foregroundStyle(p.secondary).lineLimit(1) }
-                        Text(song.title).text(.titleS).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                        if showArt { Text(song.album).text(.bodyS).foregroundStyle(p.secondary).lineLimit(2) }
                     }
+                    Spacer(minLength: 0)
                 }
                 if let sum = episode?.summary, !sum.isEmpty { Text(sum).text(.caption).foregroundStyle(p.secondary).lineLimit(2).multilineTextAlignment(.leading) }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.pressable(0.99))
                 HStack(spacing: 4) {
-                    Text(meta).text(.labelS).foregroundStyle(p.secondary)
-                    Spacer()
+                    Text(meta).text(.caption).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
                     if let show, let episode {
                         if episode.localFile != nil {
                             Button { app.shows.deleteDownload(episode, in: show) } label: { Image(systemName: "arrow.down.circle.fill").foregroundStyle(p.accent).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Remove download")
@@ -184,14 +185,12 @@ struct EpisodeRow: View {
                     Button { app.shows.setPlayed(song.resumeKey, r?.played != true, dur) } label: {
                         Image(systemName: r?.played == true ? "checkmark.circle.fill" : "circle").foregroundStyle(r?.played == true ? p.accent : p.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
                     }.accessibilityLabel(r?.played == true ? "Mark unplayed" : "Mark played")
-                    Button { if isCurrent { app.player.toggle() } else { play() } } label: {
-                        Image(systemName: isCurrent && app.player.isPlaying ? "pause.fill" : "play.fill").foregroundStyle(p.background).frame(width: 38, height: 38).background(p.text, in: Circle()).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel(isCurrent && app.player.isPlaying ? "Pause episode" : "Play episode")
+                    PlayButton(playing: isCurrent && app.player.isPlaying, size: 44) { if isCurrent { app.player.toggle() } else { play() } }
+                        .accessibilityLabel(isCurrent && app.player.isPlaying ? "Pause episode" : "Play episode")
                 }.font(.system(size: 21))
                 if let r, !r.played, r.positionMs > 0, dur > 0 { ProgressView(value: Double(r.positionMs) / Double(dur)).tint(p.accent) }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 10).contentShape(Rectangle())
-        }.buttonStyle(.pressable(0.99))
+        }
+        .padding(.horizontal, MediaLayout.inset).padding(.vertical, 12).contentShape(Rectangle())
     }
 }
 
@@ -200,7 +199,6 @@ struct ShowView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
-    @State private var color = Color(hex: 0x2A2A2E)
     @State private var filter = 0
     @State private var expanded = false
     var body: some View {
@@ -212,34 +210,35 @@ struct ShowView: View {
                 default: return true
                 }
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .bottom, spacing: 16) {
-                        ArtworkView(key: show.id, remote: show.artworkURL, cornerRadius: 12).frame(width: 140, height: 140).shadow(radius: 16)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("PODCAST").text(.labelS).foregroundStyle(p.secondary)
-                            Text(show.title).text(.headlineS).foregroundStyle(p.text).lineLimit(3)
-                            Text(show.author).text(.bodyS).foregroundStyle(p.secondary).lineLimit(1)
-                        }
-                    }.padding(16)
-                    HStack {
-                        Button { app.shows.setFollowing(show, !show.following) } label: { Text(show.following ? "Following" : "Follow").text(.label).foregroundStyle(show.following ? p.text : p.onAccent).padding(.horizontal, 16).padding(.vertical, 8).background(show.following ? p.tint : p.accent, in: Capsule()) }
-                        Spacer()
-                        if let latest = app.shows.songs(show).first {
-                            Button { app.player.playEpisode(latest) } label: { Label("Latest episode", systemImage: "play.fill").text(.label).foregroundStyle(p.onAccent).padding(.horizontal, 16).padding(.vertical, 10).background(p.accent, in: Capsule()) }
-                        }
-                    }.padding(.horizontal, 16)
-                    if !show.summary.isEmpty {
-                        Text(show.summary).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 3).padding(16).onTapGesture { withAnimation { expanded.toggle() } }
+            CollectionLayout(title: show.title, subtitle: show.author,
+                             metadata: "Podcast • \(show.episodes.count) episodes", artKey: show.id, remoteArt: show.artworkURL) {
+                ArtworkView(key: show.id, remote: show.artworkURL, cornerRadius: 8)
+            } actions: {
+                CollectionActionBar(enabled: !show.episodes.isEmpty, playLabel: "Play latest episode", play: {
+                    if let latest = app.shows.songs(show).first { app.player.playEpisode(latest) }
+                }) {
+                    IconControl(title: show.following ? "Unfollow podcast" : "Follow podcast",
+                                symbol: show.following ? "checkmark.circle.fill" : "plus.circle", selected: show.following) {
+                        app.shows.setFollowing(show, !show.following)
                     }
-                    ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(Array(["All", "Unplayed", "Downloaded"].enumerated()), id: \.offset) { i, t in Pill(title: t, selected: filter == i) { filter = i } } }.padding(.horizontal, 16) }
-                    Text("\(songs.count) episodes").text(.labelS).foregroundStyle(p.secondary).padding(16)
-                    LazyVStack(spacing: 0) { ForEach(songs) { s in EpisodeRow(show: show, song: s, showArt: false); Divider().opacity(0.3) } }
-                }.padding(.bottom, 24)
+                    Text(show.following ? "Following" : "Follow").text(.label).foregroundStyle(p.secondary)
+                }
+            } content: {
+                if !show.summary.isEmpty {
+                    Text(show.summary).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 3)
+                        .padding(.horizontal, MediaLayout.inset).padding(.bottom, 16).onTapGesture { withAnimation { expanded.toggle() } }
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) { ForEach(Array(["All", "Unplayed", "Downloaded"].enumerated()), id: \.offset) { i, title in
+                        Pill(title: title, selected: filter == i) { filter = i }
+                    } }.padding(.horizontal, MediaLayout.inset)
+                }
+                SectionHeader(title: "Episodes", eyebrow: "\(songs.count) available")
+                LazyVStack(spacing: 0) { ForEach(songs) { song in
+                    EpisodeRow(show: show, song: song, showArt: false)
+                    Divider().overlay(p.tint).padding(.horizontal, MediaLayout.inset)
+                } }
             }
-            .background(LinearGradient(colors: [p.isDark ? color : color.mix(.white, 0.55), p.background], startPoint: .top, endPoint: .center).ignoresSafeArea())
-            .artColor(key: show.id, remote: show.artworkURL, into: $color)
-            .navigationBarTitleDisplayMode(.inline)
         } else { EmptyState(title: "Show not found", message: "Find this show again in Podcasts.", icon: "dot.radiowaves.left.and.right") }
     }
 }
@@ -373,17 +372,16 @@ struct BookResultRow: View {
             HStack(spacing: 12) {
                 ArtworkView(key: r.id, remote: r.coverURL, cornerRadius: 6).frame(width: 56, height: 78)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(r.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).multilineTextAlignment(.leading)
-                    Text(r.author).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
+                    Text(r.title).text(.body).fontWeight(.semibold).foregroundStyle(p.text).lineLimit(2).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
+                    Text(r.author).text(.bodyS).foregroundStyle(p.secondary).lineLimit(2)
                     Text([r.seconds > 0 ? (r.seconds * 1000).formattedLong : nil, r.language.isEmpty ? nil : r.language].compactMap { $0 }.joined(separator: " · ")).text(.labelS).foregroundStyle(p.tertiary)
                     if failed { Text("Couldn't add this book. Tap to try again.").text(.caption).foregroundStyle(p.secondary).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer()
                 if busy { ProgressView() } else {
-                    Text(owned != nil ? "In library" : "Add").text(.label).foregroundStyle(owned != nil ? p.text : p.onAccent)
-                        .padding(.horizontal, 14).padding(.vertical, 7).background(owned != nil ? p.tint : p.accent, in: Capsule())
+                    IconControlLabel(symbol: owned != nil ? "checkmark.circle.fill" : "plus.circle", selected: owned != nil).accessibilityLabel(owned != nil ? "In library" : "Add audiobook")
                 }
-            }.padding(.horizontal, 16).padding(.vertical, 6).contentShape(Rectangle())
+            }.padding(.horizontal, MediaLayout.inset).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
         }.buttonStyle(.pressable(0.98)).disabled(busy)
     }
 }
@@ -399,7 +397,7 @@ struct ContinueBookRow: View {
             HStack(spacing: 12) {
                 ArtworkView(key: book.artKey, remote: book.artURL, cornerRadius: 6).frame(width: 56, height: 78)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(book.title).text(.titleS).foregroundStyle(p.text).lineLimit(1)
+                    Text(book.title).text(.body).fontWeight(.semibold).foregroundStyle(p.text).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Text("Chapter \(pr.index + 1) of \(book.chapters.count) · \(pr.leftMs.formattedLong) left").text(.caption).foregroundStyle(p.secondary)
                     ProgressView(value: pr.fraction).tint(p.accent)
                 }
@@ -416,48 +414,55 @@ struct BookView: View {
     @Environment(Router.self) private var router
     @Environment(\.palette) private var p
     @Environment(\.dismiss) private var dismiss
-    @State private var color = Color(hex: 0x2A2A2E)
     @State private var expanded = false
 
     var body: some View {
         if let book = bookItems(app).first(where: { $0.id == (showId.map { "lv" + $0 } ?? "lb" + (localKey ?? "")) }) {
             let pr = bookProgress(app, book.chapters)
-            ScrollView {
-                VStack(spacing: 10) {
-                    ArtworkView(key: book.artKey, remote: book.artURL, cornerRadius: 8).frame(width: 180, height: 250).shadow(color: .black.opacity(0.5), radius: 24, y: 12).padding(.top, 10)
-                    Text(book.title).text(.headlineS).foregroundStyle(p.text).multilineTextAlignment(.center).padding(.horizontal, 24)
-                    Text(book.author).text(.body).foregroundStyle(p.secondary)
-                    Text("\(book.chapters.count) chapters · \(book.chapters.reduce(Int64(0)) { $0 + $1.durationMs }.formattedLong)").text(.caption).foregroundStyle(p.tertiary)
-                    if pr.started {
-                        ProgressView(value: pr.fraction).tint(p.accent).frame(width: 220)
-                        Text("\(Int(pr.fraction * 100))% · \(pr.leftMs.formattedLong) left").text(.labelS).foregroundStyle(p.secondary)
-                    }
-                    HStack(spacing: 14) {
-                        Button { app.player.playBook(book.chapters, from: pr.index, title: book.title) } label: {
-                            Label(pr.started ? "Continue · Ch. \(pr.index + 1)" : "Start listening", systemImage: "play.fill").text(.label).foregroundStyle(p.onAccent)
-                                .padding(.horizontal, 24).padding(.vertical, 12).background(p.accent, in: Capsule())
-                        }.buttonStyle(.pressable)
-                        if let show = book.show, show.episodes.contains(where: { $0.localFile == nil }) {
-                            Button { show.episodes.filter { $0.localFile == nil }.forEach { app.shows.download($0, in: show) } } label: { Image(systemName: "arrow.down.circle").font(.system(size: 26)).foregroundStyle(p.text).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Download whole book")
-                        }
-                        if book.show == nil { Button { router.editing = (book.chapters, true) } label: { Image(systemName: "pencil.circle").font(.system(size: 26)).foregroundStyle(p.text).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Edit book info and cover") }
-                    }
-                    if let s = book.show?.summary, !s.isEmpty {
-                        Text(s).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 4).padding(20).onTapGesture { withAnimation { expanded.toggle() } }
-                    }
-                    if let show = book.show { Button("Remove from library") { dismiss(); app.shows.remove(show) }.text(.label).foregroundStyle(p.secondary) }
-                    SectionHeader(title: "Chapters")
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(book.chapters.enumerated()), id: \.element.id) { i, c in
-                            EpisodeRow(show: book.show, song: c, showArt: false) { app.player.playBook(book.chapters, from: i, title: book.title) }
-                            Divider().opacity(0.3)
+            CollectionLayout(title: book.title, subtitle: book.author,
+                             metadata: "Audiobook • \(book.chapters.count) chapters · \(book.chapters.reduce(Int64(0)) { $0 + $1.durationMs }.formattedLong)",
+                             artKey: book.artKey, remoteArt: book.artURL, portrait: true) {
+                ArtworkView(key: book.artKey, remote: book.artURL, cornerRadius: 8)
+            } actions: {
+                CollectionActionBar(enabled: !book.chapters.isEmpty,
+                                    playLabel: pr.started ? "Continue chapter \(pr.index + 1)" : "Start listening", play: {
+                    app.player.playBook(book.chapters, from: pr.index, title: book.title)
+                }) {
+                    if let show = book.show, show.episodes.contains(where: { $0.localFile == nil }) {
+                        IconControl(title: "Download whole book", symbol: "arrow.down.circle") {
+                            show.episodes.filter { $0.localFile == nil }.forEach { app.shows.download($0, in: show) }
                         }
                     }
-                }.padding(.bottom, 24)
+                    if book.show == nil {
+                        IconControl(title: "Edit book info and cover", symbol: "pencil") { router.editing = (book.chapters, true) }
+                    }
+                }
+            } content: {
+                if pr.started {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Chapter \(pr.index + 1) · \(Int(pr.fraction * 100))% complete · \(pr.leftMs.formattedLong) left")
+                            .text(.caption).foregroundStyle(p.secondary)
+                        ProgressView(value: pr.fraction).tint(p.accent)
+                    }.padding(.horizontal, MediaLayout.inset).padding(.bottom, 16)
+                }
+                if let summary = book.show?.summary, !summary.isEmpty {
+                    Text(summary).text(.bodyS).foregroundStyle(p.secondary).lineLimit(expanded ? nil : 4)
+                        .padding(.horizontal, MediaLayout.inset).padding(.bottom, 12).onTapGesture { withAnimation { expanded.toggle() } }
+                }
+                SectionHeader(title: "Chapters")
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(book.chapters.enumerated()), id: \.element.id) { i, chapter in
+                        EpisodeRow(show: book.show, song: chapter, showArt: false) { app.player.playBook(book.chapters, from: i, title: book.title) }
+                        Divider().overlay(p.tint).padding(.horizontal, MediaLayout.inset)
+                    }
+                }
             }
-            .background(LinearGradient(colors: [p.isDark ? color : color.mix(.white, 0.55), p.background], startPoint: .top, endPoint: .center).ignoresSafeArea())
-            .artColor(key: book.artKey, remote: book.artURL, into: $color)
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let show = book.show {
+                    Menu { Button("Remove from library", systemImage: "trash", role: .destructive) { dismiss(); app.shows.remove(show) } }
+                    label: { IconControlLabel(symbol: "ellipsis") }.accessibilityLabel("Book options")
+                }
+            }
         } else { EmptyState(title: "Book not found", message: "It may have been removed.", icon: "book") }
     }
 }

@@ -3,6 +3,12 @@ package com.localfy.app.ui.screens
 import android.text.format.DateUtils
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import com.localfy.app.ui.components.BigPlayButton
+import com.localfy.app.ui.components.PageHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,29 +131,16 @@ fun PodcastsScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
         item {
-            Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Podcasts", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+            PageHeader("Podcasts") {
                 if (refreshing) CircularProgressIndicator(Modifier.size(20.dp).padding(end = 4.dp), strokeWidth = 2.dp)
                 else IconButton(onClick = { app.podcasts.refreshAll() }) { Icon(Icons.Rounded.Refresh, "Check for new episodes") }
                 IconButton(onClick = { addRss = true }) { Icon(Icons.Rounded.RssFeed, "Add by RSS link") }
             }
         }
         item {
-            TextField(
-                value = query,
-                onValueChange = { query = it; search.clear() },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                placeholder = { Text("Search all podcasts") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; search.clear() }) { Icon(Icons.Rounded.Close, "Clear") } },
-                singleLine = true,
-                shape = RoundedCornerShape(10.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { if (query.isNotBlank()) runSearch(query) }),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = LocalfyColors.SurfaceHigh, unfocusedContainerColor = LocalfyColors.SurfaceHigh,
-                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                ),
+            com.localfy.app.ui.components.MediaSearchField(
+                value = query, onValueChange = { query = it; search.clear() },
+                placeholder = "Search all podcasts", onSearch = { if (query.isNotBlank()) runSearch(query) },
             )
         }
         if (searching) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
@@ -267,7 +260,7 @@ private fun SearchResultRow(r: PodcastSearchResult, subscribed: Boolean) {
         Artwork(ArtKey(r.feedUrl.hashCode().toLong(), r.feedUrl.hashCode().toLong(), r.artworkUrl), Modifier.size(64.dp), RoundedCornerShape(8.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(r.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(r.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(r.author, r.genre).joinToString(" • "), style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
@@ -329,7 +322,7 @@ fun EpisodeRow(song: Song, episode: EpisodeEntity?, showArt: Boolean, onPlay: ((
             }
             Column(Modifier.weight(1f)) {
                 if (showArt) Text(song.album, style = MaterialTheme.typography.labelMedium, color = LocalfyColors.TextSecondary, maxLines = 1)
-                Text(song.title, style = MaterialTheme.typography.titleSmall, color = if (isCurrent) MaterialTheme.colorScheme.primary else LocalfyColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(song.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = if (isCurrent) MaterialTheme.colorScheme.primary else LocalfyColors.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         episode?.description?.takeIf { it.isNotBlank() }?.let {
@@ -359,17 +352,7 @@ fun EpisodeRow(song: Song, episode: EpisodeEntity?, showArt: Boolean, onPlay: ((
                 )
             }
             IconButton(onClick = { app.openSongMenu(song, SongMenuExtras()) }) { Icon(Icons.Rounded.MoreVert, "More", tint = LocalfyColors.TextSecondary) }
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(LocalfyColors.TextPrimary)
-                    .pressable { if (isCurrent) app.player.togglePlay() else play() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    if (isCurrent && player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    if (isCurrent && player.isPlaying) "Pause" else "Play",
-                    tint = LocalfyColors.Background,
-                )
-            }
+            BigPlayButton(playing = isCurrent && player.isPlaying, onClick = { if (isCurrent) app.player.togglePlay() else play() }, size = 44.dp)
         }
         if (r != null && !r.played && r.positionMs > 0 && dur > 0) {
             Spacer(Modifier.height(6.dp))
@@ -413,6 +396,7 @@ fun LocalShowScreen(name: String) {
     ShowLayout(name, eps.first().artist, "Podcast files stored on this device.", eps.first().artKey, eps.map { null to it }, resume.mapValues { it.value.played }, null, null)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ShowLayout(
     title: String,
@@ -425,8 +409,7 @@ private fun ShowLayout(
     onFollow: (() -> Unit)?,
 ) {
     val app = LocalApp.current
-    val color by rememberArtColor(art)
-    val headerColor = if (LocalPalette.current.isDark) color else lerp(color, Color.White, 0.55f)
+    val player = rememberPlayerState()
     var filter by rememberSaveable { mutableStateOf(EpisodeFilter.All) }
     var newestFirst by rememberSaveable { mutableStateOf(true) }
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -440,49 +423,26 @@ private fun ShowLayout(
         }
         .let { list -> if (newestFirst) list else list.reversed() }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
+    val latest = episodes.firstOrNull()?.second
+    CollectionPage(
+        title = title, kindLabel = "Podcast", subtitle = author, summary = "${episodes.size} episodes", art = art,
+        playing = latest != null && player.currentId == latest.id && player.isPlaying, playEnabled = latest != null,
+        onPlay = { latest?.let { if (player.currentId == it.id) app.player.togglePlay() else app.player.playEpisode(it) } },
+        headerActions = {
+            if (following != null && onFollow != null) IconButton(onClick = onFollow) {
+                Icon(if (following) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, if (following) "Unfollow podcast" else "Follow podcast", tint = if (following) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary)
+            }
+        },
+    ) {
+        if (description.isNotBlank()) item {
+            Text(description, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary,
+                maxLines = if (expanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).animateContentSize().pressable(pressedScale = 1f) { expanded = !expanded })
+        }
         item {
-            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(headerColor, LocalfyColors.Background))).statusBarsPadding()) {
-                IconButton(onClick = { app.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.Bottom) {
-                    Artwork(art, Modifier.size(140.dp).shadow(20.dp, RoundedCornerShape(12.dp)), RoundedCornerShape(12.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("PODCAST", style = MaterialTheme.typography.labelSmall, color = LocalfyColors.TextSecondary)
-                        Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Text(author, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, maxLines = 1)
-                    }
-                }
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (following != null && onFollow != null) FollowButton(following, onFollow)
-                    Spacer(Modifier.weight(1f))
-                    episodes.firstOrNull()?.second?.let { latest ->
-                        Row(
-                            Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary).pressable { app.player.playEpisode(latest) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Rounded.PlayArrow, null, tint = LocalPalette.current.onBrand)
-                            Spacer(Modifier.width(4.dp))
-                            Text("Latest episode", style = MaterialTheme.typography.labelLarge, color = LocalPalette.current.onBrand)
-                        }
-                    }
-                }
-                if (description.isNotBlank()) {
-                    Text(
-                        description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalfyColors.TextSecondary,
-                        maxLines = if (expanded) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 16.dp).animateContentSize().pressable(pressedScale = 1f) { expanded = !expanded },
-                    )
-                }
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    EpisodeFilter.entries.forEach { f -> Pill(f.label, filter == f, { filter = f }) }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { newestFirst = !newestFirst }) { Text(if (newestFirst) "Newest" else "Oldest", color = LocalfyColors.TextPrimary) }
-                }
+            FlowRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                EpisodeFilter.entries.forEach { f -> Pill(f.label, filter == f, { filter = f }, modifier = Modifier.align(Alignment.CenterVertically)) }
+                TextButton(onClick = { newestFirst = !newestFirst }) { Text(if (newestFirst) "Newest" else "Oldest", color = LocalfyColors.TextPrimary) }
             }
         }
         item { Text("${shown.size} episodes", style = MaterialTheme.typography.labelMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(horizontal = 16.dp)) }

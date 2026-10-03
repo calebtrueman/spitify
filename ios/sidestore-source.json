@@ -31,6 +31,15 @@
       },
       "versions": [
         {
+          "version": "1.0.17",
+          "buildVersion": "21",
+          "date": "2026-10-03T04:56:19Z",
+          "localizedDescription": "Albums, playlists, artists, podcasts and books now share matching headers, spacing, rows and controls. Page titles, search fields, forms and colours follow the chosen theme. Includes the earlier video and playback fixes.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.17/Spitify-1.0.17-unsigned.ipa",
+          "size": 92997649,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.16",
           "buildVersion": "20",
           "date": "2026-10-03T04:08:00Z",

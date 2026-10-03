@@ -1,6 +1,8 @@
 package com.localfy.app.ui.components
 
 import android.text.format.Formatter
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,11 +81,11 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
         containerColor = LocalfyColors.SurfaceHigh,
         contentColor = LocalfyColors.TextPrimary,
     ) {
-        Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
+        Column(Modifier.navigationBarsPadding().verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(song.artKey, Modifier.size(52.dp), RoundedCornerShape(4.dp))
+                Artwork(song.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
                 Spacer(Modifier.width(12.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(song.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(song.artist, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, maxLines = 1)
                 }
@@ -206,7 +208,7 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
             LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 item {
                     Row(Modifier.fillMaxWidth().clickable { creating = true }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
+                        Icon(Icons.Rounded.Add, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(50.dp))
                         Spacer(Modifier.width(12.dp))
                         Text("New playlist", style = MaterialTheme.typography.bodyLarge)
                     }
@@ -216,11 +218,11 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
                         Modifier.fillMaxWidth().clickable { app.repo.addToPlaylist(p.id, songs.map { it.id }); onDismiss() }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Artwork(p.songs.firstOrNull()?.artKey, Modifier.size(40.dp), RoundedCornerShape(4.dp))
+                        Artwork(p.songs.firstOrNull()?.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
                         Spacer(Modifier.width(12.dp))
-                        Column {
+                        Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(songCount(p.songs.size), style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
+                            Text(songCount(p.songs.size), style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary)
                         }
                     }
                 }

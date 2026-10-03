@@ -309,15 +309,15 @@ fun QuickTile(tile: TileData, modifier: Modifier = Modifier, playing: Boolean = 
 }
 
 @Composable
-fun BigPlayButton(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 56.dp, container: Color = MaterialTheme.colorScheme.primary) {
+fun BigPlayButton(playing: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 56.dp, container: Color = MaterialTheme.colorScheme.primary, enabled: Boolean = true) {
     val haptics = rememberHaptics()
     Box(
         modifier
             .size(size)
-            .shadow(12.dp, CircleShape, spotColor = container)
+            .shadow(if (size < 50.dp) 0.dp else 12.dp, CircleShape, spotColor = container)
             .clip(CircleShape)
-            .background(container)
-            .pressable(pressedScale = 0.9f) { haptics(HapticFeedbackType.ContextClick); onClick() },
+            .background(if (enabled) container else container.copy(alpha = 0.4f))
+            .pressable(pressedScale = if (enabled) 0.9f else 1f) { if (enabled) { haptics(HapticFeedbackType.ContextClick); onClick() } },
         contentAlignment = Alignment.Center,
     ) {
         AnimatedContent(

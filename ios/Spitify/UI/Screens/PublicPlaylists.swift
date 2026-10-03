@@ -17,11 +17,8 @@ struct PublicPlaylistSearch: View {
             ForEach(results) { result in
                 NavigationLink { SpotifyPlaylistPreview(input: result.id) } label: {
                     HStack(spacing: 12) {
-                        PlaylistCover(url: result.image).frame(width: 64, height: 64)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(result.name).text(.body).foregroundStyle(p.text).lineLimit(2)
-                            Text(result.owner).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
-                        }
+                        PlaylistCover(url: result.image).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                        MediaRowText(title: result.name, subtitle: "Playlist · " + result.owner)
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(p.secondary)
                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -55,9 +52,7 @@ struct PublicPlaylistSearch: View {
 struct PlaylistCover: View {
     var url: String?
     var body: some View {
-        AsyncImage(url: url.flatMap(URL.init(string:))) { image in image.resizable().scaledToFill() }
-        placeholder: { Color.gray.opacity(0.2).overlay(Image(systemName: "music.note.list")) }
-            .clipped().clipShape(RoundedRectangle(cornerRadius: 8))
+        ArtworkView(key: url ?? "playlist", remote: url, cornerRadius: 8)
     }
 }
 
@@ -92,25 +87,39 @@ struct SharedPlaylistView: View {
     private var saved: Bool { app.social.state.playlists[initial.key] != nil }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                PlaylistCover(url: playlist.image).frame(width: 220, height: 220).frame(maxWidth: .infinity)
-                Text(playlist.name).text(.title).foregroundStyle(p.text)
-                if !playlist.description.isEmpty { Text(playlist.description).text(.bodyS).foregroundStyle(p.secondary) }
-                Text("\(playlist.tracks.count) songs" + (playlist.sourceName.map { " · From \($0)" } ?? "")).text(.caption).foregroundStyle(p.secondary)
-                if playlist.partial {
-                    Label("Only part of this playlist was available. Saved songs will keep their original titles and order.", systemImage: "exclamationmark.triangle").text(.bodyS).foregroundStyle(p.secondary)
+        CollectionLayout(title: playlist.name,
+                         subtitle: playlist.sourceName.map { "From \($0)" } ?? (playlist.kind == "mix" ? "Shared mix" : "Shared playlist"),
+                         metadata: "\(playlist.kind == "mix" ? "Mix" : "Playlist") • \(songCount(playlist.tracks.count))",
+                         artKey: playlist.image ?? "playlist:" + playlist.key, remoteArt: playlist.image) {
+            PlaylistCover(url: playlist.image)
+        } actions: {
+            CollectionActionBar(playing: app.player.source == playlist.name && app.player.isPlaying,
+                                enabled: !playlist.tracks.isEmpty, shuffle: { play(from: 0, shuffle: true) }, play: {
+                if app.player.source == playlist.name && app.player.hasMedia { app.player.toggle() }
+                else { play(from: 0) }
+            }) {
+                saveButton
+                if saved, playlist.owner == app.social.publicKey {
+                    NavigationLink { PlaylistSharingView(playlist: playlist) } label: { IconControlLabel(symbol: "square.and.arrow.up") }
+                        .accessibilityLabel("Share with friends")
                 }
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { playbackButtons; saveButton }
-                    VStack(alignment: .leading, spacing: 10) { HStack(spacing: 10) { playbackButtons }; saveButton }
-                }.buttonStyle(.bordered)
-                if let message { Text(message).text(.bodyS).foregroundStyle(p.secondary) }
+            }
+        } content: {
+            if !playlist.description.isEmpty {
+                Text(playlist.description).text(.bodyS).foregroundStyle(p.secondary)
+                    .padding(.horizontal, MediaLayout.inset).padding(.bottom, 12)
+            }
+            if playlist.partial {
+                Label("Only part of this playlist was available. Saved songs will keep their original titles and order.", systemImage: "exclamationmark.triangle")
+                    .text(.bodyS).foregroundStyle(p.secondary).padding(.horizontal, MediaLayout.inset).padding(.bottom, 12)
+            }
+            if let message { Text(message).text(.bodyS).foregroundStyle(p.secondary).padding(.horizontal, MediaLayout.inset).padding(.bottom, 12) }
+            LazyVStack(spacing: 0) {
                 ForEach(Array(playlist.tracks.enumerated()), id: \.element.id) { index, track in
                     SharedPlaylistTrackRow(track: track, onPlay: { play(from: index) }, onError: { message = $0 })
                 }
-            }.padding(16)
-        }.background(p.background).navigationTitle(playlist.kind == "mix" ? "Shared Mix" : playlist.kind.capitalized).navigationBarTitleDisplayMode(.inline)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if saved || playlist.owner != app.social.publicKey { Menu {
@@ -132,16 +141,10 @@ struct SharedPlaylistView: View {
 
     }
 
-    @ViewBuilder private var playbackButtons: some View {
-        Button { play(from: 0) } label: { Label("Play", systemImage: "play.fill").frame(minHeight: 30) }
-            .tint(p.accent).disabled(playlist.tracks.isEmpty)
-        Button { play(from: 0, shuffle: true) } label: { Label("Shuffle", systemImage: "shuffle").frame(minHeight: 30) }
-            .disabled(playlist.tracks.isEmpty)
-    }
     private var saveButton: some View {
         Button {
             do { try app.social.save(playlist); SharedSongMatch.prepare(playlist, app: app); message = "Saved in Your Library." } catch { message = error.localizedDescription }
-        } label: { Label(saved ? "Saved" : "Save", systemImage: saved ? "checkmark.circle.fill" : "plus.circle").frame(minHeight: 30) }
+        } label: { IconControlLabel(symbol: saved ? "checkmark.circle.fill" : "plus.circle", selected: saved) }
             .disabled(saved).accessibilityLabel(saved ? "Playlist saved" : "Save playlist")
     }
 
@@ -188,29 +191,25 @@ struct SharedPlaylistTrackRow: View {
     @Environment(\.palette) private var p
     @State private var matched: Song?
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MediaLayout.rowSpacing) {
             Button(action: onPlay) {
                 HStack(spacing: 12) {
-                    SharedTrackCover(track: track, matched: matched).frame(width: 52, height: 52)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(track.title).text(.body).fontWeight(.semibold).foregroundStyle(p.text).lineLimit(2)
-                        Text(track.artist).text(.bodyS).foregroundStyle(p.secondary).lineLimit(2)
-                    }.multilineTextAlignment(.leading)
-                    Spacer(minLength: 0)
-                }.frame(maxWidth: .infinity, minHeight: 60, alignment: .leading).contentShape(Rectangle())
+                    SharedTrackCover(track: track, matched: matched).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                    MediaRowText(title: track.title, subtitle: track.artist, highlighted: matched?.id == app.player.current?.id && matched != nil)
+                }.frame(maxWidth: .infinity, minHeight: MediaLayout.rowArt, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain)
             if let matched {
-                SongMenu(song: matched) { Image(systemName: "ellipsis").foregroundStyle(p.secondary).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                SongMenu(song: matched) { IconControlLabel(symbol: "ellipsis") }
                     .accessibilityLabel("More options for \(track.title)")
             } else {
                 Menu {
                     Button("Play", systemImage: "play.fill", action: onPlay)
                     Button("Play next", systemImage: "text.line.first.and.arrowtriangle.forward") { resolve { app.player.playNext([$0]) } }
                     Button("Add to queue", systemImage: "text.line.last.and.arrowtriangle.forward") { resolve { app.player.addToQueue([$0]) } }
-                } label: { Image(systemName: "ellipsis").foregroundStyle(p.secondary).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                } label: { IconControlLabel(symbol: "ellipsis") }
                     .accessibilityLabel("More options for \(track.title)")
             }
-        }.padding(.vertical, 3)
+        }.padding(.horizontal, MediaLayout.inset).padding(.vertical, MediaLayout.rowPadding)
         .task(id: track) { matched = try? await SharedSongMatch.resolve(track, app: app) }
     }
     private func resolve(_ action: @escaping (Song) -> Void) {

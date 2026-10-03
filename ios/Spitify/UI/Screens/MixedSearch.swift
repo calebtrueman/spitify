@@ -4,14 +4,15 @@ struct SearchSubtitle: View {
     var type: String
     var creator: String
     var explicit = false
+    @Environment(\.palette) private var p
     var body: some View {
         HStack(spacing: 5) {
             if explicit {
-                Text("E").font(.system(size: 9, weight: .bold)).foregroundStyle(Color(.systemBackground))
-                    .frame(width: 13, height: 13).background(.secondary, in: RoundedRectangle(cornerRadius: 2))
+                Text("E").font(.system(size: 9, weight: .bold)).foregroundStyle(p.background)
+                    .frame(width: 13, height: 13).background(p.secondary, in: RoundedRectangle(cornerRadius: 2))
                     .accessibilityLabel("Explicit")
             }
-            Text(type + (creator.isEmpty ? "" : " · " + creator)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(type + (creator.isEmpty ? "" : " · " + creator)).text(.bodyS).foregroundStyle(p.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -38,6 +39,7 @@ struct MixedSearchView: View {
     var query: String
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    @Environment(\.palette) private var p
     @State private var music = OnlineSearch()
     @State private var podcasts: [ShowSearchResult] = []
     @State private var books: [BookSearchResult] = []
@@ -49,10 +51,10 @@ struct MixedSearchView: View {
     @State private var retry = 0
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             if pending > 0 { ProgressView("Searching…") }
-            if !failed.isEmpty { Button("Some results couldn't load. Try again") { retry += 1 }.font(.caption) }
-            if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            if !failed.isEmpty { Button("Some results couldn't load. Try again") { retry += 1 }.text(.caption) }
+            if let message { Text(message).text(.caption).foregroundStyle(.secondary) }
             if results.isEmpty && pending == 0 { Text("No matches yet. Try a title, artist, author or show.").foregroundStyle(.secondary) }
             ForEach(results) { result in
                 if let spotify = result.spotify {
@@ -103,15 +105,12 @@ struct MixedSearchView: View {
 
     private func row(_ result: MixedResult) -> some View {
         HStack(spacing: 12) {
-            if let song = result.local { ArtworkView(song).frame(width: 56, height: 56) }
-            else { PlaylistCover(url: result.artwork).frame(width: 56, height: 56) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(result.title).font(.body).foregroundStyle(.primary).lineLimit(2)
-                SearchSubtitle(type: result.type, creator: result.creator, explicit: result.explicit)
-            }
+            if let song = result.local { ArtworkView(song).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
+            else { PlaylistCover(url: result.artwork).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
+            MediaRowText(title: result.title, subtitle: result.type + (result.creator.isEmpty ? "" : " · " + result.creator), explicit: result.explicit)
             Spacer(minLength: 0)
             if opening == result.id { ProgressView() }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()).accessibilityIdentifier("search:" + result.id)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle()).accessibilityIdentifier("search:" + result.id)
     }
 
     private var results: [MixedResult] {
@@ -209,27 +208,45 @@ struct OnlineArtistView: View {
     @State private var moreRequest = 0
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var p
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 14) {
-                PlaylistCover(url: artist.artwork).frame(width: 200, height: 200).frame(maxWidth: .infinity)
-                Button(app.artistFollows.contains(artist.id) ? "Following" : "Follow artist") {
+        CollectionLayout(title: artist.name, subtitle: "Artist", metadata: "", artKey: artist.artwork ?? artist.id, remoteArt: artist.artwork) {
+            ArtworkView(key: artist.artwork ?? artist.id, remote: artist.artwork, circle: true)
+        } actions: {
+            CollectionActionBar(playing: app.player.source == artist.name && app.player.isPlaying,
+                                enabled: !result.tracks.isEmpty, shuffle: { play(shuffle: true) }, play: {
+                if app.player.source == artist.name && app.player.hasMedia { app.player.toggle() }
+                else { play(shuffle: false) }
+            }) {
+                IconControl(title: app.artistFollows.contains(artist.id) ? "Unfollow artist" : "Follow artist",
+                            symbol: app.artistFollows.contains(artist.id) ? "checkmark.circle.fill" : "plus.circle",
+                            selected: app.artistFollows.contains(artist.id)) {
                     if app.artistFollows.contains(artist.id) { app.artistFollows.unfollow(artist.id) }
                     else { app.artistFollows.follow(artist, releases: result.albums) }
-                }.buttonStyle(.bordered).disabled(result.albums.isEmpty)
-                if let message { Text(message) }
-                Text("Songs").font(.headline)
-                ForEach(result.tracks) { track in OnlineTrackRow(track: track) }
-                if loadingMore { ProgressView("Loading more songs…") }
-                else if albumCursor < result.albums.count { Button("Show more songs") { moreRequest += 1 }.buttonStyle(.bordered) }
-                Text("Albums & singles").font(.headline)
+                }.disabled(result.albums.isEmpty)
+            }
+        } content: {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if let message { Text(message).text(.bodyS).foregroundStyle(p.secondary).padding(.horizontal, MediaLayout.inset) }
+                SectionHeader(title: "Songs")
+                ForEach(result.tracks) { track in
+                    OnlineTrackRow(track: track, onPlay: { selected in
+                        let songs = result.tracks.map { savedSong($0, app: app) ?? app.musicStreams.register($0) }
+                        app.player.play(songs, from: songs.firstIndex { $0.id == selected.id } ?? 0, shuffle: false, source: artist.name)
+                    })
+                }
+                if loadingMore { ProgressView("Loading more songs…").padding(MediaLayout.inset) }
+                else if albumCursor < result.albums.count { Button("Show more songs") { moreRequest += 1 }.buttonStyle(.bordered).padding(MediaLayout.inset) }
+                SectionHeader(title: "Albums & singles")
                 ForEach(result.albums) { album in
                     Button { router.go(.catalogAlbum(album)) } label: {
-                        HStack { PlaylistCover(url: album.artwork).frame(width: 56, height: 56); VStack(alignment: .leading) { Text(album.title); SearchSubtitle(type: "Album", creator: album.artist, explicit: album.explicit == true) }; Spacer() }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        MediaRowContent {
+                            PlaylistCover(url: album.artwork).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                        } detail: { MediaRowText(title: album.title, subtitle: "Album · " + album.artist, explicit: album.explicit == true) } trailing: { EmptyView() }
                     }.buttonStyle(.plain)
                 }
-            }.padding(16)
-        }.navigationTitle(artist.name)
+            }
+        }
         .task(id: artist.id) {
             do {
                 result = try await MonochromeClient().artistPage(artist.id)
@@ -238,6 +255,10 @@ struct OnlineArtistView: View {
             } catch { message = error.localizedDescription }
         }
         .task(id: moreRequest) { if moreRequest > 0 { await loadMore() } }
+    }
+    private func play(shuffle: Bool) {
+        let songs = result.tracks.map { savedSong($0, app: app) ?? app.musicStreams.register($0) }
+        app.player.play(songs, shuffle: shuffle, source: artist.name)
     }
     @MainActor private func loadMore() async {
         guard !loadingMore else { return }

@@ -12,6 +12,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextOverflow
+import com.localfy.app.ui.components.*
+import com.localfy.app.ui.player.rememberPlayerState
+import com.localfy.app.ui.theme.LocalfyColors
 import com.localfy.app.ui.SongMenuExtras
 import com.localfy.app.ui.art.ArtKey
 import com.localfy.app.ui.art.Artwork
@@ -75,50 +78,47 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
             if (missing.isNotEmpty()) message = "Couldn't match ${missing.size} songs: " + missing.take(4).joinToString(", ")
         }
     }
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { actions.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                Text(if (playlist?.kind == "mix") "Shared Mix" else "Playlist", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                playlist?.let { list ->
-                    val isSaved = app.social.state.playlists.containsKey(list.key)
-                    if (list.owner != app.social.publicKey || isSaved) Box {
-                        IconButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, "Playlist options") }
-                        DropdownMenu(options, { options = false }) {
-                            if (list.owner != app.social.publicKey) DropdownMenuItem(text = { Text("Make your own copy") }, onClick = { options = false; runCatching { actions.navigate(Routes.sharedPlaylist(app.social.copy(list).key)) }.onFailure { message = it.message } })
-                            if (isSaved && list.owner == app.social.publicKey) DropdownMenuItem(text = { Text("Share with friends") }, onClick = { options = false; showSharing = !showSharing })
-                            if (isSaved && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) DropdownMenuItem(text = { Text(if (list.kind == "mix") "Contribute songs" else "Edit playlist") }, onClick = { options = false; showEditor = !showEditor })
-                        }
-                    }
-                }
-            }
+    val player = rememberPlayerState()
+    val list = playlist
+    if (list == null) {
+        Column(Modifier.fillMaxSize()) {
+            PageHeader("Playlist", onBack = { actions.nav.popBackStack() })
+            if (message == null) CircularProgressIndicator(Modifier.padding(16.dp))
+            else EmptyState("Couldn't load playlist", message.orEmpty())
         }
-        if (playlist == null && message == null) item { CircularProgressIndicator() }
-        playlist?.let { list ->
-            item {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Artwork(ArtKey(list.key.hashCode().toLong(), list.key.hashCode().toLong(), list.image ?: list.tracks.firstOrNull { it.artwork != null }?.artwork), Modifier.align(Alignment.CenterHorizontally).size(220.dp), RoundedCornerShape(12.dp))
-                    Text(list.name, style = MaterialTheme.typography.headlineMedium)
+        return
+    }
+    val isSaved = app.social.state.playlists.containsKey(list.key)
+    CollectionPage(
+        title = list.name, kindLabel = if (list.kind == "mix") "Shared mix" else "Playlist",
+        subtitle = list.description,
+        summary = "${list.tracks.size} songs" + (list.sourceName?.let { " • From $it" } ?: ""),
+        art = ArtKey(list.key.hashCode().toLong(), list.key.hashCode().toLong(), list.image ?: list.tracks.firstOrNull { it.artwork != null }?.artwork),
+        playing = player.source == list.name && player.isPlaying, playEnabled = list.tracks.isNotEmpty(),
+        onPlay = { if (player.source == list.name && player.hasMedia) actions.player.togglePlay() else play(0) },
+        onShuffle = { play(0, shuffle = true) }, shuffleActive = player.shuffle,
+        headerActions = {
+            IconButton(onClick = { if (!isSaved) runCatching { app.social.save(list); PlaylistMatches.prepare(list, app); message = "Saved in Your Library." }.onFailure { message = it.message } }) {
+                Icon(if (isSaved) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, if (isSaved) "Saved in Your Library" else "Save to Your Library", tint = if (isSaved) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary)
+            }
+            if (list.owner != app.social.publicKey || isSaved) Box {
+                IconButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, "Playlist options", tint = LocalfyColors.TextSecondary) }
+                DropdownMenu(options, { options = false }) {
+                    if (list.owner != app.social.publicKey) DropdownMenuItem(text = { Text("Make your own copy") }, onClick = { options = false; runCatching { actions.navigate(Routes.sharedPlaylist(app.social.copy(list).key)) }.onFailure { message = it.message } })
+                    if (isSaved && list.owner == app.social.publicKey) DropdownMenuItem(text = { Text("Share with friends") }, onClick = { options = false; showSharing = !showSharing })
+                    if (isSaved && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) DropdownMenuItem(text = { Text(if (list.kind == "mix") "Contribute songs" else "Edit playlist") }, onClick = { options = false; showEditor = !showEditor })
                 }
             }
-            item { if (list.description.isNotBlank()) Text(list.description); Text("${list.tracks.size} songs" + (list.sourceName?.let { " · From $it" } ?: "")) }
-            if (list.partial) item { Text("Only part of this playlist was available. Saved songs keep their original titles and order.") }
-            item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { play(0) }, enabled = list.tracks.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) { Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Play") }
-                    OutlinedButton(onClick = { play(0, shuffle = true) }, enabled = list.tracks.isNotEmpty(), contentPadding = PaddingValues(horizontal = 14.dp)) { Icon(Icons.Rounded.Shuffle, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Shuffle") }
-                    val isSaved = app.social.state.playlists.containsKey(list.key)
-                    OutlinedButton(onClick = { runCatching { app.social.save(list); PlaylistMatches.prepare(list, app); message = "Saved in Your Library." }.onFailure { message = it.message } }, enabled = !isSaved, contentPadding = PaddingValues(horizontal = 14.dp)) { Icon(if (isSaved) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (isSaved) "Saved" else "Save") }
-                }
-            }
-            message?.let { item { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-            if (showSharing && list.owner == app.social.publicKey && app.social.state.playlists.containsKey(list.key)) item { PlaylistSharingControls(list) }
-            if (showEditor && app.social.state.playlists.containsKey(list.key) && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) item { SharedPlaylistEditor(list, initiallyExpanded = true) }
-            itemsIndexed(list.tracks, key = { _, track -> track.id }) { index, track ->
-                SharedPlaylistTrackRow(track, onPlay = { play(index) }, onError = { message = it })
-            }
+        },
+    ) {
+        if (list.partial) item { Text("Only part of this playlist was available. Saved songs keep their original titles and order.", Modifier.padding(16.dp), color = LocalfyColors.TextSecondary) }
+        message?.let { item { Text(it, Modifier.padding(16.dp), color = LocalfyColors.TextSecondary) } }
+        if (showSharing && list.owner == app.social.publicKey && isSaved) item { Box(Modifier.padding(16.dp)) { PlaylistSharingControls(list) } }
+        if (showEditor && isSaved && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) item { Box(Modifier.padding(16.dp)) { SharedPlaylistEditor(list, initiallyExpanded = true) } }
+        itemsIndexed(list.tracks, key = { _, track -> track.id }) { index, track ->
+            SharedPlaylistTrackRow(track, onPlay = { play(index) }, onError = { message = it })
         }
-        if (playlist == null) message?.let { item { Text(it) } }
+        if (list.tracks.isEmpty()) item { EmptyState("No songs yet", "Add songs from the playlist options.") }
     }
 }
 
@@ -126,6 +126,7 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
 internal fun SharedPlaylistTrackRow(track: SharedTrack, onPlay: () -> Unit, onError: (String?) -> Unit) {
     val app = LocalContext.current.applicationContext as LocalfyApp
     val actions = LocalApp.current
+    val player = rememberPlayerState()
     val scope = rememberCoroutineScope()
     var matched by remember(track) { mutableStateOf<Song?>(null) }
     var openingMenu by remember(track) { mutableStateOf(false) }
@@ -133,26 +134,24 @@ internal fun SharedPlaylistTrackRow(track: SharedTrack, onPlay: () -> Unit, onEr
         try { matched = PlaylistMatches.resolve(track, app) }
         catch (e: Exception) { if (e is CancellationException) throw e }
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable(onClick = onPlay).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            SharedTrackCover(track, matched, Modifier.size(52.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(track.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(track.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    MediaRow(
+        title = track.title, subtitle = track.artist, onClick = onPlay,
+        isCurrent = matched != null && player.currentId == matched?.id, isPlaying = player.isPlaying,
+        artwork = { SharedTrackCover(track, matched, it) },
+        trailing = {
+            IconButton(enabled = !openingMenu, onClick = {
+                scope.launch {
+                    openingMenu = true
+                    try { val song = matched ?: PlaylistMatches.resolve(track, app); matched = song; actions.openSongMenu(song, SongMenuExtras()) }
+                    catch (e: Exception) { if (e is CancellationException) throw e; onError(e.message) }
+                    finally { openingMenu = false }
+                }
+            }) {
+                if (openingMenu) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Rounded.MoreVert, "More options for ${track.title}", tint = LocalfyColors.TextSecondary)
             }
-        }
-        IconButton(enabled = !openingMenu, onClick = {
-            scope.launch {
-                openingMenu = true
-                try { val song = matched ?: PlaylistMatches.resolve(track, app); matched = song; actions.openSongMenu(song, SongMenuExtras()) }
-                catch (e: Exception) { if (e is CancellationException) throw e; onError(e.message) }
-                finally { openingMenu = false }
-            }
-        }) {
-            if (openingMenu) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            else Icon(Icons.Rounded.MoreVert, "More options for ${track.title}")
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -193,21 +192,35 @@ fun OnlineArtistScreen(encoded: String) {
         try { result = Monochrome.artistPage(artistID); loaded = true; albumCursor = 0; loadMore() }
         catch (e: Exception) { if (e is CancellationException) throw e; message = e.message }
     }
-    LazyColumn(contentPadding = PaddingValues(16.dp, 24.dp, 16.dp, 100.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { TextButton(onClick = { actions.nav.popBackStack() }) { Text("Back") }; Text(name, style = MaterialTheme.typography.headlineMedium); AsyncImage(artist?.optString("artwork"), null, Modifier.fillMaxWidth().height(200.dp)) }
-        message?.let { item { Text(it) } }
-        item {
-            val followed = remember(followRevision, artistID) { app.artistFollows.contains(artistID) }
-            Button(enabled = loaded, onClick = { runCatching { if (followed) app.artistFollows.unfollow(artistID) else app.artistFollows.follow(OnlineArtist(artistID, name, artist?.optString("artwork")), result.albums) }.onFailure { message = it.message } }) { Text(if (followed) "Following" else "Follow artist") }
-        }
-        item { Text("Songs", style = MaterialTheme.typography.titleLarge) }
-        items(result.tracks, key = { it.id }) { OnlineMusicRow(it) }
-        item { if (loadingMore) CircularProgressIndicator() else if (albumCursor < result.albums.size) TextButton(onClick = { scope.launch { loadMore() } }) { Text("Show more songs") } }
-        item { Text("Albums & singles", style = MaterialTheme.typography.titleLarge) }
-        items(result.albums, key = { it.id }) { album ->
-            Row(Modifier.fillMaxWidth().clickable { actions.navigate(Routes.catalogAlbum(album)) }.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AsyncImage(album.artwork, null, Modifier.size(56.dp)); Column { Text(album.title); SearchSubtitle("Album", album.artist, album.explicit == true) }
+    val player = rememberPlayerState()
+    fun playArtist(shuffle: Boolean = false) {
+        val songs = result.tracks.map(app.musicStreams::register)
+        if (songs.isNotEmpty()) actions.player.playSongs(songs, 0, shuffle, name)
+    }
+    val followed = remember(followRevision, artistID) { app.artistFollows.contains(artistID) }
+    CollectionPage(
+        title = name, kindLabel = "Artist", subtitle = if (followed) "Following" else "", summary = "",
+        art = ArtKey(artistID.hashCode().toLong(), artistID.hashCode().toLong(), artist?.optString("artwork")), hero = true,
+        playing = player.source == name && player.isPlaying, playEnabled = result.tracks.isNotEmpty(),
+        onPlay = { if (player.source == name && player.hasMedia) actions.player.togglePlay() else playArtist() },
+        onShuffle = { playArtist(true) }, shuffleActive = player.shuffle,
+        headerActions = {
+            IconButton(enabled = loaded, onClick = { runCatching { if (followed) app.artistFollows.unfollow(artistID) else app.artistFollows.follow(OnlineArtist(artistID, name, artist?.optString("artwork")), result.albums) }.onFailure { message = it.message } }) {
+                Icon(if (followed) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline, if (followed) "Unfollow artist" else "Follow artist", tint = if (followed) MaterialTheme.colorScheme.primary else LocalfyColors.TextSecondary)
             }
+        },
+    ) {
+        message?.let { item { Text(it, Modifier.padding(16.dp), color = LocalfyColors.TextSecondary) } }
+        item { SectionHeader("Songs") }
+        itemsIndexed(result.tracks, key = { _, track -> track.id }) { index, track ->
+            OnlineMusicRow(track, onPlay = {
+                actions.player.playSongs(result.tracks.map(app.musicStreams::register), index, shuffle = false, source = name)
+            })
+        }
+        item { if (loadingMore) CircularProgressIndicator(Modifier.padding(16.dp)) else if (albumCursor < result.albums.size) TextButton(modifier = Modifier.padding(horizontal = 8.dp), onClick = { scope.launch { loadMore() } }) { Text("Show more songs") } }
+        item { SectionHeader("Albums & singles") }
+        items(result.albums, key = { it.id }) { album ->
+            MediaRow(album.title, album.artist, artwork = { Artwork(ArtKey(album.id.hashCode().toLong(), album.id.hashCode().toLong(), album.artwork), it, RoundedCornerShape(6.dp)) }, onClick = { actions.navigate(Routes.catalogAlbum(album)) }, subtitleContent = { SearchSubtitle("Album", album.artist, album.explicit == true) })
         }
     }
 }

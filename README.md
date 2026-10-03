@@ -57,7 +57,7 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - Downloads include Wi-Fi-only mode, cancellation, retries, and matched backup sources when the first source fails. Online availability varies. See [music sources and checks](docs/MONOCHROME.md).
 - Download rings keep their last known progress while files are checked and saved. Album counts include completed files immediately.
 - Your Library with filters, sorting, and grid or list view.
-- Album, artist and playlist pages with collapsing headers coloured from the artwork.
+- Album, artist, playlist, podcast and book pages share headers coloured from their cover art, title spacing and a round Play button. Song rows, page titles and forms follow the same theme throughout the app.
 - Liked Songs, playlists, and a queue you can reorder by dragging.
 - **Keep music playing** is on by default. Fresh suggestions follow your queue, while manual picks, repeat, sleep timers and clearing the queue take priority.
 - Shuffle that reorders the real queue, so "Next up" shows what will actually play.

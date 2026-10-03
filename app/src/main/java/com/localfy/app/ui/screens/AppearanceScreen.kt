@@ -88,9 +88,7 @@ fun AppearanceScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
         item {
-            Row(Modifier.statusBarsPadding().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { app.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                Text("Appearance", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            com.localfy.app.ui.components.PageHeader("Appearance", onBack = { app.nav.popBackStack() }) {
                 TextButton(onClick = repo::reset) { Text("Reset") }
             }
         }

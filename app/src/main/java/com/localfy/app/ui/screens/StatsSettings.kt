@@ -50,10 +50,7 @@ import kotlinx.coroutines.launch
 @Composable
 private fun BackHeader(title: String) {
     val app = LocalApp.current
-    Row(Modifier.statusBarsPadding().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { app.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-        Text(title, style = MaterialTheme.typography.headlineSmall)
-    }
+    com.localfy.app.ui.components.PageHeader(title, onBack = { app.nav.popBackStack() })
 }
 
 /** A year-round "Wrapped", computed entirely on-device. */

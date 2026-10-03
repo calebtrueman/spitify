@@ -1,5 +1,9 @@
 package com.localfy.app.ui.screens
 
+import com.localfy.app.ui.player.rememberPlayerState
+import com.localfy.app.ui.components.PageHeader
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -147,22 +151,12 @@ fun BooksScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
         item {
-            Text("Audiobooks", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.statusBarsPadding().padding(start = 16.dp, top = 12.dp))
+            PageHeader("Audiobooks")
         }
         item {
-            TextField(
+            com.localfy.app.ui.components.MediaSearchField(
                 value = query, onValueChange = { query = it; search.clear() },
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                placeholder = { Text("Search 20,000+ free books by title or author") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; search.clear() }) { Icon(Icons.Rounded.Close, "Clear") } },
-                singleLine = true, shape = RoundedCornerShape(10.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { if (query.isNotBlank()) runSearch(query) }),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = LocalfyColors.SurfaceHigh, unfocusedContainerColor = LocalfyColors.SurfaceHigh,
-                    focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
-                ),
+                placeholder = "Search books by title or author", onSearch = { if (query.isNotBlank()) runSearch(query) },
             )
         }
         if (searching) item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
@@ -222,7 +216,7 @@ private fun BookCover(b: BookItem, modifier: Modifier) {
     Column(modifier.padding(4.dp).pressable { app.navigate(b.route) }) {
         Artwork(b.art, Modifier.fillMaxWidth().aspectRatio(0.72f).shadow(10.dp, RoundedCornerShape(6.dp)), RoundedCornerShape(6.dp))
         Spacer(Modifier.height(6.dp))
-        Text(b.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(b.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(b.author, style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
     }
 }
@@ -274,7 +268,7 @@ private fun BookResultRow(r: BookSearchResult) {
         Artwork(ArtKey(r.id.hashCode().toLong(), r.id.hashCode().toLong(), r.coverUrl), Modifier.size(width = 56.dp, height = 78.dp), RoundedCornerShape(6.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(r.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(r.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(r.author, style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Text(
@@ -313,56 +307,35 @@ fun LocalBookScreen(albumId: Long) {
 private fun BookLayout(book: BookItem, description: String, onRemove: (() -> Unit)?, editable: Boolean) {
     val app = LocalApp.current
     val resume by app.podcasts.resume.collectAsStateWithLifecycle()
-    val color by rememberArtColor(book.art)
-    val headerColor = if (LocalPalette.current.isDark) color else lerp(color, Color.White, 0.55f)
+    val player = rememberPlayerState()
     val (idx, left, progress) = bookProgress(book.chapters, resume)
     val started = book.chapters.any { resume[it.resumeKey] != null }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val total = book.chapters.sumOf { it.durationMs }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
-        item {
-            Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(headerColor, LocalfyColors.Background))).statusBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth()) {
-                    IconButton(onClick = { app.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                    Spacer(Modifier.weight(1f))
-                    if (editable) IconButton(onClick = { app.editMetadata(book.chapters, true) }) { Icon(Icons.Rounded.Edit, "Edit book info & cover") }
-                }
-                Artwork(book.art, Modifier.width(180.dp).aspectRatio(0.72f).shadow(28.dp, RoundedCornerShape(8.dp)), RoundedCornerShape(8.dp))
-                Spacer(Modifier.height(16.dp))
-                Text(book.title, style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(horizontal = 24.dp))
-                Text(book.author, style = MaterialTheme.typography.bodyLarge, color = LocalfyColors.TextSecondary)
-                Text("${book.chapters.size} chapters · ${hours(total)}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextTertiary)
-                Spacer(Modifier.height(16.dp))
-                if (started) {
-                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.width(220.dp).height(4.dp).clip(CircleShape), drawStopIndicator = {}, gapSize = 0.dp)
-                    Text("${(progress * 100).toInt()}% · ${hours(left)} left", style = MaterialTheme.typography.labelMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(top = 6.dp))
-                    Spacer(Modifier.height(12.dp))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary)
-                            .pressable { app.player.playBook(book.chapters, idx, book.title) }.padding(horizontal = 24.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, null, tint = LocalPalette.current.onBrand)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (started) "Continue · Ch. ${idx + 1}" else "Start listening", style = MaterialTheme.typography.labelLarge, color = LocalPalette.current.onBrand)
-                    }
-                    val downloadable = book.episodes.filterNotNull().filter { it.localPath == null }
-                    if (downloadable.isNotEmpty()) IconButton(onClick = { app.podcasts.downloadAll(downloadable.map { it.id }) }) {
-                        Icon(Icons.Rounded.Download, "Download whole book")
-                    }
-                }
-                if (description.isNotBlank()) {
-                    Text(
-                        description, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary,
-                        maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(20.dp).animateContentSize().pressable(pressedScale = 1f) { expanded = !expanded },
-                    )
-                }
-                if (onRemove != null) TextButton(onClick = onRemove) { Text("Remove from library", color = LocalfyColors.TextSecondary) }
+    val isCurrentBook = book.chapters.any { it.id == player.currentId }
+    CollectionPage(
+        title = book.title, kindLabel = "Audiobook", subtitle = book.author,
+        summary = "${book.chapters.size} chapters • ${hours(total)}", art = book.art, artAspectRatio = 0.72f,
+        playing = isCurrentBook && player.isPlaying, playEnabled = book.chapters.isNotEmpty(),
+        onPlay = { if (isCurrentBook && player.hasMedia) app.player.togglePlay() else app.player.playBook(book.chapters, idx, book.title) },
+        headerActions = {
+            if (editable) IconButton(onClick = { app.editMetadata(book.chapters, true) }) { Icon(Icons.Rounded.Edit, "Edit book info & cover", tint = LocalfyColors.TextSecondary) }
+            val downloadable = book.episodes.filterNotNull().filter { it.localPath == null }
+            if (downloadable.isNotEmpty()) IconButton(onClick = { app.podcasts.downloadAll(downloadable.map { it.id }) }) { Icon(Icons.Rounded.Download, "Download whole book", tint = LocalfyColors.TextSecondary) }
+            if (onRemove != null) IconButton(onClick = onRemove) { Icon(Icons.Rounded.DeleteOutline, "Remove from library", tint = LocalfyColors.TextSecondary) }
+        },
+    ) {
+        if (started) item {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), drawStopIndicator = {}, gapSize = 0.dp)
+                Text("Continue chapter ${idx + 1} • ${(progress * 100).toInt()}% • ${hours(left)} left", style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(top = 8.dp))
             }
+        }
+        if (description.isNotBlank()) item {
+            Text(description, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary,
+                maxLines = if (expanded) Int.MAX_VALUE else 4, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).animateContentSize().pressable(pressedScale = 1f) { expanded = !expanded })
         }
         item { SectionHeader("Chapters") }
         itemsIndexed(book.chapters, key = { _, c -> c.id }) { i, c ->

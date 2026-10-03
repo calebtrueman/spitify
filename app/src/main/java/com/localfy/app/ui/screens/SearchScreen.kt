@@ -91,33 +91,9 @@ fun SearchScreen() {
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
-            Column(Modifier.statusBarsPadding().padding(16.dp)) {
-                Text("Search", style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(12.dp))
-                TextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("What do you want to listen to?") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null, tint = Color.Black) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear", tint = Color.Black) }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = if (LocalPalette.current.isDark) Color.White else LocalfyColors.SurfaceHigh,
-                        unfocusedContainerColor = if (LocalPalette.current.isDark) Color.White else LocalfyColors.SurfaceHigh,
-                        focusedTextColor = Color.Black,
-                        unfocusedTextColor = Color.Black,
-                        focusedPlaceholderColor = Color(0xFF555555),
-                        unfocusedPlaceholderColor = Color(0xFF555555),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = Color.Black,
-                    ),
-                )
+            Column {
+                com.localfy.app.ui.components.PageHeader("Search")
+                com.localfy.app.ui.components.MediaSearchField(query, { query = it }, "What do you want to listen to?")
             }
         }
 

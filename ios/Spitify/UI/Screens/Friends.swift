@@ -8,7 +8,7 @@ struct FriendsView: View {
     @State private var relays = ""
     @State private var message: String?
     var body: some View {
-        Form {
+        AppForm {
             Section("Sharing") {
                 Toggle("Connect with friends", isOn: Binding(get: { app.social.enabled }, set: { app.social.configure(enabled: $0, discovery: app.social.discovery) }))
                 Text("Friends connect through public relays. Public profiles and public playlists can be read by anyone. Direct shares are encrypted. Your audio files stay on your device.")
@@ -42,7 +42,7 @@ struct FriendsView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(app.social.state.profiles[id]?.name ?? "Friend " + id.prefix(8))
-                            if let about = app.social.state.profiles[id]?.about, !about.isEmpty { Text(about).font(.caption) }
+                            if let about = app.social.state.profiles[id]?.about, !about.isEmpty { Text(about).text(.caption) }
                         }
                         Spacer()
                         Button("Unfollow", role: .destructive) { app.social.unfollow(id) }
@@ -74,7 +74,7 @@ struct PlaylistSharingView: View {
     @Environment(AppModel.self) private var app
     @State private var message: String?
     var body: some View {
-        Form {
+        AppForm {
             Section("Public link") {
                 Text("Publishing makes the playlist name, description and song list readable by anyone.")
                 Button("Publish playlist") { perform { try await app.social.share(playlist) } }
@@ -118,7 +118,7 @@ struct IncomingShareView: View {
             } else if link.type == "playlist", let id = link.id, let playlist = app.social.state.playlists[link.owner + ":" + id] {
                 SharedPlaylistView(initial: playlist)
             } else {
-                Form {
+                AppForm {
                     Text(app.social.state.profiles[link.owner]?.name ?? "Friend " + link.owner.prefix(8))
                     Text("Following connects to public relays to receive this person's shared music. Private playlists must be sent to your friend code first.")
                     Button("Connect and follow") {

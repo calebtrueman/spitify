@@ -5,14 +5,12 @@ struct SongRow: View {
     var trackNumber: Int? = nil
     var subtitle: String? = nil
     var downloaded = false
+    var accessory: AnyView? = nil
     var onTap: () -> Void
     var removeLabel: String? = nil
     var onRemove: (() -> Void)? = nil
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
-    @Environment(\.themeSettings) private var theme
-    @Environment(\.dynamicTypeSize) private var textSize
-    private var roomyText: Bool { textSize >= .xxLarge || theme.textScale == .huge }
 
     @State private var swipeX: CGFloat = 0
     @State private var suppressTapUntil = Date.distantPast
@@ -20,7 +18,7 @@ struct SongRow: View {
     var body: some View {
         let isCurrent = app.player.current?.id == song.id
         Button(action: { if Date() >= suppressTapUntil { Haptics.tap(); onTap() } }) {
-            HStack(spacing: 12) {
+            HStack(spacing: MediaLayout.rowSpacing) {
                 if let n = trackNumber {
                     ZStack {
                         if isCurrent { EqualizerBars(playing: app.player.isPlaying).frame(width: 14, height: 14) }
@@ -28,24 +26,21 @@ struct SongRow: View {
                     }.frame(width: 26, alignment: .leading)
                 } else {
                     ZStack {
-                        ArtworkView(song).frame(width: 50, height: 50)
+                        ArtworkView(song).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                         if isCurrent { Color.black.opacity(0.45).clipShape(RoundedRectangle(cornerRadius: 6)); EqualizerBars(playing: app.player.isPlaying, color: .white).frame(width: 18, height: 18) }
-                    }.frame(width: 50, height: 50)
+                    }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(song.title).text(.body).fontWeight(.semibold).foregroundStyle(isCurrent ? p.accent : p.text).lineLimit(roomyText ? 2 : 1).multilineTextAlignment(.leading)
-                    HStack(spacing: 4) {
-                        if downloaded { Image(systemName: "arrow.down.circle.fill").font(.system(size: 12)).foregroundStyle(.green).accessibilityLabel("Downloaded") }
-                        Text(song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))").text(.bodyS).foregroundStyle(p.secondary).lineLimit(roomyText ? 2 : 1).multilineTextAlignment(.leading)
-                    }
-                }
-                Spacer(minLength: 4)
-                SongMenu(song: song, removeLabel: removeLabel, onRemove: onRemove) {
-                    Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold)).foregroundStyle(p.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
+                MediaRowText(title: song.title, subtitle: song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))",
+                             highlighted: isCurrent, badge: downloaded ? "arrow.down.circle.fill" : nil)
+                HStack(spacing: 0) {
+                    SongMenu(song: song, removeLabel: removeLabel, onRemove: onRemove) {
+                        IconControlLabel(symbol: "ellipsis")
+                    }.accessibilityLabel("More options for \(song.title)")
+                    if let accessory { accessory }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: MediaLayout.rowArt, alignment: .leading)
+            .padding(.horizontal, MediaLayout.inset).padding(.vertical, MediaLayout.rowPadding)
             .contentShape(Rectangle())
             .opacity(song.playable ? 1 : 0.45)
         }
@@ -239,12 +234,12 @@ struct PlayButton: View {
         Button(action: { Haptics.tap(); action() }) {
             Image(systemName: playing ? "pause.fill" : "play.fill")
                 .font(.system(size: size * 0.4, weight: .bold))
-                .foregroundStyle(bg.luminance > 0.45 ? Color.black : .white)
+                .foregroundStyle(bg.luminance > 0.179 ? Color.black : .white)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: size, height: size)
                 .background(bg, in: Circle())
                 .shadow(color: bg.opacity(0.4), radius: 10, y: 4)
-        }.buttonStyle(.pressable(0.9))
+        }.buttonStyle(.pressable(0.9)).accessibilityLabel(playing ? "Pause" : "Play")
     }
 }
 

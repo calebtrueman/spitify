@@ -12,7 +12,7 @@ struct SharedPlaylistEditor: View {
     @State private var busy = false
     private var playlist: SharedPlaylist { app.social.state.playlists[initial.key] ?? initial }
     var body: some View {
-        List {
+        AppList {
             Section("Name and description") {
                 TextField("Name", text: $name)
                 TextField("Description", text: $description, axis: .vertical)
@@ -20,7 +20,7 @@ struct SharedPlaylistEditor: View {
             }
             Section(playlist.kind == "mix" ? "Your contribution" : "Add songs") {
                 TextField("Find a song", text: $query)
-                if playlist.kind == "mix" { Text("Pick up to 100 songs. Sending replaces your previous contribution. The mix takes turns between each person's songs and skips repeats.").font(.caption) }
+                if playlist.kind == "mix" { Text("Pick up to 100 songs. Sending replaces your previous contribution. The mix takes turns between each person's songs and skips repeats.").text(.caption) }
                 ForEach(results) { track in
                     Button {
                         let key = "remote:" + track.id
@@ -30,7 +30,7 @@ struct SharedPlaylistEditor: View {
                         SharedTrackLabel(track: SharedTrack(title: track.title, artist: track.artist, artwork: track.artwork), matched: MusicStreams.song(track), selected: selected["remote:" + track.id] != nil)
                     }
                 }
-                Text("\(selected.count) selected").font(.caption)
+                Text("\(selected.count) selected").text(.caption)
                 if !selected.isEmpty { Button("Clear selection") { selected = [:] } }
                 ForEach(Array(app.library.library.songs.filter { query.isEmpty || SearchMatch.score(query, title: $0.title, artist: $0.artist, album: $0.album) != nil }.prefix(30))) { song in
                     Button {
@@ -53,7 +53,7 @@ struct SharedPlaylistEditor: View {
                         .onMove { offsets, destination in var tracks = playlist.tracks; tracks.move(fromOffsets: offsets, toOffset: destination); send(SharedEdit(playlistID: playlist.id, owner: playlist.owner, action: "reorder", trackIDs: tracks.map(\.id))) }
                 }
             }
-            if playlist.owner != app.social.publicKey { Text("Your changes appear after the owner's app accepts them.").font(.caption) }
+            if playlist.owner != app.social.publicKey { Text("Your changes appear after the owner's app accepts them.").text(.caption) }
             if let message { Text(message) }
         }.disabled(busy).navigationTitle(playlist.kind == "mix" ? "Edit Shared Mix" : "Edit playlist").toolbar { EditButton() }
         .onAppear { name = playlist.name; description = playlist.description }
@@ -77,7 +77,7 @@ struct CreateSharedPlaylistView: View {
     @State private var created: SharedPlaylist?
     @State private var message: String?
     var body: some View {
-        Form {
+        AppForm {
             TextField("Name", text: $name)
             Toggle("Shared Mix", isOn: $mix)
             Text(mix ? "Invite friends from Share with friends. Each person picks songs; the mix balances their contributions." : "Create a playlist, add songs, then choose who can read or edit it.")
@@ -97,14 +97,11 @@ struct SharedTrackLabel: View {
     @State private var resolved: Song?
     var body: some View {
         HStack(spacing: 12) {
-            SharedTrackCover(track: track, matched: matched ?? resolved).frame(width: 48, height: 48)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(track.title).foregroundStyle(p.text).lineLimit(2)
-                Text(track.artist).font(.caption).foregroundStyle(p.secondary).lineLimit(2)
-            }.multilineTextAlignment(.leading)
+            SharedTrackCover(track: track, matched: matched ?? resolved).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+            MediaRowText(title: track.title, subtitle: track.artist)
             Spacer(minLength: 0)
             if let selected { Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? p.accent : p.secondary) }
-        }.frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
+        }.frame(maxWidth: .infinity, minHeight: MediaLayout.rowArt, alignment: .leading).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())
         .task(id: track) { if matched == nil { resolved = try? await SharedSongMatch.resolve(track, app: app) } }
     }
 }

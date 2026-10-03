@@ -84,14 +84,10 @@ fun EqualizerScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 140.dp)) {
         item {
-            Row(Modifier.statusBarsPadding().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { app.nav.popBackStack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                Column(Modifier.weight(1f)) {
-                    Text("Equaliser", style = MaterialTheme.typography.headlineSmall)
-                    Text(caps?.engine ?: "Start playback to connect the sound engine", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
-                }
+            com.localfy.app.ui.components.PageHeader("Equaliser", onBack = { app.nav.popBackStack() }) {
                 Switch(state.enabled, { v -> haptics(HapticFeedbackType.ToggleOn); EqStore.update { it.copy(enabled = v) } }, Modifier.padding(end = 12.dp))
             }
+            Text(caps?.engine ?: "Start playback to connect the sound engine", style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, modifier = Modifier.padding(horizontal = 16.dp))
         }
 
         // Interactive response curve: drag any point up or down; double-tap resets that band.

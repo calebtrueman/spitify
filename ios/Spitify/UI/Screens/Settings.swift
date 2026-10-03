@@ -12,7 +12,7 @@ struct SettingsView: View {
         @Bindable var lyrics = app.lyrics
         @Bindable var player = app.player
         @Bindable var downloads = app.musicDownloads
-        Form {
+        AppForm {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
@@ -26,7 +26,7 @@ struct SettingsView: View {
             Section("Downloads & listening") {
                 Toggle("Download over Wi-Fi only", isOn: $downloads.wifiOnly)
                 Button("Clear listening cache") { ListeningCache.clear() }
-                Text("Streaming uses a temporary cache of up to 1 GB. Older streams are cleared automatically. Downloads stay until you remove them.").font(.caption).foregroundStyle(.secondary)
+                Text("Streaming uses a temporary cache of up to 1 GB. Older streams are cleared automatically. Downloads stay until you remove them.").text(.caption).foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Full-screen lock-screen art", isOn: $player.lockScreenArt)
@@ -59,7 +59,7 @@ struct SettingsView: View {
 struct VoiceHelpView: View {
     @Environment(\.palette) private var p
     var body: some View {
-        Form {
+        AppForm {
             Section {
                 Text("Hey Siri, resume in Spitify player")
                 Text("Hey Siri, pause Spitify player")
@@ -89,7 +89,7 @@ struct AppearanceView: View {
     @Environment(\.palette) private var p
     var body: some View {
         @Bindable var app = app
-        Form {
+        AppForm {
             Section("Preview") {
                 HStack(spacing: 14) {
                     ArtworkView(app.library.library.songs.first, cornerRadius: 8).frame(width: 64, height: 64)
@@ -375,7 +375,7 @@ struct StatsView: View {
         let time = lib.listens.reduce(Int64(0)) { $0 + $1.listenedMs }
         let topSongs = lib.library.songs.filter { (counts[$0.id] ?? 0) > 0 }.sorted { counts[$0.id]! > counts[$1.id]! }.prefix(10)
         let topArtists = lib.library.artists.map { a in (a, a.songs.reduce(0) { $0 + (counts[$1.id] ?? 0) }) }.filter { $0.1 > 0 }.sorted { $0.1 > $1.1 }.prefix(10)
-        List {
+        AppList {
             Section {
                 HStack { stat("\(total)", "Plays"); stat(time.formattedLong, "Listening time"); stat("\(lib.library.songs.count)", "Songs") }.listRowBackground(Color.clear)
             }

@@ -101,11 +101,13 @@ struct AddToPlaylistSheet: View {
     @State private var name = ""
     var body: some View {
         NavigationStack {
-            List {
+            AppList {
                 Button { creating = true } label: { Label("New playlist", systemImage: "plus") }
                 ForEach(app.library.playlists) { pl in
                     Button { app.library.add(songs, to: pl.id); Haptics.success(); dismiss() } label: {
-                        HStack { ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4).frame(width: 44, height: 44); VStack(alignment: .leading) { Text(pl.name); Text(songCount(pl.songIds.count)).font(.caption).foregroundStyle(.secondary) }; Spacer() }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        MediaRowContent(inset: 0) {
+                            ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                        } detail: { MediaRowText(title: pl.name, subtitle: songCount(pl.songIds.count)) } trailing: { EmptyView() }
                     }
                 }
             }
@@ -126,7 +128,7 @@ struct SongInfoSheet: View {
     @Environment(AppModel.self) private var app
     var body: some View {
         NavigationStack {
-            List {
+            AppList {
                 row("Title", song.title); row("Artist", song.artist); row("Album", song.album); row("Album artist", song.albumArtist)
                 row("Track", [song.disc > 1 ? "Disc \(song.disc)" : nil, song.track > 0 ? "Track \(song.track)" : nil].compactMap { $0 }.joined(separator: ", "))
                 row("Year", song.year > 0 ? String(song.year) : "—"); row("Genre", song.genre ?? "—"); row("Length", song.durationMs.formattedDuration)
@@ -168,7 +170,7 @@ struct MetadataEditor: View {
         let first = songs[0]
         let book = first.isAudiobook
         NavigationStack {
-            Form {
+            AppForm {
                 Section {
                     HStack(spacing: 16) {
                         Group {
@@ -181,7 +183,7 @@ struct MetadataEditor: View {
                             if FileManager.default.fileExists(atPath: ArtCache.shared.customURL(first.albumKey).path) {
                                 Button("Use file cover", role: .destructive) { ArtCache.shared.removeCustom(first.albumKey); app.library.artVersion += 1 }
                             }
-                            Text("Saved into the selected \(songs.count == 1 ? "file" : "files")").font(.caption).foregroundStyle(.secondary)
+                            Text("Saved into the selected \(songs.count == 1 ? "file" : "files")").text(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -195,13 +197,13 @@ struct MetadataEditor: View {
                                     ArtworkView(key: c.artURL ?? c.id.uuidString, remote: c.artURL, cornerRadius: 6).frame(width: 50, height: 50)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(c.title).lineLimit(1)
-                                        Text([c.artist, c.album].filter { !$0.isEmpty }.joined(separator: " • ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        Text([c.artist, c.album].filter { !$0.isEmpty }.joined(separator: " • ")).text(.caption).foregroundStyle(.secondary).lineLimit(1)
                                         let diff = !albumMode && first.durationMs > 0 && c.durationMs > 0 ? abs(c.durationMs - first.durationMs) / 1000 : nil
                                         Text([c.source, c.year.map(String.init), diff.map { $0 <= 3 ? "length matches" : "\($0)s off" }].compactMap { $0 }.joined(separator: " · "))
-                                            .font(.caption2).foregroundStyle(diff.map { $0 <= 3 } == true ? Color.green : .secondary)
+                                            .text(.labelS).foregroundStyle(diff.map { $0 <= 3 } == true ? Color.green : .secondary)
                                     }
                                     Spacer()
-                                    Text("Use").font(.caption.bold())
+                                    Text("Use").text(.label)
                                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                             }.buttonStyle(.plain)
                         }

@@ -137,20 +137,11 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "header") {
-            Column(Modifier.statusBarsPadding()) {
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                    val compact = maxWidth < 480.dp
-                    Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Your Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                        if (compact) {
-                            IconButton(onClick = { app.navigate("releases") }) { Icon(Icons.Rounded.NewReleases, "New releases") }
-                            IconButton(onClick = { app.navigate(Routes.FRIENDS) }) { Icon(Icons.Rounded.PeopleAlt, "Friends") }
-                        } else {
-                            androidx.compose.material3.TextButton(onClick = { app.navigate("releases") }) { Text("New releases") }
-                            androidx.compose.material3.TextButton(onClick = { app.navigate(Routes.FRIENDS) }) { Text("Friends") }
-                        }
-                        IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
-                    }
+            Column {
+                com.localfy.app.ui.components.PageHeader("Your Library") {
+                    IconButton(onClick = { app.navigate("releases") }) { Icon(Icons.Rounded.NewReleases, "New releases") }
+                    IconButton(onClick = { app.navigate(Routes.FRIENDS) }) { Icon(Icons.Rounded.PeopleAlt, "Friends") }
+                    IconButton(onClick = onCreatePlaylist) { Icon(Icons.Rounded.Add, "Create playlist") }
                 }
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(Filter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = if (filter == f) null else f }) }
@@ -179,10 +170,12 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
 
         if (filter == null || filter == Filter.Playlists) {
             items(container.social.playlists, key = { "shared:${it.key}" }, span = { GridItemSpan(maxLineSpan) }) { playlist ->
-                Row(Modifier.fillMaxWidth().clickable { app.navigate(Routes.sharedPlaylist(playlist.key)) }.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    coil3.compose.AsyncImage(playlist.image, null, Modifier.size(56.dp))
-                    Column { Text(playlist.name); SearchSubtitle("Playlist", playlist.sourceName ?: "Spitify") }
-                }
+                com.localfy.app.ui.components.MediaRow(
+                    playlist.name, playlist.sourceName ?: "Spitify",
+                    artwork = { Artwork(com.localfy.app.ui.art.ArtKey(playlist.key.hashCode().toLong(), playlist.key.hashCode().toLong(), playlist.image), it, RoundedCornerShape(6.dp)) },
+                    onClick = { app.navigate(Routes.sharedPlaylist(playlist.key)) },
+                    subtitleContent = { SearchSubtitle(if (playlist.kind == "mix") "Shared mix" else "Playlist", playlist.sourceName ?: "Spitify") },
+                )
             }
             val likedCount = smart[SmartCollection.Kind.AllSongs]?.songs?.size ?: 0
             item(span = { GridItemSpan(if (grid) 1 else maxLineSpan) }, key = "liked") {
@@ -222,17 +215,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
                         MediaTile(TileData(e.key, e.title, e.subtitle, e.art, circle = e.shape == CircleShape, onClick = e.onClick), androidx.compose.ui.unit.Dp.Unspecified, Modifier.fillMaxWidth())
                     }
                 } else {
-                    Row(
-                        Modifier.fillMaxWidth().clickable(onClick = e.onClick).padding(horizontal = 16.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Artwork(e.art, Modifier.size(60.dp), e.shape)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(e.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(e.subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+                    com.localfy.app.ui.components.MediaRow(e.title, e.subtitle, artwork = { Artwork(e.art, it, e.shape) }, onClick = e.onClick)
                 }
             }
         }
@@ -261,13 +244,6 @@ private fun PinnedEntry(
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary, maxLines = 1)
         }
     } else {
-        Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            art(Modifier.size(60.dp))
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary)
-            }
-        }
+        com.localfy.app.ui.components.MediaRow(title, subtitle, artwork = art, onClick = onClick)
     }
 }

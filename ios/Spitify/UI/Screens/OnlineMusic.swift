@@ -6,6 +6,7 @@ struct OnlineMusicView: View {
 }
 
 struct DownloadMark: View {
+    @Environment(\.palette) private var p
     var complete = false
     var active = false
     var progress: Double? = nil
@@ -13,13 +14,13 @@ struct DownloadMark: View {
         ZStack {
             if active {
                 if let progress {
-                    Circle().stroke(.secondary.opacity(0.25), lineWidth: 2)
-                    Circle().trim(from: 0, to: min(1, progress)).stroke(.green, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
+                    Circle().stroke(p.secondary.opacity(0.25), lineWidth: 2)
+                    Circle().trim(from: 0, to: min(1, progress)).stroke(p.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
                 } else { ProgressView().controlSize(.small) }
                 if progress != nil { Image(systemName: "arrow.down").font(.system(size: 10, weight: .bold)) }
             } else {
                 Image(systemName: complete ? "arrow.down.circle.fill" : "arrow.down.circle").font(.system(size: 23))
-                    .foregroundStyle(complete ? Color.green : Color.secondary)
+                    .foregroundStyle(complete ? p.accent : p.secondary)
             }
         }.frame(width: 24, height: 24)
     }
@@ -35,8 +36,10 @@ struct OnlineTrackRow: View {
     let track: OnlineTrack
     var trackNumber: Int? = nil
     var onPlay: ((Song) -> Void)? = nil
+    var inset: CGFloat = 0
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
+    @Environment(\.palette) private var p
     @State private var preparing = false
 
     var body: some View {
@@ -46,18 +49,17 @@ struct OnlineTrackRow: View {
         let fraction = DownloadProgress.fraction(state: job?.state, measured: app.musicDownloads.progress[track.id])
         if let onPlay {
             let playable = song ?? MusicStreams.song(track)
-            HStack(spacing: 0) {
-                SongRow(song: playable, trackNumber: trackNumber, subtitle: track.artist, downloaded: song != nil, onTap: {
+                SongRow(song: playable, trackNumber: trackNumber, subtitle: track.artist, downloaded: song != nil,
+                        accessory: song == nil ? AnyView(
+                            Button {
+                                if job?.state.active == true { app.musicDownloads.cancel(track.id) }
+                                else { app.musicStreams.save([track]); Task { _ = await app.musicDownloads.enqueue([track]) } }
+                            } label: { DownloadMark(complete: complete, active: job?.state.active == true, progress: fraction).frame(width: 44, height: 44) }
+                                .buttonStyle(.plain).disabled(complete).accessibilityLabel(complete ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
+                        ) : nil, onTap: {
                     app.musicStreams.register(track); onPlay(playable)
                 })
-                if song == nil {
-                    Button {
-                        if job?.state.active == true { app.musicDownloads.cancel(track.id) }
-                        else { app.musicStreams.save([track]); Task { _ = await app.musicDownloads.enqueue([track]) } }
-                    } label: { DownloadMark(complete: complete, active: job?.state.active == true, progress: fraction).frame(width: 44, height: 44) }
-                        .buttonStyle(.plain).disabled(complete).padding(.trailing, 8).accessibilityLabel(complete ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
-                }
-            }.onAppear { app.musicStreams.register(track) }
+                .onAppear { app.musicStreams.register(track) }
         } else {
         HStack(spacing: 12) {
             Button {
@@ -65,14 +67,10 @@ struct OnlineTrackRow: View {
                 else { router.go(.catalogSong(track)) }
             } label: {
                 HStack(spacing: 12) {
-                    if let trackNumber { Text(String(trackNumber)).font(.callout).frame(width: 26) }
+                    if let trackNumber { Text(String(trackNumber)).text(.bodyS).foregroundStyle(p.secondary).frame(width: 26) }
                     else { SearchCover(id: "track:" + track.id, album: track.album.isEmpty ? track.title : track.album, artist: track.artist, artwork: track.artwork) }
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(track.title).lineLimit(2).font(.body)
-                        Text(track.artist).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                    Spacer(minLength: 0)
-                }.frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Color.primary).contentShape(Rectangle())
+                    MediaRowText(title: track.title, subtitle: track.artist)
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain).disabled(onPlay != nil && song == nil)
             Button {
                 if job?.state.active == true { app.musicDownloads.cancel(track.id) }
@@ -91,7 +89,7 @@ struct OnlineTrackRow: View {
                     .frame(width: 44, height: 44)
             }.buttonStyle(.plain).disabled(complete || preparing)
                 .accessibilityLabel(complete ? "Downloaded" : job?.state.active == true ? "Cancel download" : "Download \(track.title)")
-        }.padding(.vertical, 6).padding(.horizontal, onPlay == nil ? 0 : 16)
+        }.frame(minHeight: MediaLayout.rowArt).padding(.vertical, MediaLayout.rowPadding).padding(.horizontal, inset)
         }
     }
 }
@@ -143,7 +141,7 @@ struct OnlineAlbumView: View {
         let saved = !tracks.isEmpty && tracks.allSatisfy { app.musicStreams.savedIDs.contains($0.id) }
         return Button {
             if saved { app.musicStreams.remove(tracks) } else { app.musicStreams.save(tracks) }
-        } label: { Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle").font(.system(size: 24)).frame(width: 44, height: 44) }
+        } label: { IconControlLabel(symbol: saved ? "checkmark.circle.fill" : "plus.circle", selected: saved) }
             .disabled(tracks.isEmpty).accessibilityLabel(saved ? "Remove from Library" : "Add to Library")
     }
     private var downloadButton: some View {
@@ -177,10 +175,10 @@ struct MusicDownloadsView: View {
     var body: some View {
         @Bindable var downloads = app.musicDownloads
         NavigationStack {
-            List {
+            AppList {
                 Section {
                     Toggle("Wi-Fi only for new downloads", isOn: $downloads.wifiOnly)
-                    Text("Completed songs stay in your library and play offline.").font(.caption).foregroundStyle(.secondary)
+                    Text("Completed songs stay in your library and play offline.").text(.caption).foregroundStyle(.secondary)
                 }
                 if let message = downloads.message { Text(message) }
                 if downloads.jobs.isEmpty { Text("No downloads yet.") }

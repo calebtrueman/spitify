@@ -8,11 +8,11 @@ struct RoomsView: View {
     @State private var results: [OnlineTrack] = []
     @State private var message: String?
     var body: some View {
-        List {
+        AppList {
             if let room = app.rooms.room {
                 Section(room.name) {
                     Text(app.rooms.isHost ? "You host this Room" : "Listening with the host")
-                    Text("Everyone streams their own copy. An unavailable song may leave one person silent. Rooms need the host's app to stay connected.").font(.caption)
+                    Text("Everyone streams their own copy. An unavailable song may leave one person silent. Rooms need the host's app to stay connected.").text(.caption)
                     ShareLink("Invite someone", item: SocialLink(type: "room", owner: room.host, id: room.id).url)
                     Text("\(room.members.count) guests")
                     if app.rooms.isHost {
@@ -39,7 +39,9 @@ struct RoomsView: View {
                 }
                 Section("Shared queue") {
                     ForEach(room.queue) { track in
-                        HStack { if room.currentID == track.id { Image(systemName: "speaker.wave.2.fill") }; VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption) } }
+                        MediaRowContent(inset: 0) {
+                            SharedTrackCover(track: track, matched: nil).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                        } detail: { MediaRowText(title: track.title, subtitle: track.artist, highlighted: room.currentID == track.id, badge: room.currentID == track.id ? "speaker.wave.2.fill" : nil) } trailing: { EmptyView() }
                             .swipeActions { if app.rooms.isHost || room.allowControls { Button("Remove", role: .destructive) { perform { try await app.rooms.remove(track.id) } } } }
                     }
                 }
@@ -47,7 +49,9 @@ struct RoomsView: View {
                     TextField("Find a song", text: $query)
                     ForEach(results) { track in
                         Button { perform { try await app.rooms.add([SharedTrack(title: track.title, artist: track.artist, album: track.album, durationMs: track.durationMs, sourceID: track.id, releaseID: track.releaseID, artwork: track.artwork)]) } } label: {
-                            VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption) }
+                            MediaRowContent(inset: 0) {
+                                PlaylistCover(url: track.artwork).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                            } detail: { MediaRowText(title: track.title, subtitle: track.artist) } trailing: { EmptyView() }
                         }
                     }
                 }

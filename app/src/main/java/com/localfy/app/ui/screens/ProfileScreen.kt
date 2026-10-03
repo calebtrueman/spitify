@@ -92,7 +92,7 @@ fun ProfileScreen() {
                     Column(Modifier.weight(1f)) {
                         Text("PROFILE", style = MaterialTheme.typography.labelSmall, color = LocalfyColors.TextSecondary)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(profile.name.ifBlank { "Listener" }, style = MaterialTheme.typography.displaySmall, maxLines = 1)
+                            Text(profile.name.ifBlank { "Listener" }, style = MaterialTheme.typography.headlineLarge, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                             IconButton(onClick = { renaming = true }) { Icon(Icons.Rounded.Edit, "Edit name", tint = LocalfyColors.TextSecondary) }
                         }
                         Text(
