@@ -163,10 +163,32 @@ choosing a replacement yourself.
 
 ## Widgets and automatic backup
 
-The IPA includes Quick play, Your Library and Friends widgets in three sizes. Keep
-the `SpitifyWidgets` extension when signing the IPA. An Xcode install needs a profile
-for both the app and its widget extension. A build signed only for the app cannot
-install those widgets.
+The IPA includes **Now Playing**, **Playlists**, **Albums**, **Most Played**,
+**Recently Played**, **Recently Added**, **Liked Songs**, and **Friends** widgets.
+Each comes in small, medium and large sizes. Now Playing shows the current cover,
+title and artist, with previous, play/pause and next buttons that control playback
+without opening the app. Music shelves show real covers; tapping an item plays it.
+The app refreshes the saved widget data when playback, artwork or your library changes.
+iOS decides exactly when a Home Screen widget redraws.
+
+To try them on your iPhone:
+
+1. Install or update the release IPA through SideStore. Choose **Keep App Extensions**
+   if prompted; keep **SpitifyWidgets** selected when choosing extensions individually.
+2. Open Spitify once and play a song, then return to the Home Screen.
+3. Hold an empty area, choose **Edit → Add Widget**, and search for **Spitify**.
+4. Add **Now Playing** and try pause, play, next and previous. The cover and title
+   should follow the current song.
+5. Add **Playlists**, **Albums**, or one of the listening-history shelves. Tap a cover
+   to start that song or collection. Small shelves show one item, medium four, and large six.
+
+Keep the extension when installing future updates. Release checks reject a missing
+widget, mismatched app/widget versions, or missing artwork-sharing permissions before
+upload or SideStore listing. The app and widget share only the small display snapshot
+and cover copies through an App Group; the library and audio files remain in the app.
+SideStore-renamed groups are read from the installed signing profile. An Xcode install
+requires signing profiles for both targets and their shared App Group. These are Home
+Screen widgets; a separate Lock Screen widget is not included.
 
 Settings and custom covers are included in device backups. The friend identity stays
 in Keychain and can be restored from an encrypted device backup. Offloading keeps

@@ -69,7 +69,7 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 ### Friends, playlists and listening together
 - Use **Your Library → Add from Spotify** to paste a public playlist link, preview its cover and songs, then save it. Regular links and Spotify short share links work. You can also find public playlists in Search. Matching runs in the background when you open or save a playlist, and saved matches are reused. Playback starts with the first available song while the rest prepare. Spitify keeps the playlist name, cover, description and source link, then matches songs to its own files and online sources. Incomplete source lists are labelled. Unmatched songs move into **Failed matches** at the bottom. Import a matching local file to restore its original place, or tap **Choose copy**. Chosen copies and failed matches stay saved. Missing catalogue songs can also use the same matched backup sources as playback.
 - Use **Scan Spotify code** in Search or the Library menu to choose a photo or take a picture. The code is read on your phone; only its number goes to Spotify to find the item. Playlist codes open a playlist preview. Other supported codes open the matching Spotify link and a search in Spitify. Keep the bars level, clear and fully visible. This lookup uses Spotify’s unofficial web-player service and can stop working if that service changes.
-- Open **Friends** in the sidebar or Library. Tap a person to view their name, photo and shared music. Your profile updates itself while sharing is on; choose **Public profile** or keep it private to people you follow. Use **Your picture code** to share an image, or **Add friend** to import one. Adding a friend turns sharing on. Unfollowing sits in a separate menu and asks first.
+- Open **Friends** in the sidebar or Library. Tap a person to view their name, photo and shared music. Your profile updates itself while sharing is on; choose **Profile → Public profile** or keep it private to people you follow. Use **My code** at the top of Friends to share an image, or **Add friend** to import one. Adding a friend turns sharing on. Unfollowing sits in a separate menu and asks first.
 - Share a song, album or playlist from its menu. Invite editors to add, remove, rename and reorder songs. Their changes wait for the owner's app to accept them.
 - **Shared Mix** takes turns between songs picked by each person and skips repeated recordings. It uses contributions you choose, rather than uploading listening history.
 - **Rooms** lets a host approve guests, share a queue, and choose whether guests can control playback. Everyone plays their own matching source. Leaving or ending a Room stops future Room updates from restarting a guest's music.
@@ -80,7 +80,7 @@ Friends and Rooms use public relays, with no Spitify-run server. Delivery and so
 
 ### Home screen widgets and backup
 
-Both apps include **Quick play**, **Your Library**, and **Friends** widgets. Their buttons open Spitify to play music or reach the chosen page. iPhone widgets come in small, medium and large sizes in the IPA; the signing tool must keep the widget extension. A direct Xcode install needs a separate signing profile for that extension.
+iPhone has **Now Playing** with cover art and previous/play-pause/next controls, plus **Playlists**, **Albums**, **Most Played**, **Recently Played**, **Recently Added**, **Liked Songs**, and **Friends** widgets in three sizes. Music shelves show your covers and play an item when tapped. Keep the widget extension when installing through SideStore. Release checks require both the extension and its artwork-sharing permission. Android includes **Quick play**, **Your Library**, and **Friends** shortcut widgets.
 
 Settings, chosen covers, saved matches and friend details use the phone’s own backup system. Android restores depend on its backup service and the same app signing key; folder access may need to be granted again. iPhone settings belong to the device backup, and the friend key can travel in encrypted device backups. **Offload App** keeps iPhone app data; **Delete App** followed by a plain reinstall does not restore all settings automatically. There is no Spitify backup account.
 
@@ -165,7 +165,7 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Room for longer text:** Home, Search, library lists and player controls adapt to narrow screens and larger text. Selected colours stay readable in light and dark themes.
 - **Player style button:** change artwork style beside the video button. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
 - **Motion:** reduce motion and haptics toggles.
-- **Profile:** your name and photo, set up on first launch.
+- **Profile:** one place for your photo, name, bio, privacy and shared music. New photos save at 1536 pixels; friends receive a sharper copy.
 
 ## iPhone
 

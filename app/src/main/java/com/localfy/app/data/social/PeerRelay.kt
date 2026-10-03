@@ -141,7 +141,7 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
         require(packet.v == 1 && logical.length <= 220 && (recipient == null || SocialRules.key(recipient))) { "That friend code is not valid." }
         val data = packet.json().toString().toByteArray(); require(data.size <= 1_000_000) { "This share is too large. Try a smaller playlist." }
         val transfer = UUID.randomUUID().toString(); val digest = SocialRules.hash(data)
-        val chunkSize = if (logical == "profile") 36000 else 9000
+        val chunkSize = if (logical == "profile") 48000 else 9000
         require(logical != "profile" || data.size <= chunkSize) { "Your profile photo is too large." }
         val chunks = data.toList().chunked(chunkSize).map { it.toByteArray() }
         val prefix = "$logical:${recipient ?: "public"}"

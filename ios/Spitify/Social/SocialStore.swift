@@ -76,11 +76,13 @@ final class SocialStore {
             let app = AppModel.shared
             let name = app.profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return }
-            let photo = (try? Data(contentsOf: AppModel.photoURL)).flatMap { ArtCache.squareJPEG($0, side: 96) }.flatMap { $0.count <= 16000 ? $0.base64EncodedString() : nil }
+            let sourcePhoto = try? Data(contentsOf: AppModel.photoURL)
+            let photo = sourcePhoto.flatMap(ProfilePhotos.preview)
+            let photoHD = sourcePhoto.flatMap(ProfilePhotos.shared)
             let old = state.profiles[publicKey]
             let about = UserDefaults.standard.string(forKey: "socialAbout") ?? old?.about ?? ""
-            let profile = FriendProfile(photo: photo, isPublic: publicProfile, id: publicKey, name: String(name.prefix(80)), about: String(about.prefix(500)))
-            let changed = old?.name != profile.name || old?.about != profile.about || old?.photo != profile.photo || old?.isPublic != profile.isPublic
+            let profile = FriendProfile(photo: photo, photoHD: photoHD, isPublic: publicProfile, id: publicKey, name: String(name.prefix(80)), about: String(about.prefix(500)))
+            let changed = old?.name != profile.name || old?.about != profile.about || old?.photo != profile.photo || old?.photoHD != profile.photoHD || old?.isPublic != profile.isPublic
             if changed { state.profiles[publicKey] = profile; persist() }
             guard enabled, changed || force || UserDefaults.standard.double(forKey: "socialProfileSent") < Date().timeIntervalSince1970 - 86400 else { return }
             if publicProfile { try await relay?.send(.make("profile", profile), logical: "profile") }

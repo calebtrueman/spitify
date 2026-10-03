@@ -12,16 +12,10 @@ struct FriendsView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Text("Music is better together.").text(.headlineL)
                 HStack {
-                    NavigationLink { FriendProfileView(person: app.social.publicKey) } label: {
-                        FriendPortrait(profile: app.social.state.profiles[app.social.publicKey]).frame(width: 64, height: 64)
-                        VStack(alignment: .leading) { Text(app.profile.name.isEmpty ? "Your profile" : app.profile.name).text(.title); Text("View your profile & friend code").text(.bodyS) }
-                    }.buttonStyle(.plain)
-                    Spacer()
-                }
-                HStack {
                     Button("Add friend", systemImage: "person.badge.plus") { adding = true }.buttonStyle(.borderedProminent)
-                    NavigationLink { RoomsView() } label: { Label("Listen together", systemImage: "headphones") }.buttonStyle(.bordered)
+                    NavigationLink { FriendCodeView() } label: { Label("My code", systemImage: "qrcode") }.buttonStyle(.bordered)
                 }
+                NavigationLink { RoomsView() } label: { Label("Listen together", systemImage: "headphones") }
                 Text("Your friends").text(.title)
                 if app.social.state.following.isEmpty { Text("Add a friend's picture code or link to start sharing music.").foregroundStyle(p.secondary) }
                 ForEach(app.social.state.following.sorted { displayName($0) < displayName($1) }, id: \.self) { person in
@@ -34,11 +28,10 @@ struct FriendsView: View {
                     }.buttonStyle(.plain)
                 }
                 NavigationLink("Create a shared playlist or mix") { CreateSharedPlaylistView() }
-                if !app.social.enabled { Text("Sharing is paused. Turn it on in Friends settings.").text(.bodyS) }
+                if !app.social.enabled { Button("Resume sharing") { app.social.configure(enabled: true, discovery: app.social.discovery) } }
                 if let message = app.social.message { Text(message).text(.bodyS) }
             }.padding(20)
         }.navigationTitle("Friends")
-            .toolbar { NavigationLink { FriendsSettingsView() } label: { Image(systemName: "gearshape") }.accessibilityLabel("Friends settings") }
             .sheet(isPresented: $adding) { NavigationStack { AddFriendView() } }
             .task { try? app.social.prepare(); await app.social.syncProfile() }
     }
@@ -49,7 +42,7 @@ struct FriendPortrait: View {
     var profile: FriendProfile?
     var body: some View {
         Group {
-            if let photo = profile?.photo, let data = Data(base64Encoded: photo), let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill() }
+            if let photo = profile?.photoHD ?? profile?.photo, let data = Data(base64Encoded: photo), let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFill() }
             else if let url = profile?.image { AsyncImage(url: URL(string: url)) { image in image.resizable().scaledToFill() } placeholder: { placeholder } }
             else { placeholder }
         }.clipShape(Circle())
@@ -66,14 +59,12 @@ struct FriendProfileView: View {
     private var profile: FriendProfile? { app.social.state.profiles[person] }
     private var shared: [SharedPlaylist] { app.social.playlists.filter { $0.owner == person || app.social.state.recipients[$0.key]?.contains(person) == true || $0.editors.contains(person) } }
     var body: some View {
+        if own { ProfileView() } else {
         CollectionLayout(title: profile?.name ?? "Profile not loaded", subtitle: profile?.about ?? "Their name and photo will appear when their profile arrives.", metadata: own ? "Your profile" : "Friend", artKey: "friend:" + person, remoteArt: profile?.image) {
             FriendPortrait(profile: profile)
         } actions: {
             HStack {
-                if own {
-                    NavigationLink("Edit profile") { ProfileView() }.buttonStyle(.bordered)
-                    NavigationLink("Your picture code") { FriendCodeView() }.buttonStyle(.borderedProminent)
-                } else if app.social.state.following.contains(person) {
+                if app.social.state.following.contains(person) {
                     Menu { Button("Unfollow", role: .destructive) { removing = true } } label: { Label("Following", systemImage: "checkmark") }.buttonStyle(.bordered)
                 } else { Button("Follow") { try? app.social.follow(person) }.buttonStyle(.borderedProminent) }
             }.padding(.horizontal, 20)
@@ -86,22 +77,16 @@ struct FriendProfileView: View {
                 }.buttonStyle(.plain) }
             }.padding(20)
         }.confirmationDialog("Unfollow this friend?", isPresented: $removing, titleVisibility: .visible) { Button("Unfollow", role: .destructive) { app.social.unfollow(person); dismiss() } } message: { Text("Your saved playlists stay on this phone.") }
+        }
     }
 }
 
 struct FriendsSettingsView: View {
     @Environment(AppModel.self) private var app
-    @AppStorage("socialAbout") private var about = ""
     @State private var relays = ""
     @State private var message: String?
     var body: some View {
         AppForm {
-            Section("Your profile") {
-                NavigationLink("Change name or photo") { ProfileView() }
-                TextField("About you", text: $about, axis: .vertical)
-                Toggle("Public profile", isOn: Binding(get: { app.social.publicProfile }, set: { app.social.setPublicProfile($0) }))
-                Text(app.social.publicProfile ? "Anyone with your code can see your name, photo and bio. Changes share automatically." : "Only people you follow receive your name, photo and bio. A private notice replaces your public profile. Copies already saved elsewhere may remain.").text(.caption)
-            }
             Section("Connection") {
                 Toggle("Connect with friends", isOn: Binding(get: { app.social.enabled }, set: { app.social.configure(enabled: $0, discovery: app.social.discovery) }))
                 Text(app.social.enabled ? "\(app.social.connected) connections · \(app.social.pending) updates waiting" : "Sharing is paused. Your changes stay saved here.")
@@ -117,8 +102,7 @@ struct FriendsSettingsView: View {
             } }
             if let message { Text(message) }
             if let message = app.social.message { Text(message) }
-        }.navigationTitle("Friends settings").onAppear { relays = app.social.relayAddresses.joined(separator: "\n") }
-            .task(id: about) { do { try await Task.sleep(for: .milliseconds(650)); await app.social.syncProfile() } catch {} }
+        }.navigationTitle("Sharing connection").onAppear { relays = app.social.relayAddresses.joined(separator: "\n") }
     }
 }
 

@@ -126,7 +126,7 @@ struct RelayOutgoing: Codable {
         let data = try JSONEncoder().encode(packet)
         guard data.count <= 1_000_000 else { throw MusicSourceError.message("This share is too large. Try a smaller playlist.") }
         let transfer = UUID().uuidString.lowercased(); let digest = SocialRules.hash(data)
-        let chunkSize = logical == "profile" ? 36_000 : 9_000
+        let chunkSize = logical == "profile" ? 48_000 : 9_000
         guard logical != "profile" || data.count <= chunkSize else { throw MusicSourceError.message("Your profile photo is too large.") }
         let chunks = stride(from: 0, to: data.count, by: chunkSize).map { data.subdata(in: $0..<min($0 + chunkSize, data.count)) }
         let prefix = "\(logical):\(recipient ?? "public")"

@@ -74,7 +74,7 @@ struct RootView: View {
         .animation(.spring(duration: 0.35), value: app.player.message)
         .task { await app.start(); openReleaseFeedIfRequested() }
         .onReceive(NotificationCenter.default.publisher(for: .init("SpitifyOpenReleaseFeed"))) { _ in openReleaseFeedIfRequested() }
-        .onChange(of: phase) { _, new in if new == .active { app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
+        .onChange(of: phase) { _, new in if new == .active { app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
         .sheet(isPresented: Binding(get: { incomingLink != nil }, set: { if !$0 { incomingLink = nil } })) {
             if let value = incomingLink, let link = SocialLink.parse(value) { NavigationStack { IncomingShareView(link: link) }.environment(app) }
         }
@@ -111,6 +111,12 @@ struct RootView: View {
         if url.scheme == "spitify", url.host == "widget" {
             await VoiceLibrary.ready()
             switch url.lastPathComponent {
+            case "now-playing": router.playerOpen = true
+            case "playlists": router.tab = .library
+            case "albums": router.tab = .library
+            case "most-played": router.go(.smart(.mostPlayed))
+            case "recently-played": router.go(.smart(.recentlyPlayed))
+            case "recently-added": router.go(.smart(.recentlyAdded))
             case "resume": if app.player.hasMedia { app.player.resume() } else { _ = VoiceLibrary.play("allSongs") }
             case "shuffle": app.player.play(app.library.library.songs, shuffle: true, source: "All songs")
             case "liked": _ = VoiceLibrary.play("liked")

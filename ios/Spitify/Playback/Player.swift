@@ -86,6 +86,7 @@ final class Player {
     private var handlingRouteChange = false
     private var resumeAfterInterruption = false
 
+    var onPlaybackChanged: (() -> Void)?
     weak var library: LibraryStore?
     weak var shows: ShowsStore?
 
@@ -660,6 +661,7 @@ final class Player {
     }
 
     private func updateNowPlaying() {
+        onPlaybackChanged?()
         guard hasStartedPlayback else { return }
         let c = MPRemoteCommandCenter.shared()
         let spoken = current?.isSpoken == true

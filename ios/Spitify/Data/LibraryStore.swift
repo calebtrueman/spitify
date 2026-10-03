@@ -14,19 +14,20 @@ final class LibraryStore {
     private(set) var lastScanFound = 0
 
     /// Fired when anything the taste engine learns from changes.
+    var onWidgetDataChanged: (() -> Void)?
     var onScanCompleted: (() -> Void)?
     var onTasteInputChanged: (() -> Void)?
 
-    var liked: [String: Date] = [:] { didSet { Store.save(liked, "liked"); onTasteInputChanged?() } }
-    var playlists: [Playlist] = [] { didSet { Store.save(playlists, "playlists") } }
-    var listens: [Listen] = [] { didSet { Store.save(listens, "listens"); onTasteInputChanged?() } }
+    var liked: [String: Date] = [:] { didSet { Store.save(liked, "liked"); onTasteInputChanged?(); onWidgetDataChanged?() } }
+    var playlists: [Playlist] = [] { didSet { Store.save(playlists, "playlists"); onWidgetDataChanged?() } }
+    var listens: [Listen] = [] { didSet { Store.save(listens, "listens"); onTasteInputChanged?(); onWidgetDataChanged?() } }
     var overrides: [String: MetadataOverride] = [:] { didSet { Store.save(overrides, "overrides"); rebuild() } }
-    var hiddenSongs: Set<String> = [] { didSet { Store.save(hiddenSongs, "hiddenSongs"); onTasteInputChanged?() } }
-    var hiddenArtists: Set<String> = [] { didSet { Store.save(hiddenArtists, "hiddenArtists"); onTasteInputChanged?() } }
+    var hiddenSongs: Set<String> = [] { didSet { Store.save(hiddenSongs, "hiddenSongs"); onTasteInputChanged?(); onWidgetDataChanged?() } }
+    var hiddenArtists: Set<String> = [] { didSet { Store.save(hiddenArtists, "hiddenArtists"); onTasteInputChanged?(); onWidgetDataChanged?() } }
     var includeMusicLibrary: Bool = UserDefaults.standard.bool(forKey: "includeMusicLibrary") {
         didSet { UserDefaults.standard.set(includeMusicLibrary, forKey: "includeMusicLibrary") }
     }
-    var artVersion = 0
+    var artVersion = 0 { didSet { onWidgetDataChanged?() } }
 
     private struct CacheEntry: Codable { var modified: Date; var size: Int64; var song: Song; var hasArt: Bool }
     private var cache: [String: CacheEntry] = [:]
@@ -155,7 +156,7 @@ final class LibraryStore {
         let localBySong = Dictionary(grouping: local, by: Library.songMatchKey)
         let remote = saved.filter { stream in !(localBySong[Library.songMatchKey(stream)] ?? []).contains { Library.isDownloadedCopy($0, of: stream) } }
         library = Library.build(local + remote)
-        onTasteInputChanged?()
+        onTasteInputChanged?(); onWidgetDataChanged?()
     }
 
     private func apply(_ s: Song) -> Song {

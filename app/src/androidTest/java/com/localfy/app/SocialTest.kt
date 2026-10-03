@@ -37,18 +37,42 @@ class SocialTest {
             try {
                 val sender = PeerRelay(context, Keys.parse("1".repeat(64)), scope, storage, true)
                 val receiver = PeerRelay(context, Keys.parse("2".repeat(64)), scope, "photo-receiver-${UUID.randomUUID()}", true)
-                val photo = android.util.Base64.encodeToString(ByteArray(16000) { 42 }, android.util.Base64.NO_WRAP)
-                val body = JSONObject().put("id", sender.publicKey).put("name", "Photo test").put("photo", photo).put("isPublic", true).put("updatedAt", 1)
+                val photo = android.util.Base64.encodeToString(ByteArray(2000) { 42 }, android.util.Base64.NO_WRAP)
+                val hd = android.util.Base64.encodeToString(ByteArray(18000) { 7 }, android.util.Base64.NO_WRAP)
+                val body = JSONObject().put("id", sender.publicKey).put("name", "🎵".repeat(40)).put("about", "🎵".repeat(250)).put("photo", photo).put("photoHD", hd).put("isPublic", true).put("updatedAt", 1)
                 var received: String? = null
-                receiver.onPacket = { _, packet, _ -> received = packet.body.optString("photo") }
+                receiver.onPacket = { _, packet, _ -> received = packet.body.optString("photoHD") }
                 sender.send(SocialPacket("profile", body), "profile")
                 val saved = events(storage); assertEquals(1, saved.length())
                 receiver.receive(wire(JSONObject(saved.getJSONObject(0).getString("json"))))
-                assertEquals(photo, received)
+                assertEquals(hd, received)
                 sender.send(SocialPacket("profile", body), "profile", receiver.publicKey)
                 assertEquals(2, events(storage).length())
+                received = null
+                val privateEvent = events(storage).getJSONObject(1).getString("json")
+                assertTrue(privateEvent.toByteArray().size < 65536)
+                receiver.receive(wire(JSONObject(privateEvent)))
+                assertEquals(hd, received)
             } finally { scope.cancel(); context.deleteSharedPreferences(storage) }
         }
+    }
+
+    @Test fun sharedPhotoKeepsDetailWithinMessageBudget() {
+        val source = android.graphics.Bitmap.createBitmap(1536, 1536, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(source)
+        val paint = android.graphics.Paint()
+        for (y in 0 until 1536 step 24) for (x in 0 until 1536 step 24) {
+            paint.color = android.graphics.Color.HSVToColor(floatArrayOf(((x + y) % 1536) / 1536f * 360f, 0.8f, 0.9f))
+            canvas.drawRect(x.toFloat(), y.toFloat(), (x + 24).toFloat(), (y + 24).toFloat(), paint)
+        }
+        try {
+            val hd = android.util.Base64.decode(requireNotNull(ProfilePhotos.shared(source)), android.util.Base64.DEFAULT)
+            assertTrue(hd.size <= 18000)
+            val image = requireNotNull(android.graphics.BitmapFactory.decodeByteArray(hd, 0, hd.size))
+            assertTrue(image.width >= 384); image.recycle()
+            val preview = android.util.Base64.decode(requireNotNull(ProfilePhotos.preview(source)), android.util.Base64.DEFAULT)
+            assertTrue(preview.size <= 2000)
+        } finally { source.recycle() }
     }
 
     @Test fun importedPlaylistPreservesSafeSongArtworkAndSourceOrder() {

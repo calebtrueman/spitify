@@ -3,7 +3,7 @@ name: iOS build
 on:
   push:
     branches: [main]
-    paths: ["ios/**", "shared/**", ".github/workflows/ios.yml"]
+    paths: ["ios/**", "shared/**", ".github/workflows/ios.yml", "scripts/check-ios-widgets.py"]
   workflow_dispatch:
   release:
     types: [published]
@@ -39,7 +39,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet
           mkdir -p build/ipa/Payload
           cp -R build/Spitify.xcarchive/Products/Applications/Spitify.app build/ipa/Payload/
+          codesign --force --sign - --entitlements Spitify/Widgets.entitlements --generate-entitlement-der build/ipa/Payload/Spitify.app/PlugIns/SpitifyWidgets.appex
+          codesign --force --sign - --entitlements Spitify/Widgets.entitlements --generate-entitlement-der build/ipa/Payload/Spitify.app
           (cd build/ipa && zip -qry ../Spitify.ipa Payload)
+      - name: Require widgets in every update
+        run: python3 scripts/check-ios-widgets.py ios/build/Spitify.ipa
       - uses: actions/upload-artifact@v4
         with:
           name: Spitify-unsigned-ipa

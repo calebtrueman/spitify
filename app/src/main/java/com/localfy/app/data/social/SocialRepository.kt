@@ -74,17 +74,14 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
             val app = context.applicationContext as com.localfy.app.LocalfyApp
             val name = app.profiles.profile.value.name.trim().take(80)
             if (name.isEmpty()) return
-            val photo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val photos = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 android.graphics.BitmapFactory.decodeFile(app.profiles.photoFile.path)?.let { original ->
-                    val small = android.graphics.Bitmap.createScaledBitmap(original, 96, 96, true)
-                    val output = java.io.ByteArrayOutputStream(); small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, output)
-                    if (small !== original) small.recycle(); original.recycle()
-                    output.toByteArray().takeIf { it.size <= 16000 }?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+                    try { ProfilePhotos.preview(original) to ProfilePhotos.shared(original) } finally { original.recycle() }
                 }
             }
             val old = state.profiles[publicKey]
-            val profile = FriendProfile(publicKey, name, prefs.getString("about", old?.about.orEmpty()).orEmpty().take(500), photo = photo, isPublic = publicProfile)
-            val different = old?.name != name || old.about != profile.about || old.photo != photo || old.isPublic != publicProfile
+            val profile = FriendProfile(publicKey, name, prefs.getString("about", old?.about.orEmpty()).orEmpty().take(500), photo = photos?.first, isPublic = publicProfile, photoHD = photos?.second)
+            val different = old?.name != name || old.about != profile.about || old.photo != profile.photo || old.photoHD != profile.photoHD || old.isPublic != publicProfile
             if (different) { state.profiles[publicKey] = profile; persist() }
             if (!enabled || !different && !force && prefs.getLong("profileSent", 0) > SocialRules.now - 86400000) return
             if (publicProfile) relay.send(SocialPacket("profile", profile.json()), "profile")

@@ -16,13 +16,13 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.19"
-    CURRENT_PROJECT_VERSION: "23"
+    MARKETING_VERSION: "1.0.20"
+    CURRENT_PROJECT_VERSION: "24"
     SPITIFY_BUNDLE_ID: "com.calebtrueman.spitify"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     # Set this to CarPlay.entitlements only with a CarPlay-approved signing profile.
-    SPITIFY_CARPLAY_ENTITLEMENTS: ""
+    SPITIFY_CARPLAY_ENTITLEMENTS: "Spitify/Widgets.entitlements"
     # Override with Spitify/Siri.entitlements for a Siri-enabled signing profile.
     SPITIFY_APP_ENTITLEMENTS: "$(SPITIFY_CARPLAY_ENTITLEMENTS)"
     CODE_SIGN_ENTITLEMENTS: "$(SPITIFY_APP_ENTITLEMENTS)"
@@ -32,6 +32,7 @@ targets:
     platform: iOS
     sources:
       - path: Spitify
+      - path: WidgetShared
       - path: ../licenses
         buildPhase: resources
       - path: ../shared/themes
@@ -64,13 +65,14 @@ targets:
   SpitifyWidgets:
     type: app-extension
     platform: iOS
-    sources: [SpitifyWidgets]
+    sources: [SpitifyWidgets, WidgetShared]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: "$(SPITIFY_BUNDLE_ID).widgets"
         INFOPLIST_FILE: SpitifyWidgets/Info.plist
         GENERATE_INFOPLIST_FILE: NO
-        CODE_SIGN_ENTITLEMENTS: ""
+        CODE_SIGN_ENTITLEMENTS: "Spitify/Widgets.entitlements"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SPITIFY_WIDGET_EXTENSION"
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         TARGETED_DEVICE_FAMILY: "1,2"

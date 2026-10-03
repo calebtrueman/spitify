@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.20",
+          "buildVersion": "24",
+          "date": "2026-10-03T17:56:22Z",
+          "localizedDescription": "Now Playing with cover art and playback controls, plus playlist, album, most-played, recent and liked-song widgets. Simpler Profile and Friends pages and sharper photos. Keep app extensions when installing through SideStore.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.20/Spitify-1.0.20-unsigned.ipa",
+          "size": 120288269,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.19",
           "buildVersion": "23",
           "date": "2026-10-03T16:59:41Z",

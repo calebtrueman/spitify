@@ -43,10 +43,10 @@ data class SharedPlaylist(
     }
 }
 
-data class FriendProfile(val id: String, val name: String, val about: String = "", val image: String? = null, val updatedAt: Long = SocialRules.now, val photo: String? = null, val isPublic: Boolean = true) {
-    fun valid() = (photo == null || photo.length <= 22000 && runCatching { java.util.Base64.getDecoder().decode(photo) }.isSuccess) && SocialRules.key(id) && name.length in 1..80 && about.length <= 500 && (image == null || SocialRules.publicURL(image))
-    fun json() = JSONObject().put("id", id).put("name", name).put("about", about).put("image", image).put("updatedAt", updatedAt).put("photo", photo).put("isPublic", isPublic)
-    companion object { fun parse(o: JSONObject) = FriendProfile(o.getString("id"), o.getString("name"), o.optString("about"), o.text("image"), o.optLong("updatedAt"), o.text("photo"), o.optBoolean("isPublic", true)) }
+data class FriendProfile(val id: String, val name: String, val about: String = "", val image: String? = null, val updatedAt: Long = SocialRules.now, val photo: String? = null, val isPublic: Boolean = true, val photoHD: String? = null) {
+    fun valid() = (photoHD == null || photoHD.length <= 24000 && runCatching { java.util.Base64.getDecoder().decode(photoHD) }.isSuccess) && (photo == null || photo.length <= 22000 && runCatching { java.util.Base64.getDecoder().decode(photo) }.isSuccess) && SocialRules.key(id) && name.length in 1..80 && about.length <= 500 && (image == null || SocialRules.publicURL(image))
+    fun json() = JSONObject().put("id", id).put("name", name).put("about", about).put("image", image).put("updatedAt", updatedAt).put("photo", photo).put("photoHD", photoHD).put("isPublic", isPublic)
+    companion object { fun parse(o: JSONObject) = FriendProfile(o.getString("id"), o.getString("name"), o.optString("about"), o.text("image"), o.optLong("updatedAt"), o.text("photo"), o.optBoolean("isPublic", true), o.text("photoHD")) }
 }
 
 data class SharedEdit(val id: String = UUID.randomUUID().toString(), val playlistID: String, val owner: String, val action: String, val tracks: List<SharedTrack> = emptyList(), val trackIDs: List<String> = emptyList(), val name: String? = null, val description: String? = null, val createdAt: Long = SocialRules.now) {

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Adds a release to ios/sidestore-source.json (newest first) so SideStore/AltStore can offer the update.
 Usage: update-sidestore-source.py VERSION IPA_PATH DOWNLOAD_URL [NOTES]"""
-import json, os, sys, datetime, plistlib, zipfile
+import json, os, sys, datetime, plistlib, zipfile, subprocess
 
 version, ipa, url = sys.argv[1:4]
 notes = sys.argv[4] if len(sys.argv) > 4 else f"Spitify {version}"
+subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "check-ios-widgets.py"), ipa], check=True)
 path = os.path.join(os.path.dirname(__file__), "..", "ios", "sidestore-source.json")
 src = json.load(open(path))
 app = src["apps"][0]

@@ -44,15 +44,11 @@ import kotlinx.coroutines.launch
         item { PageHeader("Friends", onBack = { actions.nav.popBackStack() }) }
         insetItem {
             Text("Music is better together.", style = MaterialTheme.typography.headlineLarge)
-            Row(Modifier.fillMaxWidth().clickable { actions.navigate("friend/${store.publicKey}") }.padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                FriendPortrait(store.state.profiles[store.publicKey], Modifier.size(64.dp))
-                Column { Text(own.name.ifBlank { "Your profile" }, style = MaterialTheme.typography.titleLarge); Text("Your profile & picture code") }
-            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = { actions.navigate("add-friend") }) { Text("Add friend") }
-                OutlinedButton(onClick = { actions.navigate("rooms") }) { Text("Listen together") }
+                OutlinedButton(onClick = { actions.navigate("friend-code") }) { Text("My code") }
             }
-            TextButton(onClick = { actions.navigate("friends-settings") }) { Text("Friends settings") }
+            TextButton(onClick = { actions.navigate("rooms") }) { Text("Listen together") }
         }
         insetItem { Text("Your friends", style = MaterialTheme.typography.titleLarge) }
         if (following.isEmpty()) insetItem { Text("Add a friend's picture code or link to start sharing music.") }
@@ -67,13 +63,13 @@ import kotlinx.coroutines.launch
             }
         }
         insetItem { TextButton(onClick = { actions.navigate("new-shared-playlist") }) { Text("Create a shared playlist or mix") } }
-        if (!store.enabled) insetItem { Text("Sharing is paused. Turn it on in Friends settings.") }
+        if (!store.enabled) insetItem { TextButton(onClick = { store.configure(true) }) { Text("Resume sharing") } }
         store.message?.let { insetItem { Text(it) } }
     }
 }
 
 @Composable fun FriendPortrait(profile: FriendProfile?, modifier: Modifier = Modifier) {
-    val photo = remember(profile?.photo) { profile?.photo?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }.getOrNull() } }
+    val photo = remember(profile?.photoHD, profile?.photo) { (profile?.photoHD ?: profile?.photo)?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }.getOrNull() } }
     Box(modifier.clip(CircleShape), contentAlignment = Alignment.Center) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surfaceVariant) { Box(contentAlignment = Alignment.Center) { Text(profile?.name?.take(1)?.uppercase() ?: "?", style = MaterialTheme.typography.headlineLarge) } }
         if (photo != null || profile?.image != null) AsyncImage(model = photo ?: profile?.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -87,15 +83,13 @@ import kotlinx.coroutines.launch
     val actions = LocalApp.current
     var removing by remember { mutableStateOf(false) }
     val profile = remember(revision, person) { store.state.profiles[person] }
-    val own = person == store.publicKey
+    if (person == store.publicKey) { ProfileScreen(); return }
+    val own = false
     val shared = remember(revision, person) { store.playlists.filter { it.owner == person || person in store.state.recipients[it.key].orEmpty() || person in it.editors } }
     CollectionPage(title = profile?.name ?: "Profile not loaded", kindLabel = if (own) "Your profile" else "Friend", subtitle = profile?.about ?: "Their name and photo will appear when their profile arrives.", summary = "", art = profile?.image?.let { ArtKey(person.hashCode().toLong(), 0, it) }, hero = true,
         cover = { FriendPortrait(profile, it) }, playEnabled = false,
         headerActions = {
-            if (own) {
-                OutlinedButton(onClick = { actions.navigate(Routes.PROFILE) }) { Text("Edit profile") }
-                Button(onClick = { actions.navigate("friend-code") }) { Text("Your picture code") }
-            } else if (person in store.state.following) {
+            if (person in store.state.following) {
                 var menu by remember { mutableStateOf(false) }
                 Box { OutlinedButton(onClick = { menu = true }) { Text("Following") }; DropdownMenu(menu, { menu = false }) { DropdownMenuItem(text = { Text("Unfollow") }, onClick = { menu = false; removing = true }) } }
             } else Button(onClick = { store.follow(person) }) { Text("Follow") }
@@ -111,22 +105,12 @@ import kotlinx.coroutines.launch
     val app = LocalContext.current.applicationContext as LocalfyApp
     val store = app.social
     val revision by store.revision.collectAsStateWithLifecycle()
-    val own by app.profiles.profile.collectAsStateWithLifecycle()
     val actions = LocalApp.current
-    var about by remember { mutableStateOf(store.state.profiles[store.publicKey]?.about.orEmpty()) }
     var advanced by remember { mutableStateOf(false) }
     var relays by remember { mutableStateOf(store.relayAddresses.joinToString("\n")) }
     var message by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(about, own) { kotlinx.coroutines.delay(650); store.publishProfile(own.name, about) }
     LazyColumn(contentPadding = PaddingValues(bottom = 120.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { PageHeader("Friends settings", onBack = { actions.nav.popBackStack() }) }
-        insetItem {
-            Text("Your profile", style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = { actions.navigate(Routes.PROFILE) }) { Text("Change name or photo") }
-            OutlinedTextField(about, { about = it.take(500) }, label = { Text("About you") }, modifier = Modifier.fillMaxWidth())
-            Row(verticalAlignment = Alignment.CenterVertically) { Text("Public profile", Modifier.weight(1f)); Switch(store.publicProfile, store::setPublicProfile) }
-            Text(if (store.publicProfile) "Anyone with your code can see your name, photo and bio. Changes share automatically." else "Only people you follow receive your name, photo and bio. A private notice replaces your public profile. Copies already saved elsewhere may remain.")
-        }
+        item { PageHeader("Sharing connection", onBack = { actions.nav.popBackStack() }) }
         insetItem {
             Text("Connection", style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) { Text("Connect with friends", Modifier.weight(1f)); Switch(store.enabled, { store.configure(it) }) }

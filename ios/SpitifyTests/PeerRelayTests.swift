@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import NostrSDK
 @testable import Spitify
 
@@ -12,7 +13,8 @@ final class PeerRelayTests: XCTestCase {
 
     func testProfilePhotoUsesOneReplaceableEvent() async throws {
         let a = relay(try sender()), b = relay(try receiver())
-        let profile = FriendProfile(photo: Data(repeating: 7, count: 16000).base64EncodedString(), isPublic: true, id: a.publicKey, name: "Alex")
+        let profile = FriendProfile(photo: Data(repeating: 7, count: 2000).base64EncodedString(), photoHD: Data(repeating: 9, count: 18000).base64EncodedString(), isPublic: true, id: a.publicKey, name: String(repeating: "🎵", count: 80), about: String(repeating: "🎵", count: 500))
+        XCTAssertTrue(profile.valid())
         var received: FriendProfile?
         b.onPacket = { _, packet, _ in received = try? packet.decode(FriendProfile.self) }
         try await a.send(.make("profile", profile), logical: "profile")
@@ -20,6 +22,28 @@ final class PeerRelayTests: XCTestCase {
         b.receive(wire(a.outgoing[0].json)); XCTAssertEqual(received, profile)
         try await a.send(.make("profile", profile), logical: "profile", to: b.publicKey)
         XCTAssertEqual(a.outgoing.count, 2)
+        received = nil
+        b.receive(wire(a.outgoing[1].json)); XCTAssertEqual(received, profile)
+        for outgoing in a.outgoing { XCTAssertLessThan(outgoing.json.utf8.count, 65536) }
+    }
+
+    func testSharedPhotoKeepsDetailWithinMessageBudget() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1536, height: 1536))
+        let original = renderer.image { context in
+            for y in stride(from: 0, to: 1536, by: 24) {
+                for x in stride(from: 0, to: 1536, by: 24) {
+                    UIColor(hue: CGFloat((x + y) % 1536) / 1536, saturation: 0.8, brightness: 0.9, alpha: 1).setFill()
+                    context.fill(CGRect(x: x, y: y, width: 24, height: 24))
+                }
+            }
+        }
+        let source = try XCTUnwrap(original.pngData())
+        let shared = try XCTUnwrap(ProfilePhotos.shared(source).flatMap { Data(base64Encoded: $0) })
+        XCTAssertLessThanOrEqual(shared.count, 18000)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(UIImage(data: shared)).size.width, 384)
+        let preview = try XCTUnwrap(ProfilePhotos.preview(source).flatMap { Data(base64Encoded: $0) })
+        XCTAssertLessThanOrEqual(preview.count, 2000)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(UIImage(data: preview)).size.width, 96)
     }
 
     func testPrivateMessagesVerifySignatureRecipientAndDuplicateDelivery() async throws {

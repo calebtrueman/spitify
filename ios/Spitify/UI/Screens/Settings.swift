@@ -16,9 +16,8 @@ struct SettingsView: View {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
-                NavigationLink { FriendsSettingsView() } label: { Label("Friends", systemImage: "person.2") }
+                NavigationLink { FriendsSettingsView() } label: { Label("Sharing connection", systemImage: "network") }
                 NavigationLink { HiddenArtistsView() } label: { Label("Hidden artists", systemImage: "eye.slash") }
-                NavigationLink(value: Route.profile) { Label("Profile", systemImage: "person.crop.circle") }
                 NavigationLink { VoiceHelpView() } label: { Label("Siri & Shortcuts", systemImage: "waveform") }
             }
             Section {
@@ -303,6 +302,7 @@ struct ProfileView: View {
     @State private var photo: PhotosPickerItem?
     @State private var renaming = false
     @State private var name = ""
+    @AppStorage("socialAbout") private var about = ""
     var body: some View {
         let month = Date().addingTimeInterval(-30 * 86_400)
         let monthListens = app.library.listens.filter { $0.at > month && !$0.skipped }
@@ -322,6 +322,20 @@ struct ProfileView: View {
                         Text("\(app.library.library.songs.count) songs · \(app.mixes.count) playlists made for you").text(.bodyS).foregroundStyle(p.secondary)
                     }
                 }.padding(20)
+                VStack(alignment: .leading, spacing: 14) {
+                    TextField("About you", text: $about, axis: .vertical).lineLimit(2...4)
+                    Toggle("Public profile", isOn: Binding(get: { app.social.publicProfile }, set: { app.social.setPublicProfile($0) }))
+                    Text(app.social.publicProfile ? "Anyone with your code can see your name, photo and bio." : "Only people you follow receive your name, photo and bio. Copies already saved elsewhere may remain.").text(.caption).foregroundStyle(p.secondary)
+                    NavigationLink { FriendCodeView() } label: { Label("My friend code", systemImage: "qrcode") }.buttonStyle(.bordered)
+                }.padding(20)
+                if !app.social.playlists.isEmpty {
+                    SectionHeader(title: "Your shared music")
+                    ForEach(app.social.playlists) { list in
+                        NavigationLink { SharedPlaylistView(initial: list) } label: {
+                            HStack { Text(list.name); Spacer(); Image(systemName: "chevron.right") }.padding(.horizontal, 20).padding(.vertical, 10)
+                        }
+                    }
+                }
                 HStack(spacing: 12) {
                     stat("\(monthListens.count) plays", "This month")
                     stat(monthListens.reduce(Int64(0)) { $0 + $1.listenedMs }.formattedLong, "Listening time")
@@ -359,6 +373,8 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: photo) { _, item in Task { if let d = try? await item?.loadTransferable(type: Data.self) { saveProfilePhoto(d, app) } } }
+        .task(id: about) { do { try await Task.sleep(for: .milliseconds(650)); await app.social.syncProfile() } catch {} }
+        .onChange(of: about) { _, value in if value.count > 500 { about = String(value.prefix(500)) } }
         .alert("Your name", isPresented: $renaming) { TextField("Name", text: $name); Button("Save") { app.profile.name = name.trimmingCharacters(in: .whitespaces) }; Button("Cancel", role: .cancel) {} }
     }
     private func stat(_ v: String, _ l: String) -> some View {
@@ -368,7 +384,7 @@ struct ProfileView: View {
 }
 
 @MainActor func saveProfilePhoto(_ data: Data, _ app: AppModel) {
-    guard let jpeg = ArtCache.squareJPEG(data, side: 512) else { return }
+    guard let jpeg = ArtCache.squareJPEG(data, side: 1536) else { return }
     try? jpeg.write(to: AppModel.photoURL, options: .atomic)
     app.profile.photoVersion += 1
 }

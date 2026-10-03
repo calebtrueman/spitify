@@ -53,7 +53,7 @@ class ProfileRepository(private val context: Context, private val scope: Corouti
 
     fun setPhoto(uri: Uri?) = scope.launch(Dispatchers.IO) {
         if (uri == null) photoFile.delete()
-        else if (!com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(context.contentResolver, uri), photoFile, 512)) return@launch
+        else if (!com.localfy.app.data.saveSquareImage(android.graphics.ImageDecoder.createSource(context.contentResolver, uri), photoFile, 1536)) return@launch
         prefs.edit { putLong("photoVersion", System.currentTimeMillis()) }
         _profile.value = load()
     }

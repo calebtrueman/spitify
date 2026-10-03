@@ -59,6 +59,7 @@ final class AppModel {
     private(set) var model: TasteModel?
     private(set) var fixing = false
     private var mixTask: Task<Void, Never>?
+    private var widgetTask: Task<Void, Never>?
     private var started = false
     private var fixesRequested = false
 
@@ -66,6 +67,8 @@ final class AppModel {
 
     init() {
         musicStreams.onChanged = { [weak self] in self?.library.rebuild() }
+        player.onPlaybackChanged = { [weak self] in self?.scheduleWidgets() }
+        library.onWidgetDataChanged = { [weak self] in self?.scheduleWidgets() }
         player.library = library
         player.shows = shows
         library.onScanCompleted = { [weak self] in Task { await self?.backgroundFixes() } }
@@ -82,6 +85,7 @@ final class AppModel {
         musicDownloads.start()
         await importDownloadedMusic(rescan: false)
         player.restore { [weak self] id in self?.lookup(id) }
+        scheduleWidgets()
         Task { await shows.refreshAll() }
         Task { await backgroundFixes() }
         // Time-based playlists (daylist) move on even if nothing else changes.
@@ -100,6 +104,15 @@ final class AppModel {
             library.saveOverride(MetadataOverride(title: track.title, artist: track.artist,
                 album: track.album.isEmpty ? nil : track.album, albumArtist: track.albumArtist ?? track.primaryArtist, track: track.trackNumber > 0 ? track.trackNumber : nil,
                 disc: track.discNumber, source: "online"), for: [song])
+        }
+    }
+
+    func scheduleWidgets() {
+        widgetTask?.cancel()
+        widgetTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+            guard let self else { return }
+            WidgetPublisher.refresh(self)
         }
     }
 

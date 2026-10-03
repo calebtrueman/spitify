@@ -32,6 +32,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -63,6 +66,13 @@ import com.localfy.app.ui.theme.LocalfyColors
 fun ProfileScreen() {
     val app = LocalApp.current
     val profile by app.profiles.profile.collectAsStateWithLifecycle()
+    val nativeApp = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp
+    val store = nativeApp.social
+    val revision by store.revision.collectAsStateWithLifecycle()
+    val publicProfile = remember(revision) { store.publicProfile }
+    val shared = remember(revision) { store.playlists }
+    var about by remember { mutableStateOf(store.state.profiles[store.publicKey]?.about.orEmpty()) }
+    LaunchedEffect(about, profile) { kotlinx.coroutines.delay(650); store.publishProfile(profile.name, about) }
     val model by app.taste.model.collectAsStateWithLifecycle()
     val library by app.repo.library.collectAsStateWithLifecycle()
     val mixes by app.repo.mixes.collectAsStateWithLifecycle()
@@ -101,11 +111,21 @@ fun ProfileScreen() {
                         )
                     }
                 }
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    OutlinedTextField(about, { about = it.take(500) }, label = { Text("About you") }, modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 4)
+                    Row(verticalAlignment = Alignment.CenterVertically) { Text("Public profile", Modifier.weight(1f)); Switch(publicProfile, store::setPublicProfile) }
+                    Text(if (publicProfile) "Anyone with your code can see your name, photo and bio." else "Only people you follow receive your name, photo and bio. Copies already saved elsewhere may remain.", style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { app.navigate("friend-code") }) { Text("My friend code") }
+                }
                 Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatPill("This month", "${monthListens.size} plays", Modifier.weight(1f))
                     StatPill("Listening time", formatLongDuration(monthListens.sumOf { it.listenedMs }), Modifier.weight(1f))
                 }
             }
+        }
+        if (shared.isNotEmpty()) {
+            item { SectionHeader("Your shared music") }
+            items(shared, key = { it.key }) { list -> ProfileRow(list.name, "Shared playlist") { app.navigate(Routes.sharedPlaylist(list.key)) } }
         }
         if (topArtists.isNotEmpty()) {
             item { SectionHeader("Your top artists", eyebrow = "What Spitify has learned") }
