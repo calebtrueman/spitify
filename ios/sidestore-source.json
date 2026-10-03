@@ -33,10 +33,10 @@
         {
           "version": "1.0.16",
           "buildVersion": "20",
-          "date": "2026-10-03T03:55:08Z",
-          "localizedDescription": "Longer music videos with smooth fades and reliable resume. Better playlists with song art. Main-artist library pages, safer album tracks, closer icon crops, covers for spoken audio, clearer Siri commands, and iPhone stream and vinyl-scrubbing fixes.",
+          "date": "2026-10-03T04:08:00Z",
+          "localizedDescription": "Spitify 1.0.16 improves music videos, playlists, library artists and iPhone streaming.\n\n- Videos now use up to ten longer passages spread through the recording. The last picture stays visible while the next passage loads, then fades into it. Pausing also holds an unfinished fade, and resuming or returning to the app restarts the moving picture. A discarded video frame no longer prevents later passages from playing.\n- Playlists have a cover, clear Play/Shuffle/Save buttons, song artwork, full-row playback and song menus. Removed the \u201cOpen original playlist\u201d link.\n- Your Library lists main artists. Guest credits remain available from songs, without adding guest-only artists or giving them another artist's album cover.\n- Album loading checks the returned release and rejects unrelated duplicate-numbered tracks. This removes the Tay-K entry supplied with Phoebe Bridgers' Punisher. The source is still missing ICU; the app does not fill its place with an unrelated song.\n- Podcasts and audiobooks always show their covers. Returning to music restores the chosen artwork style.\n- All 25 icon designs keep the same artwork, cropped closer to fill their space.\n- iPhone streams retry a failed first start once before moving on. Repeated vinyl seeks finish in order and follow the latest finger position instead of repeatedly cancelling the audio decoder. Normal-speed playback also avoids the extra pitch processing that made the Buggles recording silent during a drag; changed playback speed",
           "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.16/Spitify-1.0.16-unsigned.ipa",
-          "size": 93010273,
+          "size": 92988275,
           "minOSVersion": "17.0"
         },
         {
