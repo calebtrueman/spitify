@@ -142,7 +142,7 @@ struct ArtistView: View {
         if let a = app.library.library.artistByName[name] {
             let counts = app.library.playCounts
             let popular = a.songs.sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
-            CollectionView(title: a.name, kind: "Artist", subtitle: "\(a.albums.count) albums • \(songCount(a.songs.count))", art: a.cover, songs: popular, hero: true,
+            CollectionView(title: a.name, kind: "Artist", subtitle: "\(a.albums.count) albums • \(songCount(a.songs.count))", art: a.ownCover, songs: popular, hero: true,
                            songSubtitle: { s in (counts[s.id] ?? 0) > 0 ? "\(counts[s.id]!) plays • \(s.album)" : s.album },
                            toolbarExtra: AnyView(Button { app.player.play(app.artistRadio(a.name).isEmpty ? a.songs : app.artistRadio(a.name), shuffle: false, source: "\(a.name) Radio") } label: {
                                Image(systemName: "dot.radiowaves.left.and.right").font(.system(size: 20)).frame(width: 44, height: 44).contentShape(Rectangle()) })) {

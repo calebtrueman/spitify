@@ -74,7 +74,8 @@ struct Artist: Identifiable, Hashable {
     var name: String
     var songs: [Song]
     var albums: [Album]
-    var cover: Song { songs[0] }
+    var cover: Song { ownCover ?? songs[0] }
+    var ownCover: Song? { songs.first { $0.primaryArtist.caseInsensitiveCompare(name) == .orderedSame || $0.albumArtist.caseInsensitiveCompare(name) == .orderedSame } }
 }
 
 struct Genre: Identifiable, Hashable {
@@ -160,8 +161,7 @@ struct Library {
         let artists = Dictionary(grouping: appearances, by: { $0.name.lowercased() }).map { key, entries -> Artist in
             let name = entries[0].name
             let tracks = entries.map(\.song).sorted(by: byTitle)
-            let ids = Set(tracks.map(\.id))
-            let own = albums.filter { $0.artist.lowercased() == key || $0.songs.contains { ids.contains($0.id) } }
+            let own = albums.filter { $0.artist.lowercased() == key || $0.songs.contains { $0.primaryArtist.lowercased() == key } }
             return Artist(name: name, songs: tracks, albums: own.sorted { $0.year > $1.year })
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         let genres = Dictionary(grouping: input.filter { !($0.genre ?? "").trimmingCharacters(in: .whitespaces).isEmpty }, by: { $0.genre!.trimmingCharacters(in: .whitespaces) })
@@ -170,7 +170,7 @@ struct Library {
         let folders = Dictionary(grouping: input.filter { $0.kind == .file }, by: \.folder)
             .map { Folder(path: $0.key, songs: $0.value.sorted(by: byTitle)) }
             .sorted { $0.path < $1.path }
-        var lib = Library(songs: input.sorted(by: byTitle), albums: albums, artists: artists, genres: genres, folders: folders)
+        var lib = Library(songs: input.sorted(by: byTitle), albums: albums, artists: artists.filter { $0.ownCover != nil }, genres: genres, folders: folders)
         lib.songById = Dictionary(input.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         lib.albumById = Dictionary(albums.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         lib.artistByName = Dictionary(artists.map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a })

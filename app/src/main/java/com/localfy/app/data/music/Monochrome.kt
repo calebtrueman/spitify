@@ -96,10 +96,28 @@ object Monochrome {
 
     suspend fun album(id: String): List<OnlineTrack> {
         require(validId(id))
-        val album = get("releases/$id")
+        return parseAlbum(get("releases/$id"), id)
+    }
+
+    internal fun parseAlbum(album: JSONObject, requestedId: String): List<OnlineTrack> {
+        val returnedId = album.optString("releaseId", album.optString("id"))
+        check(returnedId.isEmpty() || returnedId == requestedId) { "The music source returned a different album. Please try again." }
         val tracks = album.getJSONArray("tracks")
-        return (0 until tracks.length()).mapNotNull { parseTrack(tracks.getJSONObject(it), album) }
-            .sortedWith(compareBy({ it.disc }, { it.track }))
+        return validateAlbumTracks((0 until tracks.length()).mapNotNull { parseTrack(tracks.getJSONObject(it), album) },
+            requestedId, artistNames(album), album.optString("releaseType").equals("COMPILATION", true))
+    }
+
+    internal fun validateAlbumTracks(tracks: List<OnlineTrack>, releaseId: String, albumArtists: List<String>, compilation: Boolean = false): List<OnlineTrack> {
+        val candidates = tracks.filter { it.releaseId.isBlank() || it.releaseId == releaseId }.distinctBy { it.id }
+        val artists = albumArtists.map { it.trim().lowercase(java.util.Locale.ROOT) }.toSet()
+        fun names(track: OnlineTrack) = track.artistNames.orEmpty().map { it.trim().lowercase(java.util.Locale.ROOT) }.toSet()
+        val slots = candidates.groupBy { it.disc to it.track }
+        return candidates.filter { track ->
+            // A corrupt source row can borrow the release ID and artwork as well. Only drop
+            // an unrelated credit when a real album artist already owns that numbered slot.
+            compilation || artists.isEmpty() || track.track <= 0 || names(track).isEmpty() || names(track).any { it in artists } ||
+                slots[track.disc to track.track].orEmpty().none { other -> names(other).any { it in artists } }
+        }.sortedWith(compareBy({ it.disc }, { it.track }))
     }
 
     fun parseTrack(item: JSONObject, album: JSONObject? = null): OnlineTrack? {

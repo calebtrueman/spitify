@@ -31,6 +31,15 @@
       },
       "versions": [
         {
+          "version": "1.0.16",
+          "buildVersion": "20",
+          "date": "2026-10-03T03:55:08Z",
+          "localizedDescription": "Longer music videos with smooth fades and reliable resume. Better playlists with song art. Main-artist library pages, safer album tracks, closer icon crops, covers for spoken audio, clearer Siri commands, and iPhone stream and vinyl-scrubbing fixes.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.16/Spitify-1.0.16-unsigned.ipa",
+          "size": 93010273,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.15",
           "buildVersion": "19",
           "date": "2026-10-03T02:51:03Z",

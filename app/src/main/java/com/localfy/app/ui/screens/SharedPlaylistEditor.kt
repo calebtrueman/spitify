@@ -1,6 +1,11 @@
 package com.localfy.app.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
+import com.localfy.app.data.Song
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -17,11 +22,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun SharedPlaylistEditor(playlist: SharedPlaylist) {
+fun SharedPlaylistEditor(playlist: SharedPlaylist, initiallyExpanded: Boolean = false) {
     val app = LocalContext.current.applicationContext as LocalfyApp
     val scope = rememberCoroutineScope()
     val library by app.library.library.collectAsStateWithLifecycle()
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
     var name by remember(playlist.key) { mutableStateOf(playlist.name) }
     var description by remember(playlist.key) { mutableStateOf(playlist.description) }
     var query by remember { mutableStateOf("") }
@@ -43,15 +48,13 @@ fun SharedPlaylistEditor(playlist: SharedPlaylist) {
             if (playlist.kind == "mix") Text("Pick up to 100 songs. Sending replaces your previous contribution. The mix takes turns between each person's songs and skips repeats.")
             OutlinedTextField(query, { query = it }, label = { Text("Find a song") })
             results.forEach { track ->
-                Row { Checkbox("remote:${track.id}" in selected, { checked -> selected = if (!checked) selected - "remote:${track.id}" else if (selected.size < 100) selected + ("remote:${track.id}" to SharedTrack(title = track.title, artist = track.artist, album = track.album, durationMs = track.durationMs, sourceID = track.id, releaseID = track.releaseId, artwork = track.artwork)) else selected }, modifier = Modifier.semantics { contentDescription = "Select ${track.title} by ${track.artist}" }); Column { Text(track.title); Text(track.artist) } }
+                val shared = SharedTrack(title = track.title, artist = track.artist, album = track.album, durationMs = track.durationMs, sourceID = track.id, releaseID = track.releaseId, artwork = track.artwork)
+                SharedTrackChoice(shared, app.musicStreams.song(track), "remote:${track.id}" in selected) { checked -> selected = if (!checked) selected - "remote:${track.id}" else if (selected.size < 100) selected + ("remote:${track.id}" to shared) else selected }
             }
             Text("${selected.size} selected")
             if (selected.isNotEmpty()) TextButton(onClick = { selected = emptyMap() }) { Text("Clear selection") }
             library.songs.filter { query.isBlank() || SearchMatch.score(query, it.title, it.artist, it.album) != null }.take(30).forEach { song ->
-                Row {
-                    Checkbox("local:${song.id}" in selected, { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams)) else selected }, modifier = Modifier.semantics { contentDescription = "Select ${song.title} by ${song.artist}" })
-                    Column { Text(song.title); Text("Your library · ${song.artist}") }
-                }
+                SharedTrackChoice(SharedTrack.from(song, app.musicStreams), song, "local:${song.id}" in selected) { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams)) else selected }
             }
             Button(enabled = !busy && selected.isNotEmpty(), onClick = {
                 val tracks = selected.keys.sorted().mapNotNull { selected[it] }
@@ -59,7 +62,7 @@ fun SharedPlaylistEditor(playlist: SharedPlaylist) {
             }) { Text(if (playlist.kind == "mix") "Send my contribution" else "Add selected songs") }
             if (playlist.kind != "mix") playlist.tracks.forEachIndexed { index, track ->
                 Column {
-                    Text(track.title)
+                    SharedTrackChoice(track)
                     Row {
                         TextButton(enabled = !busy && index > 0, onClick = { val ids = playlist.tracks.map { it.id }.toMutableList(); java.util.Collections.swap(ids, index, index - 1); send(SharedEdit(playlistID = playlist.id, owner = playlist.owner, action = "reorder", trackIDs = ids)) }) { Text("Move up") }
                         TextButton(enabled = !busy, onClick = { send(SharedEdit(playlistID = playlist.id, owner = playlist.owner, action = "remove", trackIDs = listOf(track.id))) }) { Text("Remove") }
@@ -68,5 +71,23 @@ fun SharedPlaylistEditor(playlist: SharedPlaylist) {
             }
             message?.let { Text(it) }
         }
+    }
+}
+
+@Composable
+private fun SharedTrackChoice(track: SharedTrack, matched: Song? = null, selected: Boolean? = null, onToggle: ((Boolean) -> Unit)? = null) {
+    val app = LocalContext.current.applicationContext as LocalfyApp
+    var resolved by remember(track) { mutableStateOf<Song?>(null) }
+    LaunchedEffect(track, matched) {
+        if (matched == null) try { resolved = PlaylistMatches.resolve(track, app) } catch (e: Exception) { if (e is CancellationException) throw e }
+    }
+    val click = if (selected != null && onToggle != null) Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = onToggle) else Modifier
+    Row(Modifier.fillMaxWidth().then(click).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        SharedTrackCover(track, matched ?: resolved, Modifier.size(48.dp))
+        Column(Modifier.weight(1f)) {
+            Text(track.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (selected != null) Checkbox(selected, null)
     }
 }

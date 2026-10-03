@@ -35,11 +35,13 @@ final class SocialTests: XCTestCase {
     @MainActor func testPlaylistReusesPreviouslyMatchedSongWithoutSearch() async throws {
         let app = AppModel()
         let title = "Saved match " + UUID().uuidString
-        let track = OnlineTrack(id: "998811221", title: title, artist: "Test Artist", album: "Test Album", releaseID: "1", durationMs: 120000, trackNumber: 1, discNumber: 1, artwork: nil, playable: true)
+        let track = OnlineTrack(id: "998811221", title: title, artist: "Test Artist", album: "Test Album", releaseID: "1", durationMs: 120000, trackNumber: 1, discNumber: 1, artwork: "https://images.example.com/matched-cover.jpg", playable: true)
         let expected = app.musicStreams.register(track)
         let shared = SharedTrack(title: title, artist: "Test Artist", durationMs: 120000)
         let result = try await SharedSongMatch.resolve(shared, app: app)
         XCTAssertEqual(result.id, expected.id)
+        XCTAssertEqual(result.artURL, track.artwork)
+        XCTAssertNil(shared.artwork)
     }
     func testExplicitFlagSurvivesSongConversionAndOldSavedTracks() throws {
         let track = try XCTUnwrap(MonochromeClient.track(["id": "123", "title": "Song", "artistNames": ["Artist"], "explicit": true]))
@@ -87,6 +89,22 @@ final class SocialTests: XCTestCase {
         XCTAssertTrue(playlist.partial)
         XCTAssertEqual(playlist.tracks[0].title, "Song")
         XCTAssertEqual(playlist.sourceURL, "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+    }
+
+    func testImportedPlaylistPreservesSafeSongArtworkAndSourceOrder() throws {
+        let input: [String: Any] = ["name": "Evening", "total_tracks": 3, "tracks": [
+            ["id": "first", "title": "One", "artist": "Singer", "artwork": "https://images.example.com/one.jpg"],
+            ["id": "second", "title": "Two", "artist": "Singer", "thumbnail": "https://images.example.com/two.jpg"],
+            ["id": "third", "title": "Three", "artist": "Singer", "artwork": "file:///private/image.jpg"]
+        ]]
+        let playlist = try SpotifyPlaylists.parse(input, id: "37i9dQZF1DXcBWIGoYBM5M", owner: owner)
+        XCTAssertEqual(playlist.tracks.map(\.title), ["One", "Two", "Three"])
+        XCTAssertEqual(playlist.tracks.map(\.spotifyID), ["first", "second", "third"])
+        XCTAssertEqual(playlist.tracks[0].artwork, "https://images.example.com/one.jpg")
+        XCTAssertEqual(playlist.tracks[1].artwork, "https://images.example.com/two.jpg")
+        XCTAssertNil(playlist.tracks[2].artwork)
+        XCTAssertFalse(playlist.partial)
+        XCTAssertEqual(try JSONDecoder().decode(SharedPlaylist.self, from: JSONEncoder().encode(playlist)), playlist)
     }
 
     func testPlaylistLinksRejectOtherHostsAndExtraPath() {

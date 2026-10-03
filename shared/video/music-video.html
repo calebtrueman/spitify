@@ -1,122 +1,211 @@
 <!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<style>html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}#stage{position:fixed;inset:0;overflow:hidden;background:#000}#video{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;opacity:0}</style></head>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
+#stage{position:fixed;inset:0;overflow:hidden;background:#000;animation:spitify-held-frame 24s ease-in-out infinite alternate;animation-play-state:paused;transform-origin:center}
+#video{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;opacity:0}
+@keyframes spitify-held-frame{from{transform:scale(1.012) translate(0,0)}to{transform:scale(1.045) translate(.4%,-.3%)}}
+@media(prefers-reduced-motion:reduce){#stage{animation:none!important}}
+</style></head>
 <body><div id="stage"><div id="video"></div></div><script>
 'use strict';
-let player, ready = false, frameReady = false, desired = {playing:false, reduceMotion:false}, loop = [], shot = 0, lastSeek = 0, loopTimer, bootstrapping = false;
 const videoID = '__VIDEO_ID__';
+let player, ready=false, frameReady=false, visible=false, bootstrapping=false;
+let desired={playing:false,reduceMotion:false}, loop=[], shot=0, shotStart=0;
+let loopTimer, transition=null, transitionID=0, resumeID=0, lastPlayAttempt=0, retryAfter=0;
+let lastWidth=0,lastHeight=0,lastSurfaceProgress=0,lastSurfaceTime=-1;
+let surface={time:0,paused:true,seeking:false,frames:0};
+const frame=()=>document.getElementById('video');
+const onScreen=()=>visible && !document.hidden;
+const shouldRun=()=>onScreen() && (desired.playing || bootstrapping);
 function report(state) {
-  if (window.webkit && window.webkit.messageHandlers.videoState) window.webkit.messageHandlers.videoState.postMessage(state);
-  console.log('SPITIFY_VIDEO_' + state);
+  if(window.webkit && window.webkit.messageHandlers.videoState) window.webkit.messageHandlers.videoState.postMessage(state);
+  console.log('SPITIFY_VIDEO_'+state);
+}
+function post(message) {
+  const view=frame();
+  if(view.contentWindow) view.contentWindow.postMessage(message,'https://www.youtube.com');
 }
 function sendSurfaceState() {
-  const frame = document.getElementById('video');
-  if (frame.contentWindow) frame.contentWindow.postMessage({spitifyCanvas:{paused:!desired.playing, reduceMotion:desired.reduceMotion, shot:shot}}, 'https://www.youtube.com');
+  const stage=document.getElementById('stage');
+  // Keeping the same animation paused during playback avoids a crop jump on resume.
+  stage.style.animationPlayState=onScreen() && !desired.playing && frameReady ? 'running':'paused';
+  stage.style.animationName=desired.reduceMotion ? 'none':'spitify-held-frame';
+  post({spitifyCanvas:{playing:shouldRun(),paused:!desired.playing,visible:onScreen(),reduceMotion:desired.reduceMotion,resumeID}});
+}
+function spitifyVideoState() {
+  return {ready,frameReady,visible,onScreen:onScreen(),playing:desired.playing,shot,shots:loop.length,
+    position:ready?player.getCurrentTime():0,playerState:ready?player.getPlayerState():-1,
+    surface:{...surface},transition:transition?{id:transition.id,phase:transition.phase,to:transition.to}:null};
+}
+function spitifySetVisible(value) {
+  const changed=visible!==Boolean(value); visible=Boolean(value);
+  if(changed && visible) resumeID++;
+  drive(changed);
 }
 function spitifyBeginDisplay() {
-  const frame = document.getElementById('video');
-  report(ready && frameReady ? 'READY' : 'WAITING');
-  if (frame.contentWindow) frame.contentWindow.postMessage({spitifyRequestFrame:true}, 'https://www.youtube.com');
-  sendSurfaceState();
+  report(ready && frameReady?'READY':'WAITING');
+  post({spitifyRequestFrame:true}); sendSurfaceState();
 }
 function spitifyHideCaptions() {
-  if (!player) return;
-  try { if (typeof player.unloadModule === 'function') player.unloadModule('captions'); } catch (_) {}
-  try { if (typeof player.setOption === 'function') player.setOption('captions', 'track', {}); } catch (_) {}
+  if(!player) return;
+  try{if(typeof player.unloadModule==='function') player.unloadModule('captions');}catch(_){}
+  try{if(typeof player.setOption==='function') player.setOption('captions','track',{});}catch(_){}
 }
-let lastWidth = 0, lastHeight = 0;
-window.addEventListener('message', function(event) {
-  const frame = document.getElementById('video');
-  if (event.origin !== 'https://www.youtube.com' || event.source !== frame.contentWindow || !event.data || event.data.spitifyVideoSurface !== true) return;
-  frameReady = event.data.frameReady === true;
-  frame.style.opacity = frameReady ? '1' : '0';
-  if (frameReady) {
-    bootstrapping = false;
-    if (!desired.playing && ready && (player.getPlayerState() === 1 || player.getPlayerState() === 3)) player.pauseVideo();
-  }
-  report(frameReady && ready ? 'READY' : 'WAITING');
-  sendSurfaceState();
-});
 function spitifyResize() {
-  if (!player || !ready) return;
-  const stage = document.getElementById('stage');
-  const width = Math.ceil(stage.clientWidth), height = Math.ceil(stage.clientHeight);
-  if (width <= 0 || height <= 0 || (width === lastWidth && height === lastHeight)) return;
-  lastWidth = width; lastHeight = height; player.setSize(width,height);
-  const frame = document.getElementById('video'); frame.style.width = width+'px'; frame.style.height = height+'px';
+  if(!ready) return;
+  const stage=document.getElementById('stage');
+  const width=Math.ceil(stage.clientWidth),height=Math.ceil(stage.clientHeight);
+  if(width<=0 || height<=0 || (width===lastWidth && height===lastHeight)) return;
+  lastWidth=width;lastHeight=height;player.setSize(width,height);
+  frame().style.width=width+'px';frame().style.height=height+'px';
 }
-window.addEventListener('resize', spitifyResize);
-if (window.ResizeObserver) new ResizeObserver(spitifyResize).observe(document.getElementById('stage'));
-// Two nearby shots make a repeatable seven-second visual loop. Pick from the body of the video,
-// leaving room for intros and credits. This is a timing rule, not a claim to understand the scene.
-function spitifyMakeLoop(duration, key) {
-  duration = Number(duration);
-  if (!Number.isFinite(duration) || duration <= 0) return [];
-  if (duration < 16) return [{start:Math.min(1,duration*.1), length:Math.max(.5,Math.min(7,duration*.8))}];
-  let hash = 0; for (const letter of key) hash = (hash*31 + letter.charCodeAt(0)) >>> 0;
-  const start = Math.max(3,Math.min(45,duration*.15));
-  const end = duration - Math.max(3,Math.min(30,duration*.12));
-  const available = Math.max(0,end-start-10);
-  const anchor = start + available*(.15+(hash%700)/1000);
-  return [{start:anchor,length:3.6},{start:anchor+5,length:3.4}];
+window.addEventListener('resize',spitifyResize);
+if(window.ResizeObserver) new ResizeObserver(spitifyResize).observe(document.getElementById('stage'));
+
+// Longer, distinct passages cover the video's body before any passage repeats.
+// This chooses times, not scenes: artist-created edits inside each passage remain intact.
+function spitifyMakeLoop(duration,key) {
+  duration=Number(duration);
+  if(!Number.isFinite(duration) || duration<=0) return [];
+  const head=duration<20?Math.min(.3,duration*.02):Math.min(18,Math.max(2,duration*.08));
+  const tail=duration<20?Math.min(.3,duration*.02):Math.min(18,Math.max(2,duration*.07));
+  const span=Math.max(.2,duration-head-tail);
+  const count=Math.max(1,Math.min(10,Math.floor(span/15)));
+  const slot=span/count;
+  let seed=2166136261;
+  for(const letter of key) seed=Math.imul(seed^letter.charCodeAt(0),16777619)>>>0;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const passages=[];
+  for(let i=0;i<count;i++) {
+    const length=Math.min(slot*.94,14+random()*7);
+    passages.push({start:head+i*slot+(slot-length)*random(),length:Math.max(.15,length)});
+  }
+  // Start in a stable place for this song, then keep the source's visual story in order.
+  const offset=Math.floor(random()*count);
+  return passages.slice(offset).concat(passages.slice(0,offset));
 }
 function ensureLoop() {
-  if (loop.length || !ready) return;
-  loop = spitifyMakeLoop(player.getDuration(),videoID);
-  if (loop.length) { shot = 0; lastSeek = Date.now(); player.seekTo(loop[0].start,true); sendSurfaceState(); }
-}
-function canvasTick() {
-  if (!ready || document.hidden) return;
-  ensureLoop();
-  if (!desired.playing || !loop.length) return;
-  const current = player.getCurrentTime(), clip = loop[shot], now = Date.now();
-  if (now-lastSeek < 700 || player.getPlayerState() === 3) return;
-  if (current >= clip.start+clip.length || current < clip.start-.75) {
-    shot = (shot+1)%loop.length; lastSeek = now; player.seekTo(loop[shot].start,true); sendSurfaceState();
-    if (player.getPlayerState() !== 1) player.playVideo();
+  if(loop.length || !ready) return;
+  loop=spitifyMakeLoop(player.getDuration(),videoID);
+  if(loop.length) {
+    shot=0;shotStart=loop[0].start;
+    post({spitifyInitialFrame:{target:shotStart}});
+    player.seekTo(shotStart,true);
   }
 }
-function spitifySync(_position, playing, _speed, reduceMotion) {
-  desired = {playing:Boolean(playing), reduceMotion:Boolean(reduceMotion)};
-  sendSurfaceState();
-  if (!ready) return;
-  spitifyResize(); ensureLoop();
-  // Music seeking and playback speed never push this short visual loop through the whole video.
-  if (player.getPlaybackRate() !== 1) player.setPlaybackRate(1);
-  const state = player.getPlayerState();
-  if ((desired.playing || bootstrapping) && !document.hidden && state !== 1 && state !== 3) player.playVideo();
-  if (!desired.playing && !bootstrapping && (state === 1 || state === 3)) player.pauseVideo();
+function startPassage() {
+  if(transition || !loop.length || !desired.playing || !onScreen() || !frameReady || Date.now()<retryAfter) return;
+  const next=(shot+1)%loop.length;
+  transition={id:++transitionID,to:next,phase:'preparing',started:Date.now(),elapsed:0,lastTick:Date.now(),retries:0};
+  // The child captures and displays the old picture BEFORE the player seeks.
+  // The canvas remains inside the video frame, so even cross-origin footage need not be exported.
+  post({spitifyPrepareCut:{id:transition.id,target:loop[next].start,duration:850}});
 }
+function seekPreparedPassage() {
+  if(!transition || transition.phase!=='armed' || !desired.playing || !onScreen()) return;
+  transition.phase='seeking';transition.elapsed=0;transition.lastTick=Date.now();
+  post({spitifySeekCut:{id:transition.id,target:loop[transition.to].start}});
+  player.seekTo(loop[transition.to].start,true);
+  drive(true);
+}
+function drive(force=false) {
+  if(ready && onScreen()) ensureLoop();
+  sendSurfaceState();
+  if(!ready) return;
+  spitifyResize();
+  if(player.getPlaybackRate()!==1) player.setPlaybackRate(1);
+  const state=player.getPlayerState(),now=Date.now();
+  if(shouldRun()) {
+    // BUFFERING can be left behind after a paused seek. A resume must not trust that old state.
+    if(force || (now-lastPlayAttempt>1200 && (state!==1 || (lastSurfaceProgress>0 && now-lastSurfaceProgress>2500)))) {
+      lastPlayAttempt=now;player.mute();player.setVolume(0);player.playVideo();
+    }
+    seekPreparedPassage();
+  } else if(force || state===1 || state===3) player.pauseVideo();
+}
+function canvasTick() {
+  if(!ready) return;
+  drive();
+  const now=Date.now();
+  if(transition) {
+    const elapsed=now-transition.lastTick;transition.lastTick=now;
+    if(onScreen() && desired.playing) transition.elapsed+=Math.max(0,Math.min(1000,elapsed));
+    if(transition.phase==='preparing' && transition.elapsed>1200) {
+      post({spitifyCancelCut:{id:transition.id}});transition=null;retryAfter=now+3000;
+    } else if(transition.phase==='seeking' && transition.elapsed>4500 && transition.retries===0 && shouldRun()) {
+      transition.retries++;player.seekTo(loop[transition.to].start,true);drive(true);
+    }
+    return;
+  }
+  if(!desired.playing || !onScreen() || !loop.length || !frameReady) return;
+  const current=player.getCurrentTime();
+  if(current>=shotStart+loop[shot].length || player.getPlayerState()===0) startPassage();
+}
+function spitifySync(_position,playing,_speed,reduceMotion) {
+  const changed=desired.playing!==Boolean(playing);
+  desired={playing:Boolean(playing),reduceMotion:Boolean(reduceMotion)};
+  if(changed && desired.playing) resumeID++;
+  drive(changed);
+}
+window.addEventListener('message',event=>{
+  if(event.origin!=='https://www.youtube.com' || event.source!==frame().contentWindow || !event.data) return;
+  const data=event.data;
+  if(data.spitifyVideoSurface===true) {
+    const wasReady=frameReady;
+    frameReady=data.frameReady===true;frame().style.opacity=frameReady?'1':'0';
+    if(Number.isFinite(data.time)) {
+      if(Math.abs(data.time-lastSurfaceTime)>.025) {lastSurfaceProgress=Date.now();lastSurfaceTime=data.time;}
+      surface={time:data.time,paused:data.paused===true,seeking:data.seeking===true,frames:Number(data.frames)||0};
+    }
+    if(!frameReady && !transition) bootstrapping=true;
+    if(frameReady) {
+      bootstrapping=false;
+      if(!desired.playing && ready && (player.getPlayerState()===1 || player.getPlayerState()===3)) player.pauseVideo();
+    }
+    if(wasReady!==frameReady) report(frameReady && ready?'READY':'WAITING');
+    if(wasReady!==frameReady) sendSurfaceState();
+  }
+  const cut=data.spitifyCutState;
+  if(cut && transition && cut.id===transition.id) {
+    if(cut.phase==='prepared') {
+      if(cut.captured!==true) {transition=null;retryAfter=Date.now()+3000;return;}
+      transition.phase='armed';seekPreparedPassage();
+    } else if(cut.phase==='revealing') transition.phase='revealing';
+    else if(cut.phase==='cancelled') {
+      transition=null;retryAfter=Date.now()+3000;
+    }
+    else if(cut.phase==='complete') {
+      shot=transition.to;shotStart=Number.isFinite(cut.time)?cut.time:loop[shot].start;
+      transition=null;retryAfter=Date.now()+750;
+    }
+  }
+});
 function spitifyStop() {
-  desired.playing = false; ready = false; frameReady = false; clearInterval(loopTimer); loopTimer = null;
-  document.getElementById('video').style.opacity = '0';
-  if (player) { player.mute(); player.stopVideo(); player.destroy(); }
+  visible=false;desired.playing=false;ready=false;frameReady=false;transition=null;
+  clearInterval(loopTimer);loopTimer=null;sendSurfaceState();frame().style.opacity='0';
+  if(player) {player.mute();player.stopVideo();player.destroy();}
 }
 function onYouTubeIframeAPIReady() {
-  player = new YT.Player('video', {
-    videoId:videoID, width:'100%', height:'100%',
+  player=new YT.Player('video',{
+    videoId:videoID,width:'100%',height:'100%',
     playerVars:{autoplay:0,cc_load_policy:0,controls:0,playsinline:1,fs:0,rel:0,origin:location.origin},
     events:{
-      onReady:function() {
-        player.mute(); player.setVolume(0); ready=true; loop=[]; shot=0; spitifyResize(); spitifyHideCaptions(); ensureLoop(); spitifyBeginDisplay();
-        // Decode one silent frame even when preloading or paused, then freeze it until needed.
-        bootstrapping = !frameReady; if (bootstrapping && !document.hidden) player.playVideo();
-        spitifySync(0,desired.playing,1,desired.reduceMotion);
-        clearInterval(loopTimer); loopTimer=setInterval(canvasTick,150);
+      onReady:()=>{
+        player.mute();player.setVolume(0);ready=true;loop=[];shot=0;bootstrapping=!frameReady;
+        spitifyResize();spitifyHideCaptions();drive(true);spitifyBeginDisplay();
+        clearInterval(loopTimer);loopTimer=setInterval(canvasTick,200);
       },
       onApiChange:spitifyHideCaptions,
-      onStateChange:function(event) {
-        spitifyHideCaptions(); player.mute(); player.setVolume(0);
-        if (event.data === 1 || event.data === 2) spitifyBeginDisplay();
-        if (event.data === 0 && desired.playing && loop.length) { shot=0; lastSeek=Date.now(); player.seekTo(loop[0].start,true); player.playVideo(); }
+      onStateChange:event=>{
+        spitifyHideCaptions();player.mute();player.setVolume(0);
+        if(event.data===1 || event.data===2) post({spitifyRequestFrame:true});
+        if(event.data===0 && desired.playing && !transition) startPassage();
       },
-      onError:function() { ready=false; frameReady=false; document.getElementById('video').style.opacity='0'; report('ERROR'); }
+      onError:()=>{ready=false;frameReady=false;frame().style.opacity='0';report('ERROR');}
     }
   });
 }
-document.addEventListener('visibilitychange',function() {
-  if (!ready) return;
-  if (document.hidden) player.pauseVideo(); else spitifySync(0,desired.playing,1,desired.reduceMotion);
-});
+document.addEventListener('visibilitychange',()=>{if(onScreen()) resumeID++;drive(true);});
 </script><script src="https://www.youtube.com/iframe_api"></script></body></html>

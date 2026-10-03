@@ -27,7 +27,7 @@ struct SharedPlaylistEditor: View {
                         if selected[key] != nil { selected.removeValue(forKey: key) }
                         else if selected.count < 100 { selected[key] = SharedTrack(title: track.title, artist: track.artist, album: track.album, durationMs: track.durationMs, sourceID: track.id, releaseID: track.releaseID, artwork: track.artwork) }
                     } label: {
-                        HStack { VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption) }; Spacer(); if selected["remote:" + track.id] != nil { Image(systemName: "checkmark") } }
+                        SharedTrackLabel(track: SharedTrack(title: track.title, artist: track.artist, artwork: track.artwork), matched: MusicStreams.song(track), selected: selected["remote:" + track.id] != nil)
                     }
                 }
                 Text("\(selected.count) selected").font(.caption)
@@ -38,7 +38,7 @@ struct SharedPlaylistEditor: View {
                         if selected[key] != nil { selected.removeValue(forKey: key) }
                         else if selected.count < 100 { selected[key] = SharedTrack.from(song) }
                     } label: {
-                        HStack { VStack(alignment: .leading) { Text(song.title); Text("Your library · " + song.artist).font(.caption) }; Spacer(); if selected["local:" + song.id] != nil { Image(systemName: "checkmark") } }
+                        SharedTrackLabel(track: SharedTrack.from(song), matched: song, selected: selected["local:" + song.id] != nil)
                     }
                 }
                 Button(playlist.kind == "mix" ? "Send my contribution" : "Add selected songs") {
@@ -48,7 +48,7 @@ struct SharedPlaylistEditor: View {
             }
             if playlist.kind != "mix" {
                 Section("Songs — use Edit to move or remove") {
-                    ForEach(playlist.tracks) { track in VStack(alignment: .leading) { Text(track.title); Text(track.artist).font(.caption) } }
+                    ForEach(playlist.tracks) { track in SharedTrackLabel(track: track) }
                         .onDelete { offsets in send(SharedEdit(playlistID: playlist.id, owner: playlist.owner, action: "remove", trackIDs: offsets.map { playlist.tracks[$0].id })) }
                         .onMove { offsets, destination in var tracks = playlist.tracks; tracks.move(fromOffsets: offsets, toOffset: destination); send(SharedEdit(playlistID: playlist.id, owner: playlist.owner, action: "reorder", trackIDs: tracks.map(\.id))) }
                 }
@@ -85,5 +85,26 @@ struct CreateSharedPlaylistView: View {
             if let message { Text(message) }
         }.navigationTitle("New shared playlist")
         .navigationDestination(item: $created) { SharedPlaylistView(initial: $0) }
+    }
+}
+
+struct SharedTrackLabel: View {
+    var track: SharedTrack
+    var matched: Song? = nil
+    var selected: Bool? = nil
+    @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var p
+    @State private var resolved: Song?
+    var body: some View {
+        HStack(spacing: 12) {
+            SharedTrackCover(track: track, matched: matched ?? resolved).frame(width: 48, height: 48)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(track.title).foregroundStyle(p.text).lineLimit(2)
+                Text(track.artist).font(.caption).foregroundStyle(p.secondary).lineLimit(2)
+            }.multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            if let selected { Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(selected ? p.accent : p.secondary) }
+        }.frame(maxWidth: .infinity, minHeight: 56, alignment: .leading).contentShape(Rectangle())
+        .task(id: track) { if matched == nil { resolved = try? await SharedSongMatch.resolve(track, app: app) } }
     }
 }

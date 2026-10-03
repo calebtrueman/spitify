@@ -25,6 +25,38 @@ final class MonochromeTests: XCTestCase {
         XCTAssertEqual(track.discNumber, 2)
     }
 
+    func testUnrelatedSourceRowCannotTakeTheAlbumArtistsTrackNumber() throws {
+        // The public Punisher response on 2026-10-03 included both rows at track 1.
+        let album: [String: Any] = ["releaseId": "155408274068344832", "title": "Punisher", "releaseType": "ALBUM",
+            "artists": [["name": "Phoebe Bridgers"]], "tracks": [
+                ["trackId": "155408325708615680", "title": "The Race - Remix", "trackNumber": 1, "discNumber": 1,
+                 "releaseId": "155408274068344832", "artists": [["name": "Tay-K"], ["name": "21 Savage"], ["name": "Young Nudy"]]],
+                ["trackId": "155408297682276352", "title": "DVD Menu", "trackNumber": 1, "discNumber": 1,
+                 "releaseId": "155408274068344832", "artists": [["name": "Phoebe Bridgers"]]]
+            ]]
+        let tracks = try MonochromeClient.albumTracks(from: album, requestedID: "155408274068344832")
+        XCTAssertEqual(tracks.map(\.title), ["DVD Menu"])
+        XCTAssertEqual(tracks.first?.album, "Punisher")
+    }
+
+    func testAlbumChecksReleaseIdentityWithoutRemovingGuests() throws {
+        func row(_ id: String, _ number: Int, _ names: [String], release: String = "100", disc: Int = 1) -> [String: Any] {
+            ["trackId": id, "title": id, "trackNumber": number, "discNumber": disc, "artistNames": names, "releaseId": release]
+        }
+        var album: [String: Any] = ["releaseId": "100", "title": "Album", "artistNames": ["Main artist"], "tracks": [
+            row("1", 1, ["Main artist"]), row("2", 2, ["Main artist", "Guest"]), row("3", 3, ["Guest"]),
+            row("4", 1, ["Guest"], disc: 2), row("5", 4, ["Main artist"], release: "999")
+        ]]
+        XCTAssertEqual(try MonochromeClient.albumTracks(from: album, requestedID: "100").map(\.id), ["1", "2", "3", "4"])
+        XCTAssertThrowsError(try MonochromeClient.albumTracks(from: album, requestedID: "999"))
+        album["tracks"] = [row("1", 1, ["Main artist"]), row("2", 1, ["Other artist"])]
+        album["releaseType"] = "COMPILATION"
+        XCTAssertEqual(try MonochromeClient.albumTracks(from: album, requestedID: "100").count, 2)
+        album["releaseType"] = "ALBUM"
+        album["artistNames"] = [String]()
+        XCTAssertEqual(try MonochromeClient.albumTracks(from: album, requestedID: "100").count, 2)
+    }
+
     func testRejectsHTMLTruncationAndWrongRecording() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

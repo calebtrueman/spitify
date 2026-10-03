@@ -127,8 +127,27 @@ struct MonochromeClient {
     func albumTracks(_ id: String) async throws -> [OnlineTrack] {
         _ = try Self.audioURL(id) // IDs are digits, never paths or arbitrary URLs.
         let album = try await json("releases/\(id)")
+        return try Self.albumTracks(from: album, requestedID: id)
+    }
+
+    static func albumTracks(from album: [String: Any], requestedID: String) throws -> [OnlineTrack] {
+        if let returnedID = Self.id(album["releaseId"] ?? album["id"]), returnedID != requestedID {
+            throw MusicSourceError.message("The music source returned a different album. Please try again.")
+        }
         guard let tracks = album["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("Online search did not return this album's songs.") }
-        return tracks.compactMap { Self.track($0, album: album) }.sorted { ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber) }
+        let candidates = tracks.compactMap { Self.track($0, album: album) }.filter { $0.releaseID.isEmpty || $0.releaseID == requestedID }
+        let artists = Set(artistNames(album).map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        func names(_ track: OnlineTrack) -> Set<String> { Set((track.artistNames ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }) }
+        let compilation = (album["releaseType"] as? String)?.uppercased() == "COMPILATION"
+        let slots = Dictionary(grouping: candidates) { "\($0.discNumber):\($0.trackNumber)" }
+        var seen = Set<String>()
+        return candidates.filter { track in
+            guard seen.insert(track.id).inserted else { return false }
+            // Corrupt rows can borrow the release ID and artwork. Reject an unrelated credit
+            // only when the album artist already owns that numbered slot; keep guest tracks.
+            return compilation || artists.isEmpty || track.trackNumber <= 0 || names(track).isEmpty || !names(track).isDisjoint(with: artists) ||
+                !(slots["\(track.discNumber):\(track.trackNumber)"] ?? []).contains { !names($0).isDisjoint(with: artists) }
+        }.sorted { ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber) }
     }
 
     func artistPage(_ id: String) async throws -> OnlineSearch {

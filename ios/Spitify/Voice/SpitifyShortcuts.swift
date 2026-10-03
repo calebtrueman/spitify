@@ -189,13 +189,15 @@ struct SpitifyShortcuts: AppShortcutsProvider {
             "Play \(\.$media) in \(.applicationName)",
             "Play \(\.$media) on \(.applicationName)",
             "Listen to \(\.$media) in \(.applicationName)",
+            "Play \(\.$media) in \(.applicationName) player",
         ], shortTitle: "Play music or a show", systemImageName: "play.fill")
         AppShortcut(intent: ResumeSpitify(), phrases: [
             "Play music in \(.applicationName)", "Resume \(.applicationName)", "Play \(.applicationName)",
+            "Resume in \(.applicationName) player", "Play music in \(.applicationName) player",
         ], shortTitle: "Resume", systemImageName: "play.circle")
-        AppShortcut(intent: PauseSpitify(), phrases: ["Pause \(.applicationName)"], shortTitle: "Pause", systemImageName: "pause.fill")
-        AppShortcut(intent: NextSpitifyTrack(), phrases: ["Next song in \(.applicationName)", "Skip song in \(.applicationName)"], shortTitle: "Next song", systemImageName: "forward.end.fill")
-        AppShortcut(intent: PreviousSpitifyTrack(), phrases: ["Previous song in \(.applicationName)", "Go back in \(.applicationName)"], shortTitle: "Previous song", systemImageName: "backward.end.fill")
+        AppShortcut(intent: PauseSpitify(), phrases: ["Pause \(.applicationName)", "Pause \(.applicationName) player"], shortTitle: "Pause", systemImageName: "pause.fill")
+        AppShortcut(intent: NextSpitifyTrack(), phrases: ["Next song in \(.applicationName)", "Skip song in \(.applicationName)", "Next song in \(.applicationName) player"], shortTitle: "Next song", systemImageName: "forward.end.fill")
+        AppShortcut(intent: PreviousSpitifyTrack(), phrases: ["Previous song in \(.applicationName)", "Go back in \(.applicationName)", "Previous song in \(.applicationName) player"], shortTitle: "Previous song", systemImageName: "backward.end.fill")
         AppShortcut(intent: ShuffleSpitify(), phrases: ["Turn shuffle \(\.$mode) in \(.applicationName)"], shortTitle: "Shuffle", systemImageName: "shuffle")
         AppShortcut(intent: RepeatSpitify(), phrases: ["Set repeat to \(\.$mode) in \(.applicationName)"], shortTitle: "Repeat", systemImageName: "repeat")
     }

@@ -77,6 +77,17 @@ try “Play [song, album, artist, playlist, or show] in Spitify,” “Resume Sp
 These actions also appear in Apple's Shortcuts app. Named shortcuts use your library,
 followed shows, and current queue.
 
+If Siri hears “Spotify,” pronounce Spitify as “spit-if-eye” and try
+“Resume in Spitify player” or “Play Liked Songs in Spitify player.” The app includes
+Apple's supported pronunciation hint without changing its name on your Home Screen.
+Speech recognition still depends on Siri and your device.
+
+For a name that sounds completely different, open **Settings › Siri & Shortcuts** in
+Spitify. In Apple's Shortcuts app, create a shortcut with the **Resume Spitify** action
+and name it **Pocket music**. Then say **“Hey Siri, Pocket music.”** You can do the same
+for Pause, Next song, or Play in Spitify with a chosen playlist. Apple documents
+[running a shortcut by its name](https://support.apple.com/guide/shortcuts/run-shortcuts-with-siri-apd07c25bb38/ios).
+
 The app also handles Siri's built-in music requests directly. That path needs a
 Siri-enabled signing profile. Build with
 `SPITIFY_APP_ENTITLEMENTS=Spitify/Siri.entitlements` and a matching team/profile.
@@ -85,6 +96,10 @@ The regular SideStore build keeps this optional permission off. App Shortcuts st
 available without it. Siri still chooses where to send a spoken request, so a real
 phone voice check is required after signing and installing.
 See [Apple's Siri setup](https://developer.apple.com/documentation/xcode/configuring-siri-support).
+The pronunciation hint follows [Apple's app-name guidance](https://developer.apple.com/library/archive/qa/qa1950/_index.html).
+We do not rely on alternate app-name aliases: Apple's current
+[synonym guidance](https://developer.apple.com/documentation/sirikit/specifying-synonyms-for-your-app-name)
+requires an Intents extension, which this app does not ship.
 
 “Keep music playing” is on by default. The queue keeps manual picks first, then the
 selected album or playlist, then a separate Autoplay section. It refreshes suggestions
@@ -97,6 +112,31 @@ and the app never raises the phone's volume. Audio format detection uses file by
 rather than a server's label, including Ogg/Opus returned from a FLAC-labeled source.
 Native Ogg/Opus playback and normalization were checked on iOS 26.4; older iOS decoder
 support may differ.
+
+To repeat the stream checks, start the local fixture server from the `ios` folder:
+
+```sh
+python3 scripts/stream_fixture.py --generate
+```
+
+`--generate` needs `ffmpeg` on PATH and creates only synthetic 30-second tones under
+`work/stream-fixture`. The server sends audio slowly, uses a wrong FLAC label, and can
+split a file into byte ranges. Leave it running, then use another terminal:
+
+```sh
+TEST_RUNNER_SPITIFY_STREAM_TEST_BASE=http://127.0.0.1:18952 \
+TEST_RUNNER_SPITIFY_AUDIO_LIVE_CHECK=1 \
+xcodebuild -project Spitify.xcodeproj -scheme Spitify \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO -only-testing:SpitifyTests/StreamRecoveryTests test
+```
+
+Choose an installed simulator name if it differs. These five checks cover a failed
+first start, one retry only, cancelling an old retry, paused seeking, and quick Opus
+seeks. The live flag also checks the reported Buggles recording with an empty listening
+cache. The seek checks count non-silent samples after the normal volume adjustment,
+including while the record is being moved. They do not measure a phone's speaker or
+Bluetooth output. Omit the live flag to skip the network recording check.
 
 The car's built-in Now Playing screen uses the same audio, artwork, and play/pause/
 skip controls as the phone. The separate Spitify CarPlay screens include library

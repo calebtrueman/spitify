@@ -25,6 +25,21 @@ class SocialTest {
     private fun events(storage: String) = JSONArray(context.getSharedPreferences(storage, Context.MODE_PRIVATE).getString("events", "[]"))
     private fun scope() = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    @Test fun importedPlaylistPreservesSafeSongArtworkAndSourceOrder() {
+        val rows = JSONArray()
+            .put(JSONObject().put("id", "first").put("title", "One").put("artist", "Singer").put("artwork", "https://images.example.com/one.jpg"))
+            .put(JSONObject().put("id", "second").put("title", "Two").put("artist", "Singer").put("thumbnail", "https://images.example.com/two.jpg"))
+            .put(JSONObject().put("id", "third").put("title", "Three").put("artist", "Singer").put("artwork", "file:///private/image.jpg"))
+        val playlist = SpotifyPlaylists.parse(JSONObject().put("name", "Evening").put("total_tracks", 3).put("tracks", rows), "37i9dQZF1DXcBWIGoYBM5M", host)
+        assertEquals(listOf("One", "Two", "Three"), playlist.tracks.map { it.title })
+        assertEquals(listOf("first", "second", "third"), playlist.tracks.map { it.spotifyID })
+        assertEquals("https://images.example.com/one.jpg", playlist.tracks[0].artwork)
+        assertEquals("https://images.example.com/two.jpg", playlist.tracks[1].artwork)
+        assertNull(playlist.tracks[2].artwork)
+        assertFalse(playlist.partial)
+        assertEquals(playlist, SharedPlaylist.parse(playlist.json()))
+    }
+
     @Test fun streamingLookupUsesIndexForLargeSavedCatalogue() {
         val storage = "lookup-test-" + UUID.randomUUID()
         val prefs = context.getSharedPreferences(storage, Context.MODE_PRIVATE)

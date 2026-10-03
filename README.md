@@ -77,9 +77,9 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
 
 ### Music videos
-Tap the video icon for a short looping video behind the song controls, including behind the status bar. Tap the icon again to return to album art. This choice stays set across songs and app restarts. Each loop uses two nearby cuts from the middle of the video. It stays muted and runs separately from the song's position. Pausing freezes the picture with a gentle drift; Reduce Motion turns that drift off. Closing the view or putting the app in the background pauses the visuals.
+Tap the video icon for a changing reel behind the song controls, including behind the status bar. Tap the icon again to return to album art. This choice stays set across songs and app restarts. The reel uses up to ten longer passages spread through the video, skipping its intro and credits. A typical song offers roughly two minutes of footage before repeating. The old picture stays visible while the next passage loads, then gently fades into the new one. Video stays muted and runs separately from the song's position. Pausing holds the picture and any unfinished fade, with a gentle drift; Reduce Motion turns that drift off. Resuming continues from there. Closing the view or putting the app in the background pauses the visuals.
 
-Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse. This is not an offline video download. Artwork stays visible until a decoded video frame is ready, without a loading message. The embedded page hides its controls, captions and other page elements before showing that frame. The picture fills the screen. When the host allows pixel reads, the app also crops detected black bars inside the video. Words burned into the video itself cannot be removed.
+Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse and only starts its video when it is on screen. This is not an offline video download. Artwork stays visible until a decoded video frame is ready, without a loading message. The embedded page hides its controls, captions and other page elements before showing that frame. The picture fills the screen. When the host allows pixel reads, the app also crops detected black bars inside the video. Words burned into the video itself cannot be removed.
 
 All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
 
@@ -104,7 +104,7 @@ There's also song radio on any song, artist radio on artist pages, and **Don't r
 
 The iPhone app sends the current song, cover, playback position and play/pause/skip controls to Apple’s Now Playing screen. It keeps using the same queue when you move between the phone, Bluetooth and the car.
 
-- **Siri and Shortcuts:** play a named song, album, artist, playlist or followed show from your library; pause, resume, skip, go back, shuffle or change repeat. These actions also appear in Apple’s Shortcuts app. Siri's built-in music requests also have a handler, which needs a Siri-enabled signing profile.
+- **Siri and Shortcuts:** play a named song, album, artist, playlist or followed show from your library; pause, resume, skip, go back, shuffle or change repeat. These actions also appear in Apple’s Shortcuts app. If Siri hears Spotify, try adding ‘player’ to the command, or use **Settings › Siri & Shortcuts** to give a shortcut a distinct name such as ‘Pocket music.’ Siri's built-in music requests also have a handler, which needs a Siri-enabled signing profile.
 - **CarPlay browsing:** the included interface has For you, Library, Podcasts and Books, plus Now Playing and the queue. Shuffle and repeat use the phone’s player.
 - **Signing limit:** the dedicated Spitify CarPlay icon and browsing screens require Apple’s approved CarPlay audio permission in the signing profile. The normal SideStore build leaves that permission off. The car’s system Now Playing controls do not depend on that separate browsing interface.
 
@@ -126,7 +126,7 @@ The Android app supports Android Auto, Android Automotive, Assistant and Bluetoo
 - **Your own audiobooks:** files in an `Audiobooks` folder or `.m4b` files show up on the Books tab. Each book shows "Chapter X of Y · time left" and continues where you stopped.
 
 ### 🏷️ Metadata & artwork
-- Main and featured artists have separate artist pages while each song keeps its full credits.
+- Your Library lists the main artists of your saved music. Each song keeps its full guest credits, with separate artist pages available from those credits. A guest-only credit does not add a main Library artist or borrow the main artist’s album cover.
 - **Auto-fix:** untagged songs are matched on Deezer or iTunes, and books on Open Library. A match is only accepted when the length matches within 3 s.
 - **Missing covers:** fetched automatically.
 - **Manual editing:** edit any song, album or book, with online suggestions or your own image.
@@ -155,7 +155,7 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Accent colour:** presets or the current album art on both apps; Android also offers Material You.
 - **Look and feel:** typefaces, text sizes, artwork shape, and player style: artwork, spinning vinyl or minimal. Font choices differ by platform.
 - **Room for longer text:** Home, Search, library lists and player controls adapt to narrow screens and larger text. Selected colours stay readable in light and dark themes.
-- **Player style button:** change artwork style beside the video button. Your choice stays set across songs. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
+- **Player style button:** change artwork style beside the video button. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** your name and photo, set up on first launch.
 

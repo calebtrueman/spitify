@@ -1,0 +1,161 @@
+{
+  "releaseId": "155408274068344832",
+  "title": "Punisher",
+  "releaseType": "ALBUM",
+  "artists": [
+    {
+      "name": "Phoebe Bridgers"
+    }
+  ],
+  "tracks": [
+    {
+      "trackId": "155408325708615680",
+      "title": "The Race - Remix",
+      "duration": 211875,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artists": [
+        {
+          "name": "Tay-K"
+        },
+        {
+          "name": "21 Savage"
+        },
+        {
+          "name": "Young Nudy"
+        }
+      ]
+    },
+    {
+      "trackId": "155408297682276352",
+      "title": "DVD Menu",
+      "duration": 69931,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 1,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408301197103104",
+      "title": "Garden Song",
+      "duration": 219681,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 2,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408304703541248",
+      "title": "Kyoto",
+      "duration": 184524,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 3,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408308209979392",
+      "title": "Punisher",
+      "duration": 189622,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 4,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408311724806144",
+      "title": "Halloween",
+      "duration": 271266,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 5,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408315227049984",
+      "title": "Chinese Satellite",
+      "duration": 217070,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 6,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408318720905216",
+      "title": "Moon Song",
+      "duration": 277676,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 7,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408322214760448",
+      "title": "Savior Complex",
+      "duration": 241640,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 8,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408572098809856",
+      "title": "Graceland Too",
+      "duration": 236350,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 10,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    },
+    {
+      "trackId": "155408575605248000",
+      "title": "I Know The End",
+      "duration": 344692,
+      "releaseId": "155408274068344832",
+      "discNumber": 1,
+      "trackNumber": 11,
+      "artists": [
+        {
+          "name": "Phoebe Bridgers"
+        }
+      ]
+    }
+  ]
+}

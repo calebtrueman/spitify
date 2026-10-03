@@ -195,8 +195,9 @@ struct ArtPager: View {
 
     var body: some View {
         let player = app.player
-        let size = side * (theme.playerStyle == .minimal ? 0.72 : 1)
-        if theme.playerStyle == .vinyl, let song = player.current {
+        let style: PlayerStyle = player.current?.isSpoken == true ? .artwork : theme.playerStyle
+        let size = side * (style == .minimal ? 0.72 : 1)
+        if style == .vinyl, let song = player.current {
             ScrubbableVinyl(song: song).frame(width: size, height: size).frame(maxWidth: .infinity).frame(height: side + 24)
         } else {
         TabView(selection: $selection) {
@@ -213,9 +214,10 @@ struct ArtPager: View {
     }
 
     @ViewBuilder private func cover(_ s: Song, current: Bool) -> some View {
-        let breathe = current && !app.player.isPlaying && !theme.reduceMotion && !systemReduceMotion && theme.playerStyle != .vinyl
+        let style: PlayerStyle = s.isSpoken ? .artwork : theme.playerStyle
+        let breathe = current && !app.player.isPlaying && !theme.reduceMotion && !systemReduceMotion && style != .vinyl
         Group {
-            if theme.playerStyle == .vinyl {
+            if style == .vinyl {
                 TimelineView(.animation(paused: !(current && app.player.isPlaying) || theme.reduceMotion || systemReduceMotion)) { ctx in
                     Vinyl(song: s, rotation: current ? ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 9) / 9 * 360 : 0)
                 }

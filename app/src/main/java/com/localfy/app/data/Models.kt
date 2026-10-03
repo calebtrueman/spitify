@@ -69,7 +69,8 @@ data class Artist(
     val songs: List<Song>,
     val albums: List<Album>,
 ) {
-    val cover: Song get() = songs.first()
+    val cover: Song get() = ownCover ?: songs.first()
+    val ownCover: Song? get() = songs.firstOrNull { it.primaryArtist.equals(name, true) || it.albumArtist.equals(name, true) }
 }
 
 data class Genre(val name: String, val songs: List<Song>)
@@ -94,12 +95,13 @@ data class Library(
     val artists: List<Artist> = emptyList(),
     val genres: List<Genre> = emptyList(),
     val folders: List<Folder> = emptyList(),
+    val creditedArtists: List<Artist> = artists,
 ) {
     val songById: Map<Long, Song> by lazy { songs.associateBy { it.id } }
     val albumById: Map<Long, Album> by lazy { albums.associateBy { it.id } }
     val artistByName: Map<String, Artist> by lazy {
         buildMap {
-            artists.forEach { artist ->
+            creditedArtists.forEach { artist ->
                 put(artist.name, artist)
                 artist.songs.flatMap { it.creditedArtists }.filter { it.equals(artist.name, true) }.forEach { put(it, artist) }
             }
@@ -127,8 +129,7 @@ data class Library(
 
             val artists = songs.flatMap { song -> song.creditedArtists.map { it to song } }.groupBy { it.first.lowercase() }.map { (key, entries) ->
                 val tracks = entries.map { it.second }
-                val ids = tracks.map { it.id }.toSet()
-                val ownAlbums = albums.filter { it.artist.lowercase() == key || it.songs.any { song -> song.id in ids } }
+                val ownAlbums = albums.filter { it.artist.lowercase() == key || it.songs.any { song -> song.primaryArtist.lowercase() == key } }
                 Artist(entries.first().first, tracks.sortedWith(titleOrder), ownAlbums.sortedByDescending { it.year })
             }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 
@@ -141,7 +142,7 @@ data class Library(
                 .map { (path, tracks) -> Folder(path, tracks.sortedWith(titleOrder)) }
                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.path })
 
-            return Library(songs.sortedWith(titleOrder), albums, artists, genres, folders)
+            return Library(songs.sortedWith(titleOrder), albums, artists.filter { it.ownCover != null }, genres, folders, artists)
         }
     }
 }

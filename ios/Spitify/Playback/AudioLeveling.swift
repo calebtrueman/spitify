@@ -45,6 +45,8 @@ enum AudioLeveling {
 /// AVPlayer's decoded samples pass through this tap before reaching any output device.
 /// Gain only falls within a song, so a quiet passage cannot cause a sudden volume rise.
 final class StreamLeveling {
+    private let observeSamples: ((UnsafeMutablePointer<AudioBufferList>, AudioStreamBasicDescription) -> Void)?
+    private var format = AudioStreamBasicDescription()
     private var supported = false
     private var gain: Float = 1
     private var target: Float = 1
@@ -52,14 +54,19 @@ final class StreamLeveling {
     private var samples: Int64 = 0
     private var sampleRate = 44_100.0
 
-    static func makeTap() -> MTAudioProcessingTap? {
-        let state = Unmanaged.passRetained(StreamLeveling())
+    private init(observeSamples: ((UnsafeMutablePointer<AudioBufferList>, AudioStreamBasicDescription) -> Void)?) {
+        self.observeSamples = observeSamples
+    }
+
+    static func makeTap(observeSamples: ((UnsafeMutablePointer<AudioBufferList>, AudioStreamBasicDescription) -> Void)? = nil) -> MTAudioProcessingTap? {
+        let state = Unmanaged.passRetained(StreamLeveling(observeSamples: observeSamples))
         var callbacks = MTAudioProcessingTapCallbacks(version: kMTAudioProcessingTapCallbacksVersion_0,
             clientInfo: state.toOpaque(), init: { _, info, storage in storage.pointee = info },
             finalize: { tap in Unmanaged<StreamLeveling>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).release() },
             prepare: { tap, _, format in
                 let state = Unmanaged<StreamLeveling>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
                 let f = format.pointee
+                state.format = f
                 state.supported = f.mFormatID == kAudioFormatLinearPCM && f.mFormatFlags & kAudioFormatFlagIsFloat != 0 && f.mBitsPerChannel == 32
                 state.sampleRate = max(1, f.mSampleRate)
             }, unprepare: { _ in }, process: { tap, frames, _, list, count, flags in
@@ -67,6 +74,7 @@ final class StreamLeveling {
                 guard status == noErr else { count.pointee = 0; return }
                 let state = Unmanaged<StreamLeveling>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
                 state.process(list)
+                state.observeSamples?(list, state.format)
             })
         var tap: MTAudioProcessingTap?
         let result = MTAudioProcessingTapCreate(kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tap)

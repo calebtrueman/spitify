@@ -62,11 +62,12 @@ object SpotifyPlaylists {
             parseEmbed(get("https://open.spotify.com/embed/playlist/$id"), id, owner)
         }
     }
+    private fun artwork(row: JSONObject): String? = listOfNotNull(row.text("artwork"), row.text("thumbnail"), row.optJSONObject("coverArt")?.optJSONArray("sources")?.optJSONObject(0)?.text("url")).firstOrNull(SocialRules::publicURL)
     fun parse(obj: JSONObject, id: String, owner: String): SharedPlaylist {
         val rows = obj.getJSONArray("tracks")
         val tracks = (0 until minOf(rows.length(), 2000)).mapNotNull { index ->
             val row = rows.getJSONObject(index)
-            SharedTrack(id = "spotify:$id:$index", title = row.optString("title"), artist = row.optString("artist"), album = row.optString("album"), durationMs = row.optLong("duration_ms"), spotifyID = row.text("id")).takeIf { it.valid() }
+            SharedTrack(id = "spotify:$id:$index", title = row.optString("title"), artist = row.optString("artist"), album = row.optString("album"), durationMs = row.optLong("duration_ms"), spotifyID = row.text("id"), artwork = artwork(row)).takeIf { it.valid() }
         }
         val count = if (obj.has("total_tracks") && !obj.isNull("total_tracks")) obj.getInt("total_tracks") else null
         val result = SharedPlaylist(id = "spotify-$id", owner = owner, name = obj.getString("name").take(200), description = plain(obj.optString("description")).take(4000), image = obj.text("thumbnail")?.takeIf(SocialRules::publicURL), sourceURL = "https://open.spotify.com/playlist/$id", sourceName = "Spotify", sourceCount = count, partial = count == null || count != tracks.size || rows.length() != tracks.size, tracks = tracks)
@@ -78,7 +79,7 @@ object SpotifyPlaylists {
         check(entity.optString("type") == "playlist" && entity.optString("id") == id)
         val description = entity.objects("attributes") { it }.firstOrNull { it.optString("key") == "episode_description" }?.optString("value").orEmpty()
         val cover = entity.optJSONObject("coverArt")?.optJSONArray("sources")?.optJSONObject(0)?.text("url")
-        val rows = entity.objects("trackList") { row -> JSONObject().put("title", row.optString("title")).put("artist", row.optString("subtitle")).put("duration_ms", row.optLong("duration")).put("id", row.optString("uri").substringAfterLast(':')) }
+        val rows = entity.objects("trackList") { row -> JSONObject().put("title", row.optString("title")).put("artist", row.optString("subtitle")).put("duration_ms", row.optLong("duration")).put("id", row.optString("uri").substringAfterLast(':')).put("artwork", artwork(row)) }
         // The embed does not prove the total. Always retain the partial warning.
         return parse(JSONObject().put("name", entity.optString("name", entity.optString("title", "Spotify playlist"))).put("description", description).put("thumbnail", cover).put("tracks", JSONArray(rows)), id, owner)
     }

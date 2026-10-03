@@ -54,6 +54,7 @@ fun MusicVideoBackdrop() {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var visible by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    val latestVisible by rememberUpdatedState(visible)
     var video by remember { mutableStateOf<MusicVideo?>(null) }
     var alternatives by remember { mutableStateOf<List<MusicVideo>>(emptyList()) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -75,7 +76,7 @@ fun MusicVideoBackdrop() {
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) visible = true
-            if (event == Lifecycle.Event.ON_PAUSE) { visible = false; webView?.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1,${latestReduceMotion});", null) }
+            if (event == Lifecycle.Event.ON_PAUSE) { visible = false; webView?.evaluateJavascript("if(window.spitifySetVisible) spitifySetVisible(false);", null) }
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
@@ -102,15 +103,24 @@ fun MusicVideoBackdrop() {
             key(clip.id) {
                 AndroidView(factory = {
                     VideoWebCache.take(context, clip.id).apply {
+                        var pageHandshakeSent = false
                         setBackgroundColor(android.graphics.Color.BLACK)
                         settings.javaScriptEnabled = true; settings.mediaPlaybackRequiresUserGesture = false
                         settings.allowFileAccess = false; settings.allowContentAccess = false; settings.domStorageEnabled = true
                         webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView, url: String) { view.evaluateJavascript(syncScript, null) }
+                            override fun onPageFinished(view: WebView, url: String) {
+                                view.evaluateJavascript("$syncScript if(window.spitifySetVisible) spitifySetVisible($latestVisible); if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
+                            }
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = request.hasGesture()
                         }
                         webChromeClient = object : WebChromeClient() {
                             override fun onConsoleMessage(event: ConsoleMessage): Boolean {
+                                // A provider subframe can delay onPageFinished. The first bridge
+                                // message also confirms that the shared page can accept our state.
+                                if (!pageHandshakeSent && event.message() in listOf("SPITIFY_VIDEO_READY", "SPITIFY_VIDEO_WAITING")) {
+                                    pageHandshakeSent = true
+                                    evaluateJavascript("$syncScript if(window.spitifySetVisible) spitifySetVisible($latestVisible); if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
+                                }
                                 when (event.message()) {
                                     "SPITIFY_VIDEO_READY" -> if (video?.id == clip.id) loading = false
                                     "SPITIFY_VIDEO_WAITING" -> if (video?.id == clip.id) loading = true
@@ -119,15 +129,14 @@ fun MusicVideoBackdrop() {
                                 return true
                             }
                         }
-                        evaluateJavascript("if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
+                        evaluateJavascript("$syncScript if(window.spitifySetVisible) spitifySetVisible($latestVisible); if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
                         webView = this
                     }
                 }, modifier = Modifier.fillMaxSize().then(Modifier.graphicsLayer { alpha = if (loading) 0f else 1f }), onReset = null, onRelease = { view ->
-                    view.evaluateJavascript("if(window.spitifySync) spitifySync(0,false,1,${latestReduceMotion});", null)
                     view.webChromeClient = null; view.webViewClient = WebViewClient()
                     VideoWebCache.store(view, clip.id)
                     if (webView === view) webView = null
-                }, update = { view -> view.evaluateJavascript("if(window.spitifySync) spitifySync(${app.player.positionMs.value / 1000.0},${playback.isPlaying && visible},${playback.speed},${latestReduceMotion});", null) })
+                }, update = { view -> view.evaluateJavascript("$syncScript if(window.spitifySetVisible) spitifySetVisible($latestVisible);", null) })
             }
         }
         Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent, Color.Black.copy(alpha = 0.8f)))))
@@ -144,11 +153,17 @@ internal object VideoWebCache {
         return cache.take(id) { make(context, id) }
     }
     fun store(view: WebView, id: String) {
+        view.evaluateJavascript("if(window.spitifySetVisible) spitifySetVisible(false);", null)
         cache.store(view, id)
     }
     private fun make(context: android.content.Context, id: String): WebView = WebView(context.applicationContext).apply {
         settings.javaScriptEnabled = true; settings.mediaPlaybackRequiresUserGesture = false
         settings.allowFileAccess = false; settings.allowContentAccess = false; settings.domStorageEnabled = true
+        webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                view.evaluateJavascript("if(window.spitifySetVisible) spitifySetVisible(false);", null)
+            }
+        }
         if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.DOCUMENT_START_SCRIPT)) {
             val script = context.assets.open("video-controls.js").bufferedReader().use { it.readText() }
             androidx.webkit.WebViewCompat.addDocumentStartJavaScript(this, script, setOf("https://www.youtube.com"))

@@ -1,0 +1,27 @@
+<!doctype html><html><body style="margin:0;background:lime">
+<div id="movie_player"><div class="html5-video-container">
+<video class="html5-main-video" muted playsinline preload="auto" src="https://www.youtube.com/motion.mp4"></video>
+</div><div id="fake-title" style="position:fixed;inset:0;background:lime">Player title and buttons</div></div>
+<script>
+const video = document.querySelector('video');
+function status(ready) {
+  parent.postMessage({fixtureStatus:true, ready:!!ready, state:video.ended?0:video.paused?2:1,
+    time:video.currentTime, duration:Number.isFinite(video.duration)?video.duration:0, debug:window.fixtureSurfaceDebug?.()}, '*');
+}
+video.addEventListener('loadedmetadata', () => status(true));
+for (const event of ['playing','pause','seeked','ended']) video.addEventListener(event, () => status(false));
+setInterval(() => status(false), 80);
+window.addEventListener('message', event => {
+  const data = event.data;
+  if (!data?.fixtureCommand) return;
+  switch(data.fixtureCommand) {
+    case 'seek': video.currentTime = data.value; break;
+    case 'play': video.play().catch(() => {}); break;
+    case 'pause': video.pause(); break;
+    case 'mute': video.muted = true; break;
+    case 'volume': video.volume = data.value / 100; break;
+    case 'rate': video.playbackRate = data.value; break;
+    case 'ad': document.getElementById('movie_player').classList.toggle('ad-showing', data.value); break;
+  }
+});
+</script></body></html>

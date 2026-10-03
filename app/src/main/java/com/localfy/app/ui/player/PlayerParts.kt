@@ -279,7 +279,8 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
             }
         }
     }
-    val style = LocalThemeSettings.current.playerStyle
+    val musicStyle = LocalThemeSettings.current.playerStyle
+    val style = if (videoSong?.isPodcast == true || videoSong?.isAudiobook == true) PlayerStyle.Artwork else musicStyle
     val still = LocalThemeSettings.current.reduceMotion
     val playingScale by animateFloatAsState(
         if (state.isPlaying || still || style == PlayerStyle.Vinyl) 1f else 0.88f,
@@ -287,7 +288,7 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
         label = "breathe",
     )
     BoxWithConstraints(modifier) {
-        val side = minOf(maxWidth, maxHeight) * if (style == PlayerStyle.Minimal) 0.72f else 1f
+        val availableSide = minOf(maxWidth, maxHeight)
         HorizontalPager(
             state = pager,
             userScrollEnabled = style != PlayerStyle.Vinyl,
@@ -297,6 +298,8 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
             verticalAlignment = Alignment.CenterVertically,
         ) { page ->
             val song = queue.getOrNull(page)?.let(lookup)
+            val pageStyle = if (song?.isPodcast == true || song?.isAudiobook == true) PlayerStyle.Artwork else musicStyle
+            val side = availableSide * if (pageStyle == PlayerStyle.Minimal) 0.72f else 1f
             val pageOffset = ((pager.currentPage - page) + pager.currentPageOffsetFraction).absoluteValue.coerceIn(0f, 1f)
             val isCurrent = page == state.currentIndex
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -308,12 +311,12 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
                         alpha = lerp(1f, 0.5f, pageOffset)
 
                     }
-                if (style == PlayerStyle.Vinyl) {
+                if (pageStyle == PlayerStyle.Vinyl) {
                     if (isCurrent) ScrubbableRecord(song, layer) else VinylRecord(song, layer)
                 } else {
                     Artwork(
                         song?.artKey,
-                        if (style == PlayerStyle.Minimal) layer else layer.shadow(28.dp, RoundedCornerShape(cornerRadius), spotColor = Color.Black),
+                        if (pageStyle == PlayerStyle.Minimal) layer else layer.shadow(28.dp, RoundedCornerShape(cornerRadius), spotColor = Color.Black),
                         RoundedCornerShape(cornerRadius),
                         song?.album,
                     )

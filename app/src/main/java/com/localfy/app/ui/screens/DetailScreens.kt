@@ -96,7 +96,7 @@ fun ArtistScreen(name: String) {
         title = artist.name,
         kindLabel = "Artist",
         subtitle = "${artist.albums.size} ${if (artist.albums.size == 1) "album" else "albums"} • ${songCount(artist.songs.size)}",
-        art = artist.cover.artKey,
+        art = artist.ownCover?.artKey,
         hero = true,
         songs = popular,
         headerActions = {

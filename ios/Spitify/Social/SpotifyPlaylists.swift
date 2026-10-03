@@ -63,11 +63,16 @@ struct SpotifyPlaylists {
             return try Self.parseEmbed(bytes, id: id, owner: owner)
         }
     }
+    static func artwork(_ row: [String: Any]) -> String? {
+        let cover = row["coverArt"] as? [String: Any]
+        let source = (cover?["sources"] as? [[String: Any]])?.first?["url"] as? String
+        return [row["artwork"] as? String, row["thumbnail"] as? String, source].compactMap { $0 }.first(where: SocialRules.publicURL)
+    }
     static func parse(_ object: [String: Any], id: String, owner: String) throws -> SharedPlaylist {
         guard let name = object["name"] as? String, let rows = object["tracks"] as? [[String: Any]] else { throw MusicSourceError.message("The playlist source has changed. Try another public Spotify playlist link.") }
         let tracks = rows.prefix(2000).enumerated().compactMap { index, row -> SharedTrack? in
             guard let title = row["title"] as? String, let artist = row["artist"] as? String else { return nil }
-            let track = SharedTrack(id: "spotify:\(id):\(index)", title: title, artist: artist, album: row["album"] as? String ?? "", durationMs: (row["duration_ms"] as? NSNumber)?.int64Value ?? 0, spotifyID: row["id"] as? String)
+            let track = SharedTrack(id: "spotify:\(id):\(index)", title: title, artist: artist, album: row["album"] as? String ?? "", durationMs: (row["duration_ms"] as? NSNumber)?.int64Value ?? 0, spotifyID: row["id"] as? String, artwork: artwork(row))
             return track.valid() ? track : nil
         }
         let count = (object["total_tracks"] as? NSNumber)?.intValue
@@ -87,7 +92,7 @@ struct SpotifyPlaylists {
         let description = attributes.first { $0["key"] as? String == "episode_description" }?["value"] as? String ?? ""
         let cover = entity["coverArt"] as? [String: Any]
         let image = (cover?["sources"] as? [[String: Any]])?.first?["url"] as? String
-        let mapped: [[String: Any]] = rows.map { ["title": $0["title"] ?? "", "artist": $0["subtitle"] ?? "", "duration_ms": $0["duration"] ?? 0, "id": ($0["uri"] as? String)?.split(separator: ":").last.map(String.init) ?? ""] }
+        let mapped: [[String: Any]] = rows.map { ["title": $0["title"] ?? "", "artist": $0["subtitle"] ?? "", "duration_ms": $0["duration"] ?? 0, "id": ($0["uri"] as? String)?.split(separator: ":").last.map(String.init) ?? "", "artwork": artwork($0) ?? ""] }
         var object: [String: Any] = ["name": entity["name"] ?? entity["title"] ?? "Spotify playlist", "description": description, "tracks": mapped]
         object["thumbnail"] = image
         // The embed does not prove the total. Keep the partial warning even for a short list.

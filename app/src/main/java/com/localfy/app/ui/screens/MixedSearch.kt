@@ -115,8 +115,8 @@ fun MixedSearchPanel(query: String) {
         music.artists.forEach { artist -> score(artist.name, "")?.let {
             result += MixedResult("artist:${artist.id}", artist.name, "", "Artist", it + 20, artist.artwork, route = Routes.onlineArtist(artist))
         } }
-        library.artists.filter { artist -> music.artists.none { SearchMatch.fold(it.name) == SearchMatch.fold(artist.name) } }.forEach { artist -> score(artist.name, "")?.let {
-            result += MixedResult("localArtist:${artist.name}", artist.name, "", "Artist", it + 20, local = artist.cover, route = Routes.artist(artist.name))
+        library.creditedArtists.filter { artist -> music.artists.none { SearchMatch.fold(it.name) == SearchMatch.fold(artist.name) } }.forEach { artist -> score(artist.name, "")?.let {
+            result += MixedResult("localArtist:${artist.name}", artist.name, "", "Artist", it + 20, local = artist.ownCover, route = Routes.artist(artist.name))
         } }
         podcasts.forEach { podcast -> score(podcast.title, podcast.author)?.let { result += MixedResult("podcast:${podcast.feedUrl}", podcast.title, podcast.author, "Podcast", it, podcast.artworkUrl, podcast.explicit == true, podcast = podcast) } }
         books.forEach { book -> score(book.title, book.author)?.let { result += MixedResult("book:${book.id}", book.title, book.author, "Audiobook", it, book.coverUrl, book = book) } }

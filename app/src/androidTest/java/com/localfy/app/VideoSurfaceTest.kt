@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit
 /** Real WebView pixels, with a local silent fixture. No YouTube or browser network is needed. */
 @RunWith(AndroidJUnit4::class)
 class VideoSurfaceTest {
-    @Test fun onlyVideoPixelsFillTheScreenAndPausedMotionCanBeDisabled() {
+    @Test fun onlyVideoPixelsFillTheScreenAndPausedStateReachesTheSurface() {
         assumeTrue(WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT))
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val script = instrumentation.targetContext.assets.open("video-controls.js").bufferedReader().use { it.readText() }
@@ -61,16 +61,19 @@ class VideoSurfaceTest {
             }
             try {
             val deadline = System.currentTimeMillis() + 15_000
-            while (System.currentTimeMillis() < deadline && evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop')) > 1.2") != "true") Thread.sleep(150)
+            while (System.currentTimeMillis() < deadline && evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop')) > 1.2 && document.querySelector('video').currentTime > .25") != "true") {
+                evaluate("window.postMessage({spitifyCanvas:{playing:true,visible:true,paused:false,reduceMotion:true,resumeID:1}},'*')")
+                Thread.sleep(150)
+            }
             assertEquals("Video state: " + evaluate("JSON.stringify({ready:document.querySelector('video').readyState,paused:document.querySelector('video').paused,width:document.querySelector('video').videoWidth,time:document.querySelector('video').currentTime,crop:getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop'),frame:document.documentElement.getAttribute('data-spitify-frame')})"), "true", evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop')) > 1.2"))
             assertEquals("\"hidden\"", evaluate("getComputedStyle(document.getElementById('fake-title')).visibility"))
             assertEquals("true", evaluate("document.querySelector('video').getBoundingClientRect().height >= innerHeight"))
             // Dynamic overlays cannot become visible later, even with an inline important rule.
             evaluate("document.getElementById('fake-title').style.setProperty('visibility','visible','important')")
             assertEquals("\"hidden\"", evaluate("getComputedStyle(document.getElementById('fake-title')).visibility"))
-            evaluate("document.querySelector('video').pause();window.postMessage({spitifyCanvas:{paused:true,reduceMotion:false}},'*')")
-            assertEquals("\"spitify-held-frame\"", evaluate("getComputedStyle(document.querySelector('video')).animationName"))
-            evaluate("window.postMessage({spitifyCanvas:{paused:true,reduceMotion:true}},'*')")
+            evaluate("document.querySelector('video').pause();window.postMessage({spitifyCanvas:{playing:false,visible:true,paused:true,reduceMotion:true,resumeID:0}},'*')")
+            assertEquals("\"true\"", evaluate("document.documentElement.getAttribute('data-spitify-paused')"))
+            assertEquals("\"true\"", evaluate("document.documentElement.getAttribute('data-spitify-reduce-motion')"))
             assertEquals("\"none\"", evaluate("getComputedStyle(document.querySelector('video')).animationName"))
 
             val copied = CountDownLatch(1); var result = -1; lateinit var bitmap: Bitmap

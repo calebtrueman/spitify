@@ -158,9 +158,9 @@ struct MixedSearchView: View {
             guard let score = score(artist.name, "") else { continue }
             rows.append(.init(id: "artist:" + artist.id, title: artist.name, creator: "", type: "Artist", artwork: artist.artwork, score: score + 20, artist: artist))
         }
-        for artist in library.artists where !music.artists.contains(where: { SearchMatch.fold($0.name) == SearchMatch.fold(artist.name) }) {
+        for artist in Array(Set(library.artistByName.values)) where !music.artists.contains(where: { SearchMatch.fold($0.name) == SearchMatch.fold(artist.name) }) {
             guard let score = score(artist.name, "") else { continue }
-            rows.append(.init(id: "localArtist:" + artist.name, title: artist.name, creator: "", type: "Artist", score: score + 20, local: artist.cover, route: .artist(artist.name)))
+            rows.append(.init(id: "localArtist:" + artist.name, title: artist.name, creator: "", type: "Artist", score: score + 20, local: artist.ownCover, route: .artist(artist.name)))
         }
         for show in podcasts {
             guard let score = score(show.title, show.author) else { continue }

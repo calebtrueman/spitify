@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import AppIntents
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var app
@@ -16,6 +17,7 @@ struct SettingsView: View {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
                 NavigationLink(value: Route.profile) { Label("Profile", systemImage: "person.crop.circle") }
+                NavigationLink { VoiceHelpView() } label: { Label("Siri & Shortcuts", systemImage: "waveform") }
             }
             Section {
                 Toggle("Show recommendations", isOn: $app.showRecommendations)
@@ -51,6 +53,34 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(p.background)
         .navigationTitle("Settings")
+    }
+}
+
+struct VoiceHelpView: View {
+    @Environment(\.palette) private var p
+    var body: some View {
+        Form {
+            Section {
+                Text("Hey Siri, resume in Spitify player")
+                Text("Hey Siri, pause Spitify player")
+                Text("Hey Siri, play Liked Songs in Spitify player")
+            } header: { Text("Try saying") } footer: {
+                Text("Say Spitify as “spit-if-eye.” Open the app and load your library before your first voice request.")
+            }
+            Section {
+                Text("If Siri hears Spotify, give your shortcut a name that sounds different.")
+                Text("1. Open Shortcuts and create a new shortcut.")
+                Text("2. Search for Spitify and add “Resume Spitify.”")
+                Text("3. Name the shortcut “Pocket music.”")
+                Text("4. Say “Hey Siri, Pocket music.”")
+                ShortcutsLink().shortcutsLinkStyle(.automaticOutline)
+                    .frame(maxWidth: .infinity).padding(.vertical, 4)
+            } header: { Text("Pick your own voice command") } footer: {
+                Text("You can make another shortcut for Pause, Next song, or a favourite playlist. Say the name you gave that shortcut.")
+            }
+        }
+        .scrollContentBackground(.hidden).background(p.background)
+        .navigationTitle("Siri & Shortcuts")
     }
 }
 
