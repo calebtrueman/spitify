@@ -33,10 +33,10 @@
         {
           "version": "1.0.17",
           "buildVersion": "21",
-          "date": "2026-10-03T04:56:19Z",
-          "localizedDescription": "Albums, playlists, artists, podcasts and books now share matching headers, spacing, rows and controls. Page titles, search fields, forms and colours follow the chosen theme. Includes the earlier video and playback fixes.",
+          "date": "2026-10-03T05:09:35Z",
+          "localizedDescription": "Spitify 1.0.17 brings the album page\u2019s look across the app on iPhone and Android.\n\n- Albums, imported and shared playlists, artists, podcasts and books now use shared headers, title spacing and action bars.\n- Play uses the same round button. Save, download, share, queue and shuffle use matching icon controls where those actions apply.\n- Songs, episodes and chapters follow shared row spacing and text styles. Playlists keep song artwork, albums keep track numbers, and books keep portrait covers.\n- Page titles, back buttons, forms and sheets follow the chosen theme more consistently.\n- The shared layouts account for longer titles, larger text and wider Android screens.\n- Online artist song taps start the artist list from that song. Imported playlists and shared queues highlight the song currently playing.\n\nChecked the main screens, light mode, large text, folded and unfolded Android layouts, and the actual playback, save, menu and back controls.\n\nInstall the APK on Android. The unsigned IPA can be signed with SideStore or AltStore. The SideStore source also includes this update.",
           "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.17/Spitify-1.0.17-unsigned.ipa",
-          "size": 92997649,
+          "size": 92971836,
           "minOSVersion": "17.0"
         },
         {
