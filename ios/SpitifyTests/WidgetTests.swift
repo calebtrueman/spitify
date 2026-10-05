@@ -69,4 +69,28 @@ import AVFoundation
         XCTAssertTrue(snapshot.albums.contains { $0.title == imported[0].album && $0.artwork != nil })
         XCTAssertLessThanOrEqual(snapshot.mostPlayed.count, 8)
     }
+    func testPlaylistCoverWorksForEmptyPlaylistSurvivesReloadAndIsDeletedWithPlaylist() throws {
+        let app = AppModel()
+        let previous = app.library.playlists
+        let playlist = app.library.createPlaylist("Cover check " + UUID().uuidString)
+        let key = "playlist:" + playlist.id
+        defer { app.library.playlists = previous; ArtCache.shared.removeCustom(key) }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600)).image { context in
+            UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 600))
+        }
+        ArtCache.shared.storeCustom(try XCTUnwrap(image.pngData()), key: key)
+        app.library.artVersion += 1
+        XCTAssertEqual(app.library.playlistArtworkKey(playlist.id), key)
+        let saved = LibraryStore()
+        XCTAssertNotNil(saved.playlists.first { $0.id == playlist.id })
+        XCTAssertEqual(saved.playlistArtworkKey(playlist.id), key)
+        let row = try XCTUnwrap(WidgetPublisher.makeSnapshot(app).playlists.first { $0.id == "playlist:" + playlist.id })
+        XCTAssertNotNil(row.artwork)
+        let pixels = try XCTUnwrap(UIImage(data: try XCTUnwrap(row.artwork))?.cgImage)
+        XCTAssertLessThanOrEqual(max(pixels.width, pixels.height), 400)
+        app.library.deletePlaylist(playlist.id)
+        XCTAssertNil(app.library.playlistArtworkKey(playlist.id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: ArtCache.shared.customURL(key).path))
+    }
+
 }

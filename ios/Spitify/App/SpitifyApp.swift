@@ -66,12 +66,13 @@ struct RootView: View {
             if let e = router.editing { MetadataEditor(songs: e.songs, albumMode: e.albumMode) }
         }
         .overlay(alignment: .top) {
-            if let m = app.player.message {
+            if let m = router.notice ?? app.player.message {
                 Text(m).text(.label).foregroundStyle(p.text).padding(.horizontal, 16).padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: Capsule()).padding(.top, 8).transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.spring(duration: 0.35), value: app.player.message)
+        .animation(.spring(duration: 0.35), value: router.notice)
         .task { await app.start(); openReleaseFeedIfRequested() }
         .onReceive(NotificationCenter.default.publisher(for: .init("SpitifyOpenReleaseFeed"))) { _ in openReleaseFeedIfRequested() }
         .onChange(of: phase) { _, new in if new == .active { app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }

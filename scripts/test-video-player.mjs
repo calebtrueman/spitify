@@ -119,7 +119,7 @@ h.context.spitifySetVisible(true);assert.equal(h.state(),1);
 h.hidden(true);assert.equal(h.state(),2);h.hidden(false);assert.equal(h.state(),1);
 h.context.spitifySync(0,false,1,true);assert.equal(h.stage.style.animationName,'none');
 h.context.spitifySetVisible(false);h.context.spitifySetVisible(true);assert.equal(h.state(),2,'A user pause survives leaving the screen');
-h.stage.clientWidth=1200;h.stage.clientHeight=600;h.context.spitifyResize();assert.equal(h.frame.style.width,'1200px');assert.equal(h.frame.style.height,'600px');
+h.stage.clientWidth=1200;h.stage.clientHeight=600;h.context.spitifyResize();assert.equal(h.frame.style.width,'1200px');assert.equal(h.frame.style.height,'675px');
 h.context.spitifyStop();assert.equal(h.calls.at(-1),'destroy');
 console.log('Video behavior passed: varied long passages, capture-before-seek, guarded dissolve, pause/resume from buffering, native visibility, background, reduced motion and teardown.');
 
@@ -131,3 +131,11 @@ assert.match(helper,/cropMatches>=3/);
 assert.match(helper,/\.ad-showing/);
 assert.doesNotMatch(helper,/toDataURL|toBlob|captureStream/,'The held picture must not require exporting cross-origin video');
 console.log('Video overlay, frame gate and cross-origin snapshot constraints passed; real pixel checks run natively.');
+
+// Preserve enough source pixels when a wide clip fills a tall screen, and adapt to portrait clips.
+const quality=harness();quality.start();
+assert.equal(quality.frame.style.width,'1423px');assert.equal(quality.frame.style.height,'800px');
+quality.message({spitifyVideoSurface:true,frameReady:true,time:1,width:1080,height:1920});
+assert.equal(quality.frame.style.width,'450px');assert.equal(quality.frame.style.height,'800px');
+assert.ok(quality.reports.includes('SPITIFY_VIDEO_QUALITY:1080x1920'));
+assert.equal(quality.context.spitifyVideoState().surface.height,1920);

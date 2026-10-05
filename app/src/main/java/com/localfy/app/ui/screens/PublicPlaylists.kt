@@ -205,6 +205,8 @@ fun OnlineArtistScreen(encoded: String) {
     val followRevision by app.artistFollows.revision.collectAsStateWithLifecycle()
     val artistID = artist?.optString("id").orEmpty()
     var loaded by remember(encoded) { mutableStateOf(false) }
+    var fetching by remember(encoded) { mutableStateOf(true) }
+    var retryPage by remember(encoded) { mutableIntStateOf(0) }
     var result by remember { mutableStateOf(OnlineSearch()) }
     var message by remember { mutableStateOf<String?>(null) }
     var albumCursor by remember(encoded) { mutableIntStateOf(0) }
@@ -224,9 +226,12 @@ fun OnlineArtistScreen(encoded: String) {
         } catch (e: Exception) { if (e is CancellationException) throw e; message = "Couldn't load more songs. Tap Show more songs to retry." }
         finally { loadingMore = false }
     }
-    LaunchedEffect(encoded) {
-        try { result = Monochrome.artistPage(artistID); loaded = true; albumCursor = 0; loadMore() }
-        catch (e: Exception) { if (e is CancellationException) throw e; message = e.message }
+    LaunchedEffect(encoded, retryPage) {
+        fetching = true; message = null; loaded = false
+        try { result = Monochrome.artistPage(artistID); loaded = true; albumCursor = 0 }
+        catch (e: Exception) { if (e is CancellationException) throw e; message = e.message ?: "Couldn't load this artist." }
+        finally { fetching = false }
+        if (loaded) loadMore()
     }
     val player = rememberPlayerState()
     fun playArtist(shuffle: Boolean = false) {
@@ -247,7 +252,9 @@ fun OnlineArtistScreen(encoded: String) {
             }
         },
     ) {
+        if (fetching) item { CircularProgressIndicator(Modifier.padding(16.dp)) }
         message?.let { item { Text(it, Modifier.padding(16.dp), color = LocalfyColors.TextSecondary) } }
+        if (!loaded && !fetching) item { TextButton(onClick = { retryPage++ }) { Text("Try again") } }
         item { SectionHeader("Songs") }
         itemsIndexed(result.tracks, key = { _, track -> track.id }) { index, track ->
             OnlineMusicRow(track, onPlay = {
@@ -267,21 +274,25 @@ fun ArtistLandingScreen(name: String) {
     val actions = LocalApp.current
     val library by actions.repo.library.collectAsStateWithLifecycle()
     var artist by remember(name) { mutableStateOf<OnlineArtist?>(null) }
+    var candidates by remember(name) { mutableStateOf<List<OnlineArtist>>(emptyList()) }
     var loading by remember(name) { mutableStateOf(true) }
     var failed by remember(name) { mutableStateOf(false) }
     var retry by remember(name) { mutableIntStateOf(0) }
     LaunchedEffect(name, retry) {
-        loading = true; failed = false
-        try { artist = Monochrome.searchAll(name).artists.firstOrNull { SearchMatch.fold(it.name) == SearchMatch.fold(name) } }
+        loading = true; failed = false; artist = null; candidates = emptyList()
+        try { candidates = Monochrome.searchAll(name).artists; artist = candidates.firstOrNull { SearchMatch.fold(it.name) == SearchMatch.fold(name) } }
         catch (e: Exception) { if (e is CancellationException) throw e; failed = true }
         finally { loading = false }
     }
     val found = artist
     when {
         found != null -> OnlineArtistScreen(JSONObject().put("id", found.id).put("name", found.name).put("artwork", found.artwork).toString())
-        library.artistByName[name] != null -> ArtistScreen(name)
         loading -> Column(Modifier.fillMaxSize(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             CircularProgressIndicator(); Text("Finding artist…", Modifier.padding(16.dp))
+        }
+        candidates.isNotEmpty() -> LazyColumn(contentPadding = PaddingValues(16.dp)) {
+            item { com.localfy.app.ui.components.PageHeader("Choose an online artist", onBack = { actions.nav.popBackStack() }) }
+            items(candidates, key = { it.id }) { match -> TextButton(onClick = { artist = match }) { Text(match.name) } }
         }
         else -> Column(Modifier.fillMaxSize(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             com.localfy.app.ui.components.EmptyState(if (failed) "Couldn't load artist" else "No artist page found", if (failed) "Check your connection and try again." else "Try searching for the artist by name.")

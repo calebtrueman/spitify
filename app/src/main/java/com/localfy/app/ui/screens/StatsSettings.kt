@@ -29,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -118,6 +119,7 @@ private fun RankRow(rank: Int, title: String, subtitle: String, art: ArtKey, cir
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 fun SettingsScreen() {
     val app = LocalApp.current
+    var autoHelp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val library by app.repo.library.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val nativeApp = context.applicationContext as com.localfy.app.LocalfyApp
@@ -225,6 +227,8 @@ fun SettingsScreen() {
             SettingRow("Tip", "Settings › Display › Screen continuity — set Spitify to “Always” so it carries on seamlessly when you close the phone.") {}
         }
         item { SectionHeader("Help") }
+        item { SettingRow("Android Auto", "Setup for an app installed from an APK") { autoHelp = true } }
+        item { SettingRow("Music video quality", "Last video: ${com.localfy.app.ui.player.VideoQuality.resolution}. Spitify requests the highest available HD quality. A wide video is cropped to fill your screen. The original video must offer HD.") {} }
         item {
             val context = androidx.compose.ui.platform.LocalContext.current
             val version = androidx.compose.runtime.remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }
@@ -233,6 +237,11 @@ fun SettingsScreen() {
             }
         }
     }
+    if (autoHelp) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { autoHelp = false }, title = { Text("Show Spitify in Android Auto") },
+        text = { Text("1. Open Spitify and allow music access.\n\n2. Open Android Auto settings on your phone. Tap Version and permission info 10 times to enable developer mode.\n\n3. Open the top-right menu → Developer settings and enable Unknown sources. This is needed for media apps installed from an APK.\n\n4. Reconnect your car. In Customize launcher, enable Spitify if it is listed.\n\nDo this while parked. If it is still missing, send your phone model and Android Auto version with a problem report.") },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { autoHelp = false }) { Text("Done") } },
+    )
 }
 
 @Composable

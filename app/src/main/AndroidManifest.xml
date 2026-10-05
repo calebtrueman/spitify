@@ -203,17 +203,37 @@
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.codephotos" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/spotify_code_paths" />
         </provider>
-        <receiver android:name=".widgets.MusicWidgetProvider" android:exported="false" android:label="Spitify · Quick play">
+        <receiver android:name=".widgets.MusicWidgetProvider" android:exported="false" android:label="Spitify · Now Playing">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/music_widget" />
         </receiver>
-        <receiver android:name=".widgets.LibraryWidgetProvider" android:exported="false" android:label="Spitify · Your Library">
+        <receiver android:name=".widgets.LibraryWidgetProvider" android:exported="false" android:label="Spitify · Playlists">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
         </receiver>
         <receiver android:name=".widgets.FriendsWidgetProvider" android:exported="false" android:label="Spitify · Friends">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/friends_widget" />
+        </receiver>
+        <receiver android:name=".widgets.AlbumsWidgetProvider" android:exported="false" android:label="Spitify · Albums">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
+        </receiver>
+        <receiver android:name=".widgets.MostPlayedWidgetProvider" android:exported="false" android:label="Spitify · Most played">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
+        </receiver>
+        <receiver android:name=".widgets.RecentlyPlayedWidgetProvider" android:exported="false" android:label="Spitify · Recently played">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
+        </receiver>
+        <receiver android:name=".widgets.RecentlyAddedWidgetProvider" android:exported="false" android:label="Spitify · Recently added">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
+        </receiver>
+        <receiver android:name=".widgets.LikedWidgetProvider" android:exported="false" android:label="Spitify · Liked songs">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/library_widget" />
         </receiver>
     </application>
 </manifest>

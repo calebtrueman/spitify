@@ -5,6 +5,7 @@
     <include domain="file" path="profile.jpg" />
     <include domain="file" path="custom_art/" />
     <include domain="file" path="artist_covers/" />
+        <include domain="file" path="playlist_covers/" />
     <include domain="file" path="os_backup/" requireFlags="clientSideEncryption|deviceToDeviceTransfer" />
     <!-- Keystore wrapping keys do not survive reinstall. The agent safely rewraps the identity. -->
     <exclude domain="sharedpref" path="peer_identity.xml" />

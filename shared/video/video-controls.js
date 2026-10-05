@@ -12,6 +12,25 @@
   let cropCandidate=1,cropMatches=0,cleanFrames=0,lastCropCheck=-Infinity;
   let requested={playing:false,visible:false,reduceMotion:false,resumeID:0};
   let hold,holding=false,cut=null,fadeRequest=null,lastReport=0,lastPlayAttempt=0,lastProgress=Date.now(),lastTime=-1;
+  let qualityTarget='',qualityLevels=[],qualityCurrent='',lastQualityRequest=0;
+  function requestHD() {
+    if(!canRun()) return;
+    const player=document.getElementById('movie_player');
+    if(!player || typeof player.getAvailableQualityLevels!=='function') return;
+    try {
+      qualityLevels=player.getAvailableQualityLevels() || [];
+      qualityCurrent=typeof player.getPlaybackQuality==='function'?player.getPlaybackQuality():'';
+      const target=['highres','hd2880','hd2160','hd1440','hd1080','hd720'].find(level=>qualityLevels.includes(level));
+      if(!target) return;
+      const now=Date.now();
+      if(target===qualityTarget && (qualityCurrent===target || now-lastQualityRequest<5000)) return;
+      qualityTarget=target;lastQualityRequest=now;
+      // These belong to the page's own player. The public iframe API no longer changes quality.
+      // Keep checking decoded dimensions separately: a request alone does not prove HD arrived.
+      if(typeof player.setPlaybackQualityRange==='function') player.setPlaybackQualityRange(target,target);
+      if(typeof player.setPlaybackQuality==='function') player.setPlaybackQuality(target);
+    } catch(_) { /* Keep playback working when the provider changes its page API. */ }
+  }
   const root=()=>document.documentElement;
   const canRun=()=>requested.playing && requested.visible && !document.hidden;
   const send=(force=false)=>{
@@ -19,7 +38,8 @@
     if(!force && now-lastReport<250) return;
     lastReport=now;
     window.parent.postMessage({spitifyVideoSurface:true,frameReady:displayed || holding,
-      time:current?current.currentTime:0,paused:current?current.paused:true,seeking:current?current.seeking:false,frames},'*');
+      time:current?current.currentTime:0,paused:current?current.paused:true,seeking:current?current.seeking:false,frames,width:current?current.videoWidth:0,height:current?current.videoHeight:0,
+      qualityTarget,qualityLevels,qualityCurrent},'*');
   };
   const cutState=(phase,extra={})=>{
     if(cut) window.parent.postMessage({spitifyCutState:{id:cut.id,phase,...extra}},'*');
@@ -218,7 +238,7 @@
   setInterval(()=>{
     const now=Date.now(),delta=Math.max(0,Math.min(1000,now-lastTick));lastTick=now;
     if(cut && canRun()) cut.elapsed+=delta;
-    reconcile();checkFrame();send();
+    reconcile();checkFrame();requestHD();send();
   },250);
   window.addEventListener('message',event=>{
     if(event.source!==window.parent || !event.data) return;

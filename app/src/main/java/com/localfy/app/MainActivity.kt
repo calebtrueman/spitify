@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun handleWidget(action: String) {
+        if (action == "player") { app.incomingSocialLink.value = "widget-route:player"; return }
         val route = when (action) { "library" -> "library"; "recent" -> com.localfy.app.ui.Routes.smart(com.localfy.app.data.SmartCollection.Kind.RecentlyAdded); "search" -> "search"; "friends" -> "friends"; "code" -> "friend-code"; "rooms" -> "rooms"; else -> null }
         if (route != null) { app.incomingSocialLink.value = "widget-route:" + route; return }
         if (action !in listOf("toggle", "next", "shuffle", "liked")) return

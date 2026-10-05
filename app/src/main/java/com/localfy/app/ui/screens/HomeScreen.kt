@@ -191,7 +191,7 @@ fun HomeScreen() {
                     val liked = smart[SmartCollection.Kind.AllSongs]?.songs.orEmpty()
                     item(key = "gl") { MediaTile(TileData("gl", "All Songs", songCount(liked.size), liked.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.AllSongs)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp)) }
                     items(playlists, key = { "gp${it.id}" }) { p ->
-                        MediaTile(TileData("gp${p.id}", p.name, songCount(p.songs.size), p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
+                        MediaTile(TileData("gp${p.id}", p.name, songCount(p.songs.size), p.artKey) { app.navigate(Routes.playlist(p.id)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
                     }
                     items(mixes, key = { "gm${it.key}" }) { m ->
                         MediaTile(TileData("gm${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) }, androidx.compose.ui.unit.Dp.Unspecified, Modifier.padding(6.dp))
@@ -229,7 +229,7 @@ fun HomeScreen() {
             val quick = buildList {
                 val likedSongs = smart[SmartCollection.Kind.AllSongs]?.songs.orEmpty()
                 add(TileData("liked", "All Songs", songCount(likedSongs.size), likedSongs.firstOrNull()?.artKey) { app.navigate(Routes.smart(SmartCollection.Kind.AllSongs)) })
-                playlists.take(3).forEach { p -> add(TileData("p${p.id}", p.name, "Playlist", p.songs.firstOrNull()?.artKey) { app.navigate(Routes.playlist(p.id)) }) }
+                playlists.take(3).forEach { p -> add(TileData("p${p.id}", p.name, "Playlist", p.artKey) { app.navigate(Routes.playlist(p.id)) }) }
                 recentAlbums.take(4).forEach { a -> add(TileData("ra${a.id}", a.title, a.artist, a.cover.artKey) { app.navigate(Routes.album(a.id)) }) }
                 mixes.take(4).forEach { m -> add(TileData("qm${m.key}", m.title, m.description, m.cover.artKey, cover = { mod -> com.localfy.app.ui.components.MixCover(m, mod) }) { app.navigate(Routes.mix(m.key)) }) }
                 library.albums.shuffled(java.util.Random(7)).take(8).forEach { a ->

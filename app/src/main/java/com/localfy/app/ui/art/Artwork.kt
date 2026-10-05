@@ -59,6 +59,8 @@ data class ArtKey(val songId: Long, val albumId: Long, val url: String? = null, 
     val model: Any get() = url ?: this
 }
 
+val com.localfy.app.data.Playlist.artKey: ArtKey? get() = artwork?.let { ArtKey(id, id, it, artVersion) } ?: songs.firstOrNull()?.artKey
+
 val Song.artKey: ArtKey get() = ArtKey(id, albumId, artUrl, artVersion)
 
 class ArtKeyer : Keyer<ArtKey> {

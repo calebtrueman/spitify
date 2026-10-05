@@ -92,7 +92,7 @@ struct SongMenuItems: View {
     @Environment(Router.self) private var router
     var body: some View {
         if let track = app.musicStreams.track(song) {
-            Button(app.musicStreams.savedIDs.contains(track.id) ? "Remove from Library" : "Add to Library", systemImage: "plus.circle") {
+            Button(app.musicStreams.savedIDs.contains(track.id) ? "Remove from Library" : "Add to Library", systemImage: app.musicStreams.savedIDs.contains(track.id) ? "minus.circle" : "plus.circle") {
                 if app.musicStreams.savedIDs.contains(track.id) { app.musicStreams.remove([track]) } else { app.musicStreams.save([track]) }
             }
             Button("Download", systemImage: "arrow.down.circle") {
@@ -153,6 +153,7 @@ struct Tile: Identifiable {
     var circle = false
     var mix: Mix? = nil
     var remoteArt: String? = nil
+    var customArtKey: String? = nil
     var action: () -> Void
 }
 
@@ -164,7 +165,8 @@ struct MediaTile: View {
         Button(action: { Haptics.tap(); tile.action() }) {
             VStack(alignment: tile.circle ? .center : .leading, spacing: 8) {
                 Group {
-                    if let mix = tile.mix { MixCover(mix: mix) }
+                    if let key = tile.customArtKey { ArtworkView(key: key, remote: nil, cornerRadius: 8) }
+                    else if let mix = tile.mix { MixCover(mix: mix) }
                     else if let r = tile.remoteArt { ArtworkView(key: tile.id, remote: r, cornerRadius: 8) }
                     else { ArtworkView(tile.song, cornerRadius: 8, circle: tile.circle) }
                 }
@@ -213,7 +215,7 @@ struct QuickTile: View {
     var body: some View {
         Button(action: { Haptics.tap(); tile.action() }) {
             HStack(spacing: 0) {
-                Group { if let m = tile.mix { MixCover(mix: m, compact: true) } else { ArtworkView(tile.song, cornerRadius: 0) } }.frame(width: 54, height: 54)
+                Group { if let key = tile.customArtKey { ArtworkView(key: key, remote: nil, cornerRadius: 0) } else if let m = tile.mix { MixCover(mix: m, compact: true) } else { ArtworkView(tile.song, cornerRadius: 0) } }.frame(width: 54, height: 54)
                 Text(tile.title).text(.titleS).foregroundStyle(p.text).lineLimit(2).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 10).padding(.vertical, 6)
                 Spacer(minLength: 0)
             }

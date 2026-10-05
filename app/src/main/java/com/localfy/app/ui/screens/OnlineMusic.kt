@@ -13,6 +13,7 @@ import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
@@ -138,6 +139,7 @@ fun CatalogPage(payload: String, isSong: Boolean) {
 
 @Composable
 fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
+    val context = LocalContext.current
     val actions = LocalApp.current
     val downloads = (LocalContext.current.applicationContext as LocalfyApp).musicDownloads
     val library by actions.repo.library.collectAsStateWithLifecycle()
@@ -154,7 +156,7 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
         try {
             val loaded = Monochrome.album(album.id)
             tracks = if (single == null) loaded else loaded.filter { it.id == single.id }.ifEmpty { listOf(single) }
-        } catch (e: Exception) { if (e is CancellationException) throw e; failed = tracks.isEmpty() }
+        } catch (e: Exception) { if (e is CancellationException) throw e; failed = single == null }
         finally {
             tracks = tracks.map { it.copy(album = it.album.ifBlank { album.title }, releaseId = it.releaseId.ifBlank { album.id }, albumArtist = it.albumArtist ?: album.artist, artwork = it.artwork ?: album.artwork) }
             loading = false
@@ -180,19 +182,30 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
         art = art, songs = songs, trackNumbers = single == null, catalogTracks = tracks,
         headerActions = {
             IconButton(enabled = tracks.isNotEmpty(), onClick = { if (inLibrary) streams.remove(tracks) else streams.save(tracks) }) {
-                Icon(if (inLibrary) androidx.compose.material.icons.Icons.Rounded.CheckCircle else androidx.compose.material.icons.Icons.Rounded.AddCircleOutline,
+                Icon(if (inLibrary) androidx.compose.material.icons.Icons.Rounded.RemoveCircleOutline else androidx.compose.material.icons.Icons.Rounded.AddCircleOutline,
                     if (inLibrary) "Remove from Library" else "Add to Library")
             }
-            IconButton(enabled = tracks.isNotEmpty() && !complete && !adding, onClick = {
+            IconButton(enabled = tracks.isNotEmpty() && !loading && !failed && !complete && !adding, onClick = {
                 if (active) albumJobs.filter { it.active }.forEach { downloads.cancel(it.id) }
-                else { streams.save(tracks); adding = true; scope.launch { try { downloads.enqueue(tracks) } finally { adding = false } } }
+                else {
+                    streams.save(tracks); adding = true
+                    scope.launch {
+                        try {
+                            val message = downloads.enqueue(tracks.filter { savedSong(it, library.songs, jobs) == null })
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                        } catch (error: Exception) {
+                            if (error is CancellationException) throw error
+                            android.widget.Toast.makeText(context, "Couldn't queue downloads. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                        } finally { adding = false }
+                    }
+                }
             }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (active) "Cancel downloads" else if (single == null) "Download album" else "Download song" }) {
                 DownloadMark(complete, active || adding, albumProgress)
             }
             if (downloaded > 0) IconButton(onClick = { actions.editMetadata(songs.filter { it.sourceUri?.scheme != "spitify" }, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
         }, beforeSongs = {
             if (loading) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-            if (failed) item { TextButton(onClick = { reload++ }) { Text("Couldn't load songs. Try again") } }
+            if (failed) item { TextButton(onClick = { reload++ }) { Text("Couldn't load the full album. Try again") } }
         })
 }
 
@@ -209,4 +222,48 @@ private fun SearchCover(id: String, album: String, artist: String, artwork: Stri
         }
     }
     Artwork(ArtKey(id.hashCode().toLong(), id.hashCode().toLong(), source), Modifier.size(50.dp), RoundedCornerShape(6.dp))
+}
+
+
+@Composable
+internal fun AlbumDownloadButton(album: OnlineAlbum) {
+    val context = LocalContext.current
+    val app = context.applicationContext as LocalfyApp
+    val jobs by app.musicDownloads.jobs.collectAsStateWithLifecycle()
+    val progress by app.musicDownloads.progress.collectAsStateWithLifecycle()
+    val library by app.library.library.collectAsStateWithLifecycle()
+    var tracks by remember(album.id) { mutableStateOf<List<OnlineTrack>?>(null) }
+    var loading by remember(album.id) { mutableStateOf(false) }
+    val albumJobs = jobs.filter { it.track().releaseId == album.id }
+    val active = albumJobs.any { it.active }
+    val complete = tracks?.let { all -> all.isNotEmpty() && all.all { savedSong(it, library.songs, jobs) != null || jobs.any { job -> job.id == it.id && job.state == "complete" } } } == true
+    val fraction = tracks?.let { all -> DownloadProgress.album(all.map { track ->
+        if (savedSong(track, library.songs, jobs) != null) 1f else DownloadProgress.fraction(jobs.firstOrNull { it.id == track.id }?.state, progress[track.id])
+    }) }
+    IconButton(enabled = !loading && !complete, onClick = {
+        if (active) albumJobs.filter { it.active }.forEach { app.musicDownloads.cancel(it.id) }
+        else {
+            loading = true
+            app.appScope.launch {
+                try {
+                    val all = Monochrome.album(album.id).map { track -> track.copy(
+                        album = track.album.ifBlank { album.title }, releaseId = track.releaseId.ifBlank { album.id },
+                        albumArtist = track.albumArtist ?: album.artist, artwork = track.artwork ?: album.artwork,
+                    ) }
+                    tracks = all
+                    val missing = all.filter { savedSong(it, app.library.library.value.songs, app.musicDownloads.jobs.value) == null }
+                    val message = if (all.isNotEmpty() && missing.isEmpty()) "Album already downloaded" else {
+                        app.musicStreams.save(all)
+                        app.musicDownloads.enqueue(missing)
+                    }
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    android.widget.Toast.makeText(context, "Couldn't download ${album.title}. Tap download to try again.", android.widget.Toast.LENGTH_LONG).show()
+                } finally { loading = false }
+            }
+        }
+    }, modifier = Modifier.semantics { contentDescription = if (complete) "${album.title} downloaded" else if (active) "Cancel ${album.title} downloads" else "Download album ${album.title}" }) {
+        DownloadMark(complete, loading || active, fraction)
+    }
 }

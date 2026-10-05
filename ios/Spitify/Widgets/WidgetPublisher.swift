@@ -13,7 +13,7 @@ import WidgetKit
         var snapshot = WidgetMusicSnapshot(current: app.player.current.map(item), isPlaying: app.player.isPlaying)
         snapshot.playlists = library.playlists.sorted { $0.updatedAt > $1.updatedAt }.prefix(8).map { playlist in
             let songs = library.songs(of: playlist)
-            return WidgetMusicItem(id: "playlist:" + playlist.id, title: playlist.name, subtitle: "\(songs.count) songs", artwork: songs.first.flatMap(artwork))
+            return WidgetMusicItem(id: "playlist:" + playlist.id, title: playlist.name, subtitle: "\(songs.count) songs", artwork: library.playlistArtworkKey(playlist.id).flatMap { key in ArtCache.shared.image(for: key, remote: nil).flatMap { artworkImage($0, key: key) } } ?? songs.first.flatMap(artwork))
         }
         snapshot.albums = library.library.albums.sorted { ($0.songs.map(\.dateAdded).max() ?? .distantPast) > ($1.songs.map(\.dateAdded).max() ?? .distantPast) }.prefix(8).map {
             WidgetMusicItem(id: "album:" + $0.id, title: $0.title, subtitle: $0.artist, artwork: artwork($0.cover))
@@ -31,15 +31,19 @@ import WidgetKit
 
     private static func artwork(_ song: Song) -> Data? {
         guard let image = ArtCache.shared.image(for: song.albumKey, remote: song.artURL) else { return nil }
+        return artworkImage(image, key: song.albumKey)
+    }
+
+    private static func artworkImage(_ image: UIImage, key: String) -> Data? {
         let id = ObjectIdentifier(image)
-        if let cached = coverCache[song.albumKey], cached.0 == id { return cached.1 }
+        if let cached = coverCache[key], cached.0 == id { return cached.1 }
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
         let ratio = min(1, 400 / max(image.size.width, image.size.height))
         let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
         let copy = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
         guard let data = copy.jpegData(compressionQuality: 0.78) else { return nil }
         if coverCache.count >= 128 { coverCache.removeAll() }
-        coverCache[song.albumKey] = (id, data)
+        coverCache[key] = (id, data)
         return data
     }
 

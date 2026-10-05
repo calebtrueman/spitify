@@ -175,12 +175,16 @@ fun LocalfyRoot(activity: Activity) {
     val container = activity.application as LocalfyApp
     val nav = rememberNavController()
     val incomingLink by container.incomingSocialLink.collectAsStateWithLifecycle()
-    LaunchedEffect(incomingLink) { incomingLink?.let { nav.navigate(if (it == "releases") "releases" else if (it.startsWith("widget-route:")) it.removePrefix("widget-route:") else "incoming/" + android.net.Uri.encode(it)); container.incomingSocialLink.value = null } }
     var menu by remember { mutableStateOf<Pair<Song, SongMenuExtras>?>(null) }
     var addToPlaylist by remember { mutableStateOf<List<Song>?>(null) }
     var editing by remember { mutableStateOf<Pair<List<Song>, Boolean>?>(null) }
     var creatingPlaylist by remember { mutableStateOf(false) }
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(incomingLink) { incomingLink?.let {
+        if (it == "widget-route:player") playerExpanded = true
+        else nav.navigate(if (it == "releases") "releases" else if (it.startsWith("widget-route:")) it.removePrefix("widget-route:") else "incoming/" + android.net.Uri.encode(it))
+        container.incomingSocialLink.value = null
+    } }
     var sheet by remember { mutableFloatStateOf(0f) }
     var theater by rememberSaveable { mutableStateOf(false) }
     var paneVisible by rememberSaveable { mutableStateOf(true) }

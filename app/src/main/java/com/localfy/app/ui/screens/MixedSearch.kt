@@ -42,7 +42,7 @@ fun SearchSubtitle(type: String, creator: String, explicit: Boolean = false) {
 
 private data class MixedResult(val id: String, val title: String, val creator: String, val type: String, val score: Int,
     val artwork: String? = null, val explicit: Boolean = false, val local: Song? = null, val track: OnlineTrack? = null,
-    val route: String? = null, val podcast: PodcastSearchResult? = null, val book: BookSearchResult? = null)
+    val route: String? = null, val podcast: PodcastSearchResult? = null, val book: BookSearchResult? = null, val album: OnlineAlbum? = null)
 
 @Composable
 fun MixedSearchPanel(query: String) {
@@ -88,7 +88,7 @@ fun MixedSearchPanel(query: String) {
             result += MixedResult("song:${song.id}", song.title, song.artist, if (song.isAudiobook) "Audiobook" else if (song.isPodcast) "Episode" else "Song", it, explicit = song.explicit == true || music.tracks.any { SearchMatch.sameSong(song.title, song.artist, song.durationMs, it.title, it.artist, it.durationMs) && it.explicit == true }, local = song)
         } }
         localPlaylists.forEach { playlist -> score(playlist.name, "")?.let {
-            result += MixedResult("localPlaylist:${playlist.id}", playlist.name, "You", "Playlist", it, local = playlist.songs.firstOrNull(), route = Routes.playlist(playlist.id))
+            result += MixedResult("localPlaylist:${playlist.id}", playlist.name, "You", "Playlist", it, artwork = playlist.artwork, local = playlist.songs.firstOrNull(), route = Routes.playlist(playlist.id))
         } }
         localBooks.groupBy { it.albumId }.forEach { (id, chapters) -> chapters.firstOrNull()?.let { first -> score(first.album, first.albumArtist)?.let {
             result += MixedResult("localBook:$id", first.album, first.albumArtist, "Audiobook", it, local = first, route = Routes.localBook(id))
@@ -107,10 +107,10 @@ fun MixedSearchPanel(query: String) {
         }
         library.albums.forEach { album -> score(album.title, album.artist)?.let {
             val remote = music.albums.firstOrNull { SearchMatch.fold(it.title) == SearchMatch.fold(album.title) && SearchMatch.fold(it.artist) == SearchMatch.fold(album.artist) }
-            result += MixedResult("album:${album.id}", album.title, album.artist, "Album", it, explicit = remote?.explicit == true || album.songs.any { it.explicit == true }, local = album.cover, route = remote?.let(Routes::catalogAlbum) ?: Routes.album(album.id))
+            result += MixedResult("album:${album.id}", album.title, album.artist, "Saved album", it, explicit = remote?.explicit == true || album.songs.any { it.explicit == true }, local = album.cover, route = Routes.album(album.id), album = remote)
         } }
-        music.albums.filter { album -> library.albums.none { SearchMatch.fold(it.title) == SearchMatch.fold(album.title) && SearchMatch.fold(it.artist) == SearchMatch.fold(album.artist) } }.forEach { album ->
-            score(album.title, album.artist)?.let { result += MixedResult("release:${album.id}", album.title, album.artist, "Album", it, album.artwork, album.explicit == true, route = Routes.catalogAlbum(album)) }
+        music.albums.forEach { album ->
+            score(album.title, album.artist)?.let { result += MixedResult("release:${album.id}", album.title, album.artist, "Online album", it, album.artwork, album.explicit == true, route = Routes.catalogAlbum(album), album = album) }
         }
         music.artists.forEach { artist -> score(artist.name, "")?.let {
             result += MixedResult("artist:${artist.id}", artist.name, "", "Artist", it + 20, artist.artwork, route = Routes.onlineArtist(artist))
@@ -147,12 +147,14 @@ fun MixedSearchPanel(query: String) {
                     }
                 }
             }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (row.local != null) Artwork(row.local.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
+                if (row.id.startsWith("localPlaylist:") && row.artwork != null) AsyncImage(row.artwork, null, Modifier.size(50.dp).clip(RoundedCornerShape(6.dp)))
+                else if (row.local != null) Artwork(row.local.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
                 else AsyncImage(row.artwork, null, Modifier.size(50.dp).clip(RoundedCornerShape(6.dp)))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(row.title, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     SearchSubtitle(row.type, row.creator, row.explicit)
                 }
+                row.album?.let { AlbumDownloadButton(it) }
             }
         } }
     }

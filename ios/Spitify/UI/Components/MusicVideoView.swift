@@ -1,6 +1,11 @@
 import SwiftUI
 import WebKit
 
+@MainActor @Observable final class VideoQuality {
+    static let shared = VideoQuality()
+    var resolution = "No video played yet"
+}
+
 struct SilentVideoSurface: UIViewRepresentable {
     let videoID: String
     var position: Double
@@ -54,7 +59,13 @@ struct SilentVideoSurface: UIViewRepresentable {
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.webView === view, message.frameInfo.isMainFrame,
-                  let value = message.body as? String, ["READY", "WAITING", "ERROR"].contains(value) else { return }
+                  let value = message.body as? String else { return }
+            if value.hasPrefix("QUALITY:") {
+                let size = String(value.dropFirst(8))
+                if size.range(of: "^[0-9]{1,5}x[0-9]{1,5}$", options: .regularExpression) != nil { VideoQuality.shared.resolution = size.replacingOccurrences(of: "x", with: " × ") }
+                return
+            }
+            guard ["READY", "WAITING", "ERROR"].contains(value) else { return }
             // An embed can become ready before WebKit finishes the whole navigation.
             // The first state message confirms that early, otherwise missed commands can run.
             if !bridgeReady, value != "ERROR" { bridgeReady = true; sync(reveal: true) }

@@ -92,7 +92,7 @@ fun SongMenuSheet(song: Song, extras: SongMenuExtras, onDismiss: () -> Unit, onN
             }
             HorizontalDivider(color = LocalfyColors.SurfaceHighest)
             if (streamTrack != null) {
-                MenuItem(Icons.Rounded.Add, if (nativeApp.musicStreams.contains(streamTrack)) "Remove from Library" else "Add to Library") {
+                MenuItem(if (nativeApp.musicStreams.contains(streamTrack)) Icons.Rounded.RemoveCircleOutline else Icons.Rounded.Add, if (nativeApp.musicStreams.contains(streamTrack)) "Remove from Library" else "Add to Library") {
                     if (nativeApp.musicStreams.contains(streamTrack)) nativeApp.musicStreams.remove(listOf(streamTrack)) else nativeApp.musicStreams.save(listOf(streamTrack))
                     onDismiss()
                 }
@@ -194,6 +194,9 @@ private fun SongInfoDialog(song: Song, onDismiss: () -> Unit) {
 @Composable
 fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
     val app = LocalApp.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
     val playlists by app.repo.playlists.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     if (creating) {
@@ -215,10 +218,22 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
                 }
                 items(playlists, key = { it.id }) { p ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { app.repo.addToPlaylist(p.id, songs.map { it.id }); onDismiss() }.padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().clickable(enabled = !saving) {
+                            saving = true
+                            scope.launch {
+                                try {
+                                    app.repo.appendToPlaylist(p.id, songs.map { it.id })
+                                    android.widget.Toast.makeText(context, "Added to ${p.name}", android.widget.Toast.LENGTH_SHORT).show()
+                                    onDismiss()
+                                } catch (error: Exception) {
+                                    if (error is kotlinx.coroutines.CancellationException) throw error
+                                    android.widget.Toast.makeText(context, "Couldn't add songs. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                                } finally { saving = false }
+                            }
+                        }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Artwork(p.songs.firstOrNull()?.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
+                        Artwork(p.artKey, Modifier.size(50.dp), RoundedCornerShape(6.dp))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -234,19 +249,27 @@ fun AddToPlaylistDialog(songs: List<Song>, onDismiss: () -> Unit) {
 @Composable
 fun CreatePlaylistDialog(songIds: List<Long> = emptyList(), onDismiss: () -> Unit, onCreated: (Long) -> Unit = {}) {
     val app = LocalApp.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Give your playlist a name") },
         text = { OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text("My playlist #${app.repo.playlists.value.size + 1}") }) },
         confirmButton = {
-            TextButton(onClick = {
+            TextButton(enabled = !saving, onClick = {
+                saving = true
                 val finalName = name.ifBlank { "My playlist #${app.repo.playlists.value.size + 1}" }
                 scope.launch {
-                    val id = app.repo.createPlaylist(finalName, songIds)
-                    onDismiss()
-                    onCreated(id)
+                    try {
+                        val id = app.repo.createPlaylist(finalName, songIds)
+                        android.widget.Toast.makeText(context, if (songIds.isEmpty()) "Created $finalName" else "Added to $finalName", android.widget.Toast.LENGTH_SHORT).show()
+                        onDismiss(); onCreated(id)
+                    } catch (error: Exception) {
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        android.widget.Toast.makeText(context, "Couldn't create the playlist. Please try again.", android.widget.Toast.LENGTH_LONG).show()
+                    } finally { saving = false }
                 }
             }) { Text("Create") }
         },

@@ -4,6 +4,34 @@ import WebKit
 @testable import Spitify
 
 final class VideoLifecycleTests: XCTestCase {
+    @MainActor func testLiveVideoKeepsHDAfterPauseAndPassageChange() async throws {
+        guard ProcessInfo.processInfo.environment["SPITIFY_VIDEO_LIVE_CHECK"] == "1" else {
+            throw XCTSkip("Set SPITIFY_VIDEO_LIVE_CHECK=1 for the real HD check")
+        }
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let (view, probe) = liveVideo("h5EofwRzit0")
+        let coordinator = fixture.surface("h5EofwRzit0", playing: true).makeCoordinator()
+        coordinator.attach(view); fixture.show(view)
+        defer {
+            coordinator.detach(view)
+            view.configuration.userContentController.removeScriptMessageHandler(forName: "nativeVideoProbe")
+            view.stopLoading()
+        }
+        let hd = "spitifyVideoState().surface.height >= 720 && spitifyVideoState().surface.frames > 10 && !spitifyVideoState().surface.paused"
+        try await waitFor(view, hd, timeout: 90)
+        try await liveAdvance(probe)
+        print("REAL_VIDEO_HD: \(try await view.evaluateJavaScript("JSON.stringify(spitifyVideoState())"))")
+        coordinator.parent.playing = false; coordinator.sync()
+        try await liveHold(probe)
+        coordinator.parent.playing = true; coordinator.sync()
+        try await liveAdvance(probe)
+        try await waitFor(view, hd)
+        try await waitFor(view, "spitifyVideoState().shot > 0 && spitifyVideoState().transition === null", timeout: 45)
+        try await waitFor(view, hd)
+        print("REAL_VIDEO_HD_PASS: \(try await view.evaluateJavaScript("JSON.stringify(spitifyVideoState())"))")
+    }
+
     @MainActor func testRealVideoMovesAfterResumeVisibilityAndPausedSongSwap() async throws {
         guard ProcessInfo.processInfo.environment["SPITIFY_VIDEO_LIVE_CHECK"] == "1" else {
             throw XCTSkip("Set SPITIFY_VIDEO_LIVE_CHECK=1 for the real video provider check")

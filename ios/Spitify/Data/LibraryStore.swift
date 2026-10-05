@@ -239,7 +239,12 @@ final class LibraryStore {
         playlists[i].songIds.remove(at: index); playlists[i].updatedAt = Date()
     }
     func rename(_ id: String, to name: String) { if let i = playlists.firstIndex(where: { $0.id == id }) { playlists[i].name = name } }
-    func deletePlaylist(_ id: String) { playlists.removeAll { $0.id == id } }
+    func playlistArtworkKey(_ id: String) -> String? {
+        let _ = artVersion
+        let key = "playlist:" + id
+        return FileManager.default.fileExists(atPath: ArtCache.shared.customURL(key).path) ? key : nil
+    }
+    func deletePlaylist(_ id: String) { playlists.removeAll { $0.id == id }; ArtCache.shared.removeCustom("playlist:" + id) }
     func songs(of p: Playlist) -> [Song] { p.songIds.compactMap { library.songById[$0] ?? MusicStreams.shared.lookup($0) } }
 
     func saveFiles(_ edit: MetadataOverride, for songs: [Song], artwork: Data? = nil) async throws {

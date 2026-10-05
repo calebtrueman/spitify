@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Shared layout for albums, playlists, mixes, smart lists, genres and folders: colour-matched
 /// header, big play button, then the tracks. The header art shrinks and fades as you scroll.
@@ -17,6 +18,7 @@ struct CollectionView<Extra: View>: View {
     var toolbarExtra: AnyView? = nil
     var catalogTracks: [OnlineTrack]? = nil
     var remoteArt: String? = nil
+    var customArtKey: String? = nil
     @ViewBuilder var extra: () -> Extra
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
@@ -26,8 +28,9 @@ struct CollectionView<Extra: View>: View {
         let count = catalogTracks?.count ?? songs.count
         let length = catalogTracks?.reduce(Int64(0)) { $0 + $1.durationMs } ?? songs.reduce(Int64(0)) { $0 + $1.durationMs }
         CollectionLayout(title: title, subtitle: subtitle, metadata: "\(kind) • \(songCount(count)), \(length.formattedLong)",
-                         artKey: kind == "Artist" ? ArtistChoices.key(title) : art?.albumKey ?? remoteArt ?? "none", remoteArt: art?.artURL ?? remoteArt) {
-            if kind == "Artist" { ArtistPicture(name: title, fallback: art, remote: remoteArt) }
+                         artKey: customArtKey ?? (kind == "Artist" ? ArtistChoices.key(title) : art?.albumKey ?? remoteArt ?? "none"), remoteArt: art?.artURL ?? remoteArt) {
+            if let customArtKey { ArtworkView(key: customArtKey, remote: nil, cornerRadius: 8) }
+            else if kind == "Artist" { ArtistPicture(name: title, fallback: art, remote: remoteArt) }
             else if let mix { MixCover(mix: mix) }
             else if art == nil, let remoteArt { ArtworkView(key: remoteArt, remote: remoteArt, cornerRadius: 8, circle: hero) }
             else { ArtworkView(art, cornerRadius: 8, circle: hero) }
@@ -74,9 +77,9 @@ struct CollectionView<Extra: View>: View {
 
 extension CollectionView where Extra == EmptyView {
     init(title: String, kind: String, subtitle: String, art: Song?, songs: [Song], trackNumbers: Bool = false, hero: Bool = false, mix: Mix? = nil,
-         songSubtitle: ((Song) -> String)? = nil, removeLabel: String? = nil, onRemove: ((Int) -> Void)? = nil, toolbarExtra: AnyView? = nil, catalogTracks: [OnlineTrack]? = nil, remoteArt: String? = nil) {
+         songSubtitle: ((Song) -> String)? = nil, removeLabel: String? = nil, onRemove: ((Int) -> Void)? = nil, toolbarExtra: AnyView? = nil, catalogTracks: [OnlineTrack]? = nil, remoteArt: String? = nil, customArtKey: String? = nil) {
         self.init(title: title, kind: kind, subtitle: subtitle, art: art, songs: songs, trackNumbers: trackNumbers, hero: hero, mix: mix, songSubtitle: songSubtitle,
-                  removeLabel: removeLabel, onRemove: onRemove, toolbarExtra: toolbarExtra, catalogTracks: catalogTracks, remoteArt: remoteArt, extra: { EmptyView() })
+                  removeLabel: removeLabel, onRemove: onRemove, toolbarExtra: toolbarExtra, catalogTracks: catalogTracks, remoteArt: remoteArt, customArtKey: customArtKey, extra: { EmptyView() })
     }
 }
 
@@ -120,6 +123,8 @@ struct ArtistView: View {
 }
 
 struct PlaylistView: View {
+    @State private var photo: PhotosPickerItem?
+    @State private var deleting = false
     var id: String
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
@@ -130,13 +135,24 @@ struct PlaylistView: View {
         if let pl = app.library.playlists.first(where: { $0.id == id }) {
             let songs = app.library.songs(of: pl)
             CollectionView(title: pl.name, kind: "Playlist", subtitle: "Your playlist", art: songs.first, songs: songs, removeLabel: "Remove from this playlist",
-                           onRemove: { app.library.remove(at: $0, from: pl.id) })
+                           onRemove: { app.library.remove(at: $0, from: pl.id) }, customArtKey: app.library.playlistArtworkKey(pl.id))
                 .toolbar {
                     Menu {
+                        PhotosPicker(selection: $photo, matching: .images) { Label("Change artwork", systemImage: "photo") }
+                        if app.library.playlistArtworkKey(pl.id) != nil {
+                            Button("Use song artwork") { ArtCache.shared.removeCustom("playlist:" + pl.id); app.library.artVersion += 1 }
+                        }
                         Button("Rename", systemImage: "pencil") { name = pl.name; renaming = true }
-                        Button("Delete playlist", systemImage: "trash", role: .destructive) { dismiss(); app.library.deletePlaylist(pl.id) }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                        Button("Delete playlist", systemImage: "trash", role: .destructive) { deleting = true }
+                    } label: { Label("Edit playlist", systemImage: "ellipsis.circle") }
                 }
+                .task(id: photo) {
+                    guard let photo, let data = try? await photo.loadTransferable(type: Data.self) else { return }
+                    ArtCache.shared.storeCustom(data, key: "playlist:" + pl.id); app.library.artVersion += 1
+                }
+                .confirmationDialog("Delete “\(pl.name)”?", isPresented: $deleting, titleVisibility: .visible) {
+                    Button("Delete playlist", role: .destructive) { app.library.deletePlaylist(pl.id); dismiss() }
+                } message: { Text("Only the playlist is removed. Your songs stay in your library.") }
                 .alert("Rename playlist", isPresented: $renaming) { TextField("Name", text: $name); Button("Save") { app.library.rename(pl.id, to: name) }; Button("Cancel", role: .cancel) {} }
         }
     }

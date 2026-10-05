@@ -94,6 +94,7 @@ struct OnboardingView: View {
 }
 
 struct AddToPlaylistSheet: View {
+    @Environment(Router.self) private var router
     var songs: [Song]
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -104,9 +105,9 @@ struct AddToPlaylistSheet: View {
             AppList {
                 Button { creating = true } label: { Label("New playlist", systemImage: "plus") }
                 ForEach(app.library.playlists) { pl in
-                    Button { app.library.add(songs, to: pl.id); Haptics.success(); dismiss() } label: {
+                    Button { app.library.add(songs, to: pl.id); Haptics.success(); router.confirm("Added to \(pl.name)"); dismiss() } label: {
                         MediaRowContent(inset: 0) {
-                            ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                            Group { if let key = app.library.playlistArtworkKey(pl.id) { ArtworkView(key: key, remote: nil, cornerRadius: 4) } else { ArtworkView(app.library.songs(of: pl).first, cornerRadius: 4) } }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                         } detail: { MediaRowText(title: pl.name, subtitle: songCount(pl.songIds.count)) } trailing: { EmptyView() }
                     }
                 }
@@ -115,7 +116,7 @@ struct AddToPlaylistSheet: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .alert("Give your playlist a name", isPresented: $creating) {
                 TextField("My playlist", text: $name)
-                Button("Create") { _ = app.library.createPlaylist(name, songs: songs); dismiss() }
+                Button("Create") { let playlist = app.library.createPlaylist(name, songs: songs); router.confirm("Added to \(playlist.name)"); dismiss() }
                 Button("Cancel", role: .cancel) {}
             }
         }

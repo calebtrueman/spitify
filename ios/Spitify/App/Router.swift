@@ -29,6 +29,12 @@ final class Router {
         do { sharing = try app.social.create(name: name, songs: songs, kind: kind); playerOpen = false }
         catch { sharingError = error.localizedDescription }
     }
+    var notice: String?
+    @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    func confirm(_ text: String) {
+        noticeTask?.cancel(); notice = text
+        noticeTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { notice = nil } }
+    }
     var info: Song?
 
     func go(_ r: Route) {

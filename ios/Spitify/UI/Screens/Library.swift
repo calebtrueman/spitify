@@ -58,7 +58,7 @@ struct LibraryView: View {
                     ForEach(entries) { e in
                         Button { router.go(e.route) } label: {
                             HStack(spacing: 12) {
-                                Group { if e.circle { ArtistPicture(name: e.title, fallback: e.song) } else { ArtworkView(e.song, cornerRadius: 4) } }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
+                                Group { if case .playlist(let id) = e.route, let key = app.library.playlistArtworkKey(id) { ArtworkView(key: key, remote: nil, cornerRadius: 4) } else if e.circle { ArtistPicture(name: e.title, fallback: e.song) } else { ArtworkView(e.song, cornerRadius: 4) } }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                                 MediaRowText(title: e.title, subtitle: e.subtitle)
                                 Spacer()
                             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, MediaLayout.rowPadding).contentShape(Rectangle())

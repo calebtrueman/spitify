@@ -35,14 +35,21 @@ struct ArtistLandingView: View {
     var name: String
     @Environment(AppModel.self) private var app
     @State private var artist: OnlineArtist?
+    @State private var candidates: [OnlineArtist] = []
     @State private var loading = true
     @State private var failed = false
     @State private var retry = 0
     var body: some View {
         Group {
             if let artist { OnlineArtistView(artist: artist) }
-            else if app.library.library.artistByName[name] != nil { ArtistView(name: name) }
             else if loading { ProgressView("Finding artist…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else if !candidates.isEmpty {
+                AppList {
+                    Section("Choose an online artist") {
+                        ForEach(candidates) { match in Button(match.name) { artist = match } }
+                    }
+                }
+            }
             else {
                 VStack {
                     EmptyState(title: failed ? "Couldn't load artist" : "No artist page found", message: failed ? "Check your connection and try again." : "Try searching for the artist by name.", icon: "person")
@@ -51,10 +58,11 @@ struct ArtistLandingView: View {
             }
         }
         .task(id: "\(name):\(retry)") {
-            artist = nil; loading = true; failed = false
+            artist = nil; candidates = []; loading = true; failed = false
             do {
                 let found = try await MonochromeClient().searchAll(name)
                 guard !Task.isCancelled else { return }
+                candidates = found.artists
                 artist = found.artists.first { SearchMatch.fold($0.name) == SearchMatch.fold(name) }
             } catch { guard !Task.isCancelled else { return }; failed = true }
             loading = false

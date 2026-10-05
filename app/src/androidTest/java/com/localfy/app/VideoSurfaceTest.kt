@@ -36,7 +36,14 @@ class VideoSurfaceTest {
             <div id="movie_player" style="position:absolute;top:180px;width:320px;height:140px;overflow:hidden;transform:translateY(20px)">
               <div class="html5-video-container"><video class="html5-main-video" autoplay muted loop playsinline src="https://www.youtube.com/fixture.mp4"></video></div>
               <div id="fake-title" style="position:fixed;inset:0;background:lime;visibility:visible!important">YouTube title and buttons</div>
-            </div></body></html>"""
+            </div><script>
+            const player=document.getElementById('movie_player');
+            window.qualityCalls=[];window.currentQuality='medium';
+            player.getAvailableQualityLevels=()=>['medium','hd720','hd1080','auto'];
+            player.getPlaybackQuality=()=>window.currentQuality;
+            player.setPlaybackQualityRange=(min,max)=>window.qualityCalls.push([min,max]);
+            player.setPlaybackQuality=value=>window.currentQuality=value;
+            </script></body></html>"""
         lateinit var view: WebView
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
@@ -68,6 +75,8 @@ class VideoSurfaceTest {
             assertEquals("Video state: " + evaluate("JSON.stringify({ready:document.querySelector('video').readyState,paused:document.querySelector('video').paused,width:document.querySelector('video').videoWidth,time:document.querySelector('video').currentTime,crop:getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop'),frame:document.documentElement.getAttribute('data-spitify-frame')})"), "true", evaluate("Number(getComputedStyle(document.documentElement).getPropertyValue('--spitify-crop')) > 1.2"))
             assertEquals("\"hidden\"", evaluate("getComputedStyle(document.getElementById('fake-title')).visibility"))
             assertEquals("true", evaluate("document.querySelector('video').getBoundingClientRect().height >= innerHeight"))
+            assertEquals("\"hd1080\"", evaluate("window.currentQuality"))
+            assertEquals("[[\"hd1080\",\"hd1080\"]]", evaluate("window.qualityCalls"))
             // Dynamic overlays cannot become visible later, even with an inline important rule.
             evaluate("document.getElementById('fake-title').style.setProperty('visibility','visible','important')")
             assertEquals("\"hidden\"", evaluate("getComputedStyle(document.getElementById('fake-title')).visibility"))

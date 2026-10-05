@@ -101,7 +101,7 @@ fun LibraryScreen(onCreatePlaylist: () -> Unit) {
         val all = buildList {
             if (filter == null || filter == Filter.Playlists) playlists.forEach { p ->
                 val ids = p.songs.map { it.id }
-                add(Entry("p${p.id}", p.name, "Playlist • ${songCount(p.songs.size)}", p.songs.firstOrNull()?.artKey, rounded, maxOf(p.updatedAt, lastPlayed(ids)), plays(ids)) { app.navigate(Routes.playlist(p.id)) })
+                add(Entry("p${p.id}", p.name, "Playlist • ${songCount(p.songs.size)}", p.artKey, rounded, maxOf(p.updatedAt, lastPlayed(ids)), plays(ids)) { app.navigate(Routes.playlist(p.id)) })
             }
             if (filter == null || filter == Filter.Albums) library.albums.forEach { a ->
                 val ids = a.songs.map { it.id }

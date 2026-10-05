@@ -27,6 +27,7 @@ private struct MixedResult: Identifiable {
     var score: Int
     var local: Song?
     var track: OnlineTrack?
+    var album: OnlineAlbum?
     var route: Route?
     var podcast: ShowSearchResult?
     var book: BookSearchResult?
@@ -64,7 +65,10 @@ struct MixedSearchView: View {
                 } else if let artist = result.artist {
                     NavigationLink { OnlineArtistView(artist: artist) } label: { row(result) }.buttonStyle(.plain)
                 } else {
-                    Button { open(result) } label: { row(result) }.buttonStyle(.plain)
+                    HStack(spacing: 0) {
+                        Button { open(result) } label: { row(result) }.buttonStyle(.plain)
+                        if let album = result.album { AlbumDownloadButton(album: album) }
+                    }
                 }
             }
         }.padding(16)
@@ -105,7 +109,8 @@ struct MixedSearchView: View {
 
     private func row(_ result: MixedResult) -> some View {
         HStack(spacing: 12) {
-            if let song = result.local { ArtworkView(song).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
+            if result.id.hasPrefix("localPlaylist:"), let key = app.library.playlistArtworkKey(String(result.id.dropFirst(14))) { ArtworkView(key: key, remote: nil, cornerRadius: 4).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
+            else if let song = result.local { ArtworkView(song).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
             else { PlaylistCover(url: result.artwork).frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt) }
             MediaRowText(title: result.title, subtitle: result.type + (result.creator.isEmpty ? "" : " · " + result.creator), explicit: result.explicit)
             Spacer(minLength: 0)
@@ -147,11 +152,11 @@ struct MixedSearchView: View {
         for album in library.albums {
             guard let score = score(album.title, album.artist) else { continue }
             let remote = music.albums.first { SearchMatch.fold($0.title) == SearchMatch.fold(album.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(album.artist) }
-            rows.append(.init(id: "album:" + album.id, title: album.title, creator: album.artist, type: "Album", explicit: remote?.explicit == true || album.songs.contains { $0.explicit == true }, score: score, local: album.cover, route: remote.map(Route.catalogAlbum) ?? .album(album.id)))
+            rows.append(.init(id: "album:" + album.id, title: album.title, creator: album.artist, type: "Saved album", explicit: remote?.explicit == true || album.songs.contains { $0.explicit == true }, score: score, local: album.cover, album: remote, route: .album(album.id)))
         }
         for album in music.albums {
-            guard !library.albums.contains(where: { SearchMatch.fold($0.title) == SearchMatch.fold(album.title) && SearchMatch.fold($0.artist) == SearchMatch.fold(album.artist) }), let score = score(album.title, album.artist) else { continue }
-            rows.append(.init(id: "release:" + album.id, title: album.title, creator: album.artist, type: "Album", artwork: album.artwork, explicit: album.explicit == true, score: score, route: .catalogAlbum(album)))
+            guard let score = score(album.title, album.artist) else { continue }
+            rows.append(.init(id: "release:" + album.id, title: album.title, creator: album.artist, type: "Online album", artwork: album.artwork, explicit: album.explicit == true, score: score, album: album, route: .catalogAlbum(album)))
         }
         for artist in music.artists {
             guard let score = score(artist.name, "") else { continue }
@@ -206,6 +211,9 @@ struct OnlineArtistView: View {
     @State private var albumCursor = 0
     @State private var loadingMore = false
     @State private var moreRequest = 0
+    @State private var fetching = true
+    @State private var loaded = false
+    @State private var retryPage = 0
     @Environment(Router.self) private var router
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var p
@@ -228,7 +236,9 @@ struct OnlineArtistView: View {
             }
         } content: {
             LazyVStack(alignment: .leading, spacing: 0) {
+                if fetching { ProgressView("Loading artist…").padding(MediaLayout.inset) }
                 if let message { Text(message).text(.bodyS).foregroundStyle(p.secondary).padding(.horizontal, MediaLayout.inset) }
+                if !loaded && !fetching { Button("Try again") { retryPage += 1 }.padding(MediaLayout.inset) }
                 SectionHeader(title: "Songs")
                 ForEach(result.tracks) { track in
                     OnlineTrackRow(track: track, onPlay: { selected in
@@ -248,12 +258,15 @@ struct OnlineArtistView: View {
                 }
             }
         }
-        .task(id: artist.id) {
+        .task(id: "\(artist.id):\(retryPage)") {
+            fetching = true; loaded = false; message = nil
             do {
                 result = try await MonochromeClient().artistPage(artist.id)
-                albumCursor = 0
-                await loadMore()
-            } catch { message = error.localizedDescription }
+                try Task.checkCancellation()
+                albumCursor = 0; loaded = true
+            } catch { if !Task.isCancelled { message = error.localizedDescription } }
+            fetching = false
+            if loaded && !Task.isCancelled { await loadMore() }
         }
         .task(id: moreRequest) { if moreRequest > 0 { await loadMore() } }
     }

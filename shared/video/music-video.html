@@ -4,7 +4,7 @@
 <style>
 html,body{margin:0;width:100%;height:100%;background:#000;overflow:hidden}
 #stage{position:fixed;inset:0;overflow:hidden;background:#000;animation:spitify-held-frame 24s ease-in-out infinite alternate;animation-play-state:paused;transform-origin:center}
-#video{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;opacity:0}
+#video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:100%;height:100%;border:0;pointer-events:none;opacity:0}
 @keyframes spitify-held-frame{from{transform:scale(1.012) translate(0,0)}to{transform:scale(1.045) translate(.4%,-.3%)}}
 @media(prefers-reduced-motion:reduce){#stage{animation:none!important}}
 </style></head>
@@ -15,7 +15,8 @@ let player, ready=false, frameReady=false, visible=false, bootstrapping=false;
 let desired={playing:false,reduceMotion:false}, loop=[], shot=0, shotStart=0;
 let loopTimer, transition=null, transitionID=0, resumeID=0, lastPlayAttempt=0, retryAfter=0;
 let lastWidth=0,lastHeight=0,lastSurfaceProgress=0,lastSurfaceTime=-1;
-let surface={time:0,paused:true,seeking:false,frames:0};
+let surface={time:0,paused:true,seeking:false,frames:0,width:0,height:0};
+let sourceAspect=16/9,lastQuality="";
 const frame=()=>document.getElementById('video');
 const onScreen=()=>visible && !document.hidden;
 const shouldRun=()=>onScreen() && (desired.playing || bootstrapping);
@@ -56,7 +57,10 @@ function spitifyHideCaptions() {
 function spitifyResize() {
   if(!ready) return;
   const stage=document.getElementById('stage');
-  const width=Math.ceil(stage.clientWidth),height=Math.ceil(stage.clientHeight);
+  // Give YouTube the full landscape surface we actually magnify to fill the phone.
+  // A narrow portrait iframe made its automatic choice start from a much smaller picture.
+  const width=Math.ceil(Math.max(stage.clientWidth,stage.clientHeight*sourceAspect));
+  const height=Math.ceil(Math.max(stage.clientHeight,stage.clientWidth/sourceAspect));
   if(width<=0 || height<=0 || (width===lastWidth && height===lastHeight)) return;
   lastWidth=width;lastHeight=height;player.setSize(width,height);
   frame().style.width=width+'px';frame().style.height=height+'px';
@@ -157,7 +161,13 @@ window.addEventListener('message',event=>{
     frameReady=data.frameReady===true;frame().style.opacity=frameReady?'1':'0';
     if(Number.isFinite(data.time)) {
       if(Math.abs(data.time-lastSurfaceTime)>.025) {lastSurfaceProgress=Date.now();lastSurfaceTime=data.time;}
-      surface={time:data.time,paused:data.paused===true,seeking:data.seeking===true,frames:Number(data.frames)||0};
+      surface={time:data.time,paused:data.paused===true,seeking:data.seeking===true,frames:Number(data.frames)||0,width:Number(data.width)||0,height:Number(data.height)||0,
+        qualityTarget:String(data.qualityTarget||''),qualityCurrent:String(data.qualityCurrent||''),qualityLevels:Array.isArray(data.qualityLevels)?data.qualityLevels:[]};
+      if(surface.width>0 && surface.height>0) {
+        sourceAspect=surface.width/surface.height;spitifyResize();
+        const quality=surface.width+'x'+surface.height;
+        if(quality!==lastQuality) {lastQuality=quality;report('QUALITY:'+quality);}
+      }
     }
     if(!frameReady && !transition) bootstrapping=true;
     if(frameReady) {

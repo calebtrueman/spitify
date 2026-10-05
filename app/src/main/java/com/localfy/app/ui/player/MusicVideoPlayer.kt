@@ -34,6 +34,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
+object VideoQuality {
+    var resolution by mutableStateOf("No video played yet")
+}
+
 @Composable
 fun MusicVideoButton() {
     val actions = LocalApp.current
@@ -120,6 +124,10 @@ fun MusicVideoBackdrop() {
                                 if (!pageHandshakeSent && event.message() in listOf("SPITIFY_VIDEO_READY", "SPITIFY_VIDEO_WAITING")) {
                                     pageHandshakeSent = true
                                     evaluateJavascript("$syncScript if(window.spitifySetVisible) spitifySetVisible($latestVisible); if(window.spitifyBeginDisplay) spitifyBeginDisplay();", null)
+                                }
+                                if (event.message().startsWith("SPITIFY_VIDEO_QUALITY:")) {
+                                    val value = event.message().substringAfter("SPITIFY_VIDEO_QUALITY:")
+                                    if (value.matches(Regex("[0-9]{1,5}x[0-9]{1,5}"))) VideoQuality.resolution = value.replace("x", " × ")
                                 }
                                 when (event.message()) {
                                     "SPITIFY_VIDEO_READY" -> if (video?.id == clip.id) loading = false

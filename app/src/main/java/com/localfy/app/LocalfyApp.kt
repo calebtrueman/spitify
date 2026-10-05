@@ -25,6 +25,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         CrashReport.install(this)
+        com.localfy.app.widgets.MusicWidgetProvider.observe(this)
         appScope.launch { profiles.profile.collect { social.syncProfile() } }
         android.app.backup.BackupManager(this).dataChanged()
         com.localfy.app.playback.EqStore.init(this)

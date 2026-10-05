@@ -110,7 +110,7 @@ struct OnlineAlbumView: View {
             toolbarExtra: AnyView(HStack(spacing: 4) { libraryButton; downloadButton }),
             catalogTracks: tracks, remoteArt: single?.artwork ?? album.artwork) {
                 if loading { ProgressView().frame(maxWidth: .infinity).padding() }
-                if failed { Button("Couldn't load songs. Try again") { reload += 1 }.padding() }
+                if failed { Button("Couldn't load the full album. Try again") { reload += 1 }.padding() }
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) {
                 if songs.contains(where: { $0.kind != .remote }) { Button { appRouterEdit(songs.filter { $0.kind != .remote }) } label: { Image(systemName: "pencil") }.accessibilityLabel("Edit song details") }
@@ -124,7 +124,7 @@ struct OnlineAlbumView: View {
                     let loaded = try await MonochromeClient().albumTracks(album.id)
                     tracks = single.map { chosen in loaded.filter { $0.id == chosen.id } } ?? loaded
                     if tracks.isEmpty, let single { tracks = [single] }
-                } catch { failed = tracks.isEmpty }
+                } catch { failed = single == nil }
                 tracks = tracks.map { track in
                     var track = track
                     if track.album.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { track.album = album.title }
@@ -141,7 +141,7 @@ struct OnlineAlbumView: View {
         let saved = !tracks.isEmpty && tracks.allSatisfy { app.musicStreams.savedIDs.contains($0.id) }
         return Button {
             if saved { app.musicStreams.remove(tracks) } else { app.musicStreams.save(tracks) }
-        } label: { IconControlLabel(symbol: saved ? "checkmark.circle.fill" : "plus.circle", selected: saved) }
+        } label: { IconControlLabel(symbol: saved ? "minus.circle" : "plus.circle", selected: saved) }
             .disabled(tracks.isEmpty).accessibilityLabel(saved ? "Remove from Library" : "Add to Library")
     }
     private var downloadButton: some View {
@@ -160,10 +160,10 @@ struct OnlineAlbumView: View {
         let label = complete ? "Downloaded" : active ? "Cancel downloads" : single == nil ? "Download album" : "Download song"
         return Button {
             if active { for job in jobs where job.state.active { app.musicDownloads.cancel(job.id) } }
-            else { app.musicStreams.save(tracks); adding = true; Task { _ = await app.musicDownloads.enqueue(tracks); adding = false } }
+            else { app.musicStreams.save(tracks); adding = true; Task { let message = await app.musicDownloads.enqueue(tracks.filter { savedSong($0, app: app) == nil }); adding = false; router.confirm(message) } }
         } label: {
             DownloadMark(complete: complete, active: active || adding, progress: progress).frame(width: 44, height: 44)
-        }.disabled(complete || adding || tracks.isEmpty).accessibilityLabel(label)
+        }.disabled(complete || adding || loading || failed || tracks.isEmpty).accessibilityLabel(label)
     }
     @Environment(Router.self) private var router
     private func appRouterEdit(_ songs: [Song]) { router.editing = (songs, single == nil) }
@@ -204,5 +204,48 @@ private struct SearchCover: View {
     var body: some View {
         ArtworkView(key: "search:" + id, remote: artwork ?? resolved).frame(width: 52, height: 52)
             .task(id: id) { if artwork == nil { resolved = await MusicCatalog.albumArt(artist: artist, album: album) } }
+    }
+}
+
+
+struct AlbumDownloadButton: View {
+    let album: OnlineAlbum
+    @Environment(AppModel.self) private var app
+    @Environment(Router.self) private var router
+    @State private var tracks: [OnlineTrack]?
+    @State private var loading = false
+    var body: some View {
+        let jobs = app.musicDownloads.jobs.filter { $0.track.releaseID == album.id }
+        let active = jobs.contains { $0.state.active }
+        let complete = tracks.map { all in !all.isEmpty && all.allSatisfy { track in savedSong(track, app: app) != nil || jobs.contains { $0.id == track.id && $0.state == .complete } } } ?? false
+        let progress = tracks.flatMap { all in DownloadProgress.album(all.map { track in
+            savedSong(track, app: app) != nil ? 1 : DownloadProgress.fraction(state: jobs.first { $0.id == track.id }?.state, measured: app.musicDownloads.progress[track.id])
+        }) }
+        Button {
+            if active { for job in jobs where job.state.active { app.musicDownloads.cancel(job.id) } }
+            else {
+                loading = true
+                Task {
+                    defer { loading = false }
+                    do {
+                        let loaded = try await MonochromeClient().albumTracks(album.id)
+                        let all = loaded.map { item in
+                            var track = item
+                            if track.album.isEmpty { track.album = album.title }
+                            if track.releaseID.isEmpty { track.releaseID = album.id }
+                            if track.albumArtist == nil { track.albumArtist = album.artist }
+                            if track.artwork == nil { track.artwork = album.artwork }
+                            return track
+                        }
+                        tracks = all
+                        let missing = all.filter { savedSong($0, app: app) == nil }
+                        if !all.isEmpty && missing.isEmpty { router.confirm("Album already downloaded") }
+                        else { app.musicStreams.save(all); router.confirm(await app.musicDownloads.enqueue(missing)) }
+                    } catch { if !Task.isCancelled { router.confirm("Couldn't download \(album.title). Tap download to try again.") } }
+                }
+            }
+        } label: { DownloadMark(complete: complete, active: loading || active, progress: progress).frame(width: 44, height: 44) }
+            .buttonStyle(.plain).disabled(loading || complete)
+            .accessibilityLabel(complete ? "\(album.title) downloaded" : active ? "Cancel \(album.title) downloads" : "Download album \(album.title)")
     }
 }

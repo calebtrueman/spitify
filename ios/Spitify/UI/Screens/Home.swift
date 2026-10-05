@@ -97,7 +97,7 @@ struct HomeView: View {
 
     private var playlistTiles: [Tile] {
         var t = [Tile(id: "liked", title: "All Songs", subtitle: songCount(app.library.library.songs.count), song: app.library.library.songs.first) { router.go(.smart(.allSongs)) }]
-        t += app.library.playlists.map { pl in Tile(id: pl.id, title: pl.name, subtitle: songCount(pl.songIds.count), song: app.library.songs(of: pl).first) { router.go(.playlist(pl.id)) } }
+        t += app.library.playlists.map { pl in Tile(id: pl.id, title: pl.name, subtitle: songCount(pl.songIds.count), song: app.library.songs(of: pl).first, customArtKey: app.library.playlistArtworkKey(pl.id)) { router.go(.playlist(pl.id)) } }
         t += visibleMixes.map { m in Tile(id: m.id, title: m.title, subtitle: m.description, song: m.cover, mix: m) { router.go(.mix(m.id)) } }
         return t
     }
@@ -117,7 +117,7 @@ struct HomeView: View {
         // Quick picks
         let recentAlbums = uniqueAlbums(app.library.recentlyPlayed)
         var quick: [Tile] = [Tile(id: "liked", title: "All Songs", subtitle: "", song: app.library.library.songs.first) { router.go(.smart(.allSongs)) }]
-        let _ = app.library.playlists.prefix(2).forEach { pl in quick.append(Tile(id: pl.id, title: pl.name, subtitle: "", song: app.library.songs(of: pl).first) { router.go(.playlist(pl.id)) }) }
+        let _ = app.library.playlists.prefix(2).forEach { pl in quick.append(Tile(id: pl.id, title: pl.name, subtitle: "", song: app.library.songs(of: pl).first, customArtKey: app.library.playlistArtworkKey(pl.id)) { router.go(.playlist(pl.id)) }) }
         let _ = recentAlbums.prefix(3).forEach { a in quick.append(Tile(id: "q" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }
         let _ = visibleMixes.prefix(4).forEach { m in quick.append(Tile(id: "q" + m.id, title: m.title, subtitle: "", song: m.cover, mix: m) { router.go(.mix(m.id)) }) }
         let _ = lib.albums.prefix(8).forEach { a in quick.append(Tile(id: "qa" + a.id, title: a.title, subtitle: "", song: a.cover) { router.go(.album(a.id)) }) }

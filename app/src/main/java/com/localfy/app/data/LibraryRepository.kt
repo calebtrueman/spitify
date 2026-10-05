@@ -128,11 +128,21 @@ class LibraryRepository(
         .map { list -> list.associate { it.songId to PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) } }
         .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
+    private val playlistArtRevision = MutableStateFlow(0)
+    private fun playlistCover(id: Long) = java.io.File(java.io.File(context.filesDir, "playlist_covers").apply { mkdirs() }, "$id.jpg")
+    suspend fun setPlaylistCover(id: Long, uri: android.net.Uri?): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val file = playlistCover(id)
+        val saved = if (uri == null) !file.exists() || file.delete() else
+            saveSquareImage(android.graphics.ImageDecoder.createSource(context.contentResolver, uri), file, 1000)
+        if (saved) playlistArtRevision.value++
+        saved
+    }
+
     val playlists: StateFlow<List<Playlist>> = combine(
         db.playlists().observePlaylists(),
         db.playlists().observeEntries(),
-        library,
-    ) { playlists, entries, lib ->
+        library, playlistArtRevision,
+    ) { playlists, entries, lib, _ ->
         val byPlaylist = entries.groupBy { it.playlistId }
         playlists.map { p ->
             Playlist(
@@ -140,6 +150,8 @@ class LibraryRepository(
                 name = p.name,
                 songs = byPlaylist[p.id].orEmpty().mapNotNull { lib.songById[it.songId] ?: (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.lookup(it.songId) },
                 updatedAt = p.updatedAt,
+                artwork = playlistCover(p.id).takeIf { it.isFile }?.let { android.net.Uri.fromFile(it).buildUpon().appendQueryParameter("v", it.lastModified().toString()).build().toString() },
+                artVersion = playlistCover(p.id).lastModified(),
             )
         }
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -225,6 +237,10 @@ class LibraryRepository(
         return id
     }
 
+    suspend fun appendToPlaylist(playlistId: Long, songIds: List<Long>) {
+        db.playlists().append(playlistId, songIds, System.currentTimeMillis())
+    }
+
     fun addToPlaylist(playlistId: Long, songIds: List<Long>) = scope.launch {
         db.playlists().append(playlistId, songIds, System.currentTimeMillis())
     }
@@ -241,7 +257,7 @@ class LibraryRepository(
         db.playlists().rename(playlistId, name.trim(), System.currentTimeMillis())
     }
 
-    fun deletePlaylist(playlistId: Long) = scope.launch { db.playlists().delete(playlistId) }
+    fun deletePlaylist(playlistId: Long) = scope.launch { db.playlists().delete(playlistId); playlistCover(playlistId).delete() }
 
     private fun buildSmart(lib: Library, liked: Set<Long>, stats: Map<Long, PlayStat>): Map<SmartCollection.Kind, SmartCollection> {
         val now = System.currentTimeMillis()

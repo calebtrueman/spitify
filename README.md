@@ -78,9 +78,15 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 
 Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
 
+### Playlists and complete albums
+
+Open a saved playlist and choose **Edit playlist** to change its artwork, rename it, or delete it. Deletion asks first and keeps the songs in your library. Adding songs shows which playlist received them. Chosen covers appear in Home, Library, Search and widgets, and are included in device backup.
+
+Search lists **Saved album** and **Online album** separately. Album search results have a native download button beside them. It fetches the complete album and queues only missing songs; you do not have to open another page first. The album page uses the same download icon. Online artist pages show progress, possible name matches, and a retry when a request fails.
+
 ### Home screen widgets and backup
 
-iPhone has **Now Playing** with cover art and previous/play-pause/next controls, plus **Playlists**, **Albums**, **Most Played**, **Recently Played**, **Recently Added**, **Liked Songs**, and **Friends** widgets in three sizes. Music shelves show your covers and play an item when tapped. Keep the widget extension when installing through SideStore. Release checks require both the extension and its artwork-sharing permission. Android includes **Quick play**, **Your Library**, and **Friends** shortcut widgets.
+iPhone has **Now Playing** with cover art and previous/play-pause/next controls, plus **Playlists**, **Albums**, **Most Played**, **Recently Played**, **Recently Added**, **Liked Songs**, and **Friends** widgets in three sizes. Music shelves show your covers and play an item when tapped. Keep the widget extension when installing through SideStore. Release checks require both the extension and its artwork-sharing permission. Android has the same music shelves, plus a **Now Playing** widget with cover art and previous/play-pause/next buttons. Playback controls and music tiles work without opening the app. The **Friends** widget opens your friends, code or listening rooms. Hold an empty Home Screen space, choose Widgets and find Spitify. Existing Quick Play and Your Library widgets update to Now Playing and Playlists.
 
 Settings, chosen covers, saved matches and friend details use the phone’s own backup system. Android restores depend on its backup service and the same app signing key; folder access may need to be granted again. iPhone settings belong to the device backup, and the friend key can travel in encrypted device backups. **Offload App** keeps iPhone app data; **Delete App** followed by a plain reinstall does not restore all settings automatically. There is no Spitify backup account.
 
@@ -91,7 +97,7 @@ Video lookup starts when a song starts. Up to 100 recent matches stay in memory 
 
 All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
 
-Videos use YouTube's embedded player. Some songs have no matching video, and some videos block embedding. Detected ad playback is hidden. The song keeps playing if the video cannot load. Cut selection follows a timing rule; it does not understand scenes. A host that blocks pixel reads can also prevent detection of black bars already inside the source picture.
+Videos use YouTube's embedded player. Spitify requests the highest available HD stream from the player inside the page and checks again if it drops to a lower quality. The source player is sized to match the part of a wide video that fills your phone. **Settings → Music video quality** shows the last decoded video resolution. The original upload must offer HD; Spitify cannot add detail to a low-resolution source. The quality control depends on YouTube's page player and may need updates if that player changes. Some songs have no matching video, and some videos block embedding. Detected ad playback is hidden. The song keeps playing if the video cannot load. Cut selection follows a timing rule; it does not understand scenes. A host that blocks pixel reads can also prevent detection of black bars already inside the source picture.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -127,6 +133,8 @@ The Android app supports Android Auto, Android Automotive, Assistant and Bluetoo
 - Search by voice, with commands such as “Play Daft Punk on Spitify.”
 - Use Like and Shuffle for music, or −10 / +30 seconds for spoken word.
 - See the current song’s artwork in the car.
+
+For the release APK, Android Auto may hide Spitify until you allow sideloaded media apps. Open Android Auto settings, tap **Version and permission info** ten times to enable developer mode, then open **Developer settings → Unknown sources**. Reconnect the car and check **Customize launcher**. Open Spitify once and grant music access first. These steps are also in **Spitify Settings → Android Auto**. See [Google's testing guide](https://developer.android.com/training/cars/testing). Car hardware still needs testing separately.
 
 ### 🎙️ Podcasts & 📚 audiobooks
 - **Podcasts:** search Apple's directory or paste any RSS feed. Stream or download episodes. Each one keeps its resume position and played state. Podcasts have their own speed setting and −10 / +30 s skips.

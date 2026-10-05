@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.21",
+          "buildVersion": "25",
+          "date": "2026-10-05T14:11:23Z",
+          "localizedDescription": "HD music videos, album download buttons in search, playlist artwork and deletion, clearer library actions, and artist lookup fixes. Keep app extensions when installing to retain the artwork and playback widgets.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.21/Spitify-1.0.21-unsigned.ipa",
+          "size": 120317060,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.20",
           "buildVersion": "24",
           "date": "2026-10-03T17:56:22Z",

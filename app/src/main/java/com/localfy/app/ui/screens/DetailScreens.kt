@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -119,6 +120,13 @@ fun PlaylistScreen(id: Long) {
     val app = LocalApp.current
     val playlists by app.repo.playlists.collectAsStateWithLifecycle()
     val playlist = playlists.firstOrNull { it.id == id } ?: return
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            if (!app.repo.setPlaylistCover(id, uri)) android.widget.Toast.makeText(context, "Couldn't read this image.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var options by remember { mutableStateOf(false) }
@@ -127,13 +135,15 @@ fun PlaylistScreen(id: Long) {
         title = playlist.name,
         kindLabel = "Playlist",
         subtitle = "Your playlist",
-        art = playlist.songs.firstOrNull()?.artKey,
+        art = playlist.artKey,
         songs = playlist.songs,
         extrasFor = { i, _ -> SongMenuExtras("Remove from this playlist") { app.repo.removeFromPlaylist(id, i) } },
         headerActions = {
             androidx.compose.foundation.layout.Box {
-                IconButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, "Playlist options", tint = LocalfyColors.TextSecondary) }
+                TextButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, null); Text("Edit playlist") }
                 androidx.compose.material3.DropdownMenu(options, onDismissRequest = { options = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Change artwork") }, onClick = { options = false; picker.launch("image/*") })
+                    if (playlist.artwork != null) androidx.compose.material3.DropdownMenuItem(text = { Text("Use song artwork") }, onClick = { options = false; scope.launch { app.repo.setPlaylistCover(id, null) } })
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Rename playlist") }, onClick = { options = false; renaming = true }, leadingIcon = { Icon(Icons.Rounded.Edit, null) })
                     androidx.compose.material3.DropdownMenuItem(text = { Text("Delete playlist") }, onClick = { options = false; deleting = true }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) })
                 }

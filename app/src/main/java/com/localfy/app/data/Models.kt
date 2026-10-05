@@ -84,6 +84,8 @@ data class Playlist(
     val name: String,
     val songs: List<Song>,
     val updatedAt: Long,
+    val artwork: String? = null,
+    val artVersion: Long = 0,
 )
 
 data class PlayStat(val songId: Long, val playCount: Int, val lastPlayed: Long, val skipCount: Int)
