@@ -249,7 +249,9 @@ final class ShowsStore {
         Task {
             let name = "\(show.id)_\(e.id).\(url.pathExtension.isEmpty ? "mp3" : url.pathExtension)"
             do {
-                let (tmp, _) = try await URLSession.shared.download(from: url)
+                let (tmp, response) = try await URLSession.shared.download(from: HTTP.secure(url))
+                // An error page must not be saved as the episode.
+                guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true else { throw URLError(.badServerResponse) }
                 let dest = Self.downloadDir.appendingPathComponent(name)
                 try? FileManager.default.removeItem(at: dest)
                 try FileManager.default.moveItem(at: tmp, to: dest)

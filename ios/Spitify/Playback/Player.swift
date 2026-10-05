@@ -17,6 +17,7 @@ final class Player {
     private(set) var automaticQueueIndices: Set<Int> = []
     private(set) var queueVersion = UUID()
     private(set) var isPlaying = false
+    private(set) var isBuffering = false
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private(set) var source: String?
@@ -87,6 +88,13 @@ final class Player {
     private var resumeAfterInterruption = false
 
     var onPlaybackChanged: (() -> Void)?
+    /// Song radio from the app's taste model, which is built off the main thread.
+    var radio: ((Song) -> [Song])?
+    /// The queue state a refill last came back empty for, so it isn't recomputed on every tick.
+    private var emptyRefillKey: String?
+    private var lastPublished: (id: String?, playing: Bool)?
+    private var localCopies: [String: URL?] = [:]
+    private var localCopiesRevision = -1
     weak var library: LibraryStore?
     weak var shows: ShowsStore?
 
@@ -138,6 +146,7 @@ final class Player {
 
     func playEpisode(_ song: Song) { play([song], source: song.album, at: shows?.resumePosition(song.resumeKey) ?? 0) }
     func playBook(_ chapters: [Song], from i: Int, title: String) {
+        guard chapters.indices.contains(i) else { return } // a book whose feed had no playable chapters
         play(chapters, from: i, shuffle: false, source: title, at: shows?.resumePosition(chapters[i].resumeKey) ?? 0)
         repeatMode = .off
     }
@@ -348,9 +357,18 @@ final class Player {
     // MARK: - Core
 
     private func url(for s: Song) -> URL? {
-        if let track = MusicStreams.shared.track(s), let local = library?.rawSongs.first(where: {
-            SearchMatch.sameSong($0, track) && AudioFallback.sameRelease($0.album, track.album)
-        }) { return library?.fileURL(local) }
+        if let track = MusicStreams.shared.track(s) {
+            // Matching walks the whole library and also runs near every track end for crossfade; remember it.
+            let revision = library?.libraryRevision ?? 0
+            if revision != localCopiesRevision { localCopies = [:]; localCopiesRevision = revision }
+            let local: URL?
+            if let cached = localCopies[track.id] { local = cached }
+            else {
+                local = library?.rawSongs.first(where: { SearchMatch.sameSong($0, track) && AudioFallback.sameRelease($0.album, track.album) }).flatMap { library?.fileURL($0) }
+                localCopies[track.id] = .some(local)
+            }
+            if let local { return local }
+        }
         if s.kind == .remote { return URL(string: s.location) }
         return library?.fileURL(s)
     }
@@ -366,7 +384,7 @@ final class Player {
         // Publish the selected song before loading audio; never leave the previous title visible during a load.
         needsLoad = false
         position = seconds; duration = Double(song.durationMs) / 1000; isPlaying = play
-        if play { hasStartedPlayback = true; MusicVideoLookup.prepare(song) }
+        if play { hasStartedPlayback = true }
         activateSession()
         updateNowPlaying()
         fading = false
@@ -427,13 +445,16 @@ final class Player {
             if hiddenSongs.contains(s.id) || hiddenArtists.contains(s.artist) || s.creditedArtists.contains(where: hiddenArtists.contains) || failedSongIDs.contains(s.id) { remove(at: i) }
         }
         guard upNext.count < 5 else { return }
+        let refillKey = "\(queueVersion):\(index):\(queue.count):\(hiddenSongs.count):\(hiddenArtists.count):\(failedSongIDs.count)"
+        guard refillKey != emptyRefillKey else { return }
         let available = library?.library.songs ?? []
-        let model = TasteModel(TasteInput(songs: available, listens: library?.listens ?? [], liked: Set(library?.liked.keys.map { $0 } ?? []),
-                                         hiddenSongs: hiddenSongs, hiddenArtists: hiddenArtists))
-        let ranked = PlaylistGenerator.songRadio(model, seed: song)
-        appendAutomatic(PlaybackContinuation.songs(seed: song, candidates: ranked + available + queue,
+        // The app keeps a taste model built in the background; building one here blocked the main thread.
+        let ranked = radio?(song) ?? []
+        let picks = PlaybackContinuation.songs(seed: song, candidates: ranked + available + queue,
             history: Array(queue.prefix(index + 1)), upcoming: upNext.map(\.1), hiddenSongs: hiddenSongs,
-            hiddenArtists: hiddenArtists, failed: failedSongIDs, count: 5 - upNext.count))
+            hiddenArtists: hiddenArtists, failed: failedSongIDs, count: 5 - upNext.count)
+        emptyRefillKey = picks.isEmpty ? refillKey : nil
+        appendAutomatic(picks)
         // Fetch artist songs early for a streamed selection, even when the local library is empty.
         guard MusicStreams.shared.track(song) != nil, continuationSeed != song.id else { return }
         continuationTask?.cancel(); continuationSeed = song.id
@@ -497,12 +518,19 @@ final class Player {
             artworkSessionActive = false; updateNowPlaying()
         }
         let playing = usingStream ? stream.isPlaying : engine.isPlaying
-        position = usingStream ? stream.currentTime : engine.currentTime
-        if usingStream, stream.duration > 0 { duration = stream.duration }
-        guard isPlaying, playing else { return }
+        // Only assign real changes: every write notifies every view that reads the value.
+        let now = usingStream ? stream.currentTime : engine.currentTime
+        if abs(now - position) > 0.01 { position = now }
+        if usingStream, stream.duration > 0, abs(stream.duration - duration) > 0.01 { duration = stream.duration }
+        let waiting = usingStream && isPlaying && stream.isWaiting
+        if waiting != isBuffering { isBuffering = waiting }
+        guard isPlaying, playing, !waiting else { return }
         listenedMs += Int64(250 * Double(speed))
         sinceSave += 0.25
-        if sinceSave >= 5 { sinceSave = 0; saveProgress(); saveQueue(); refreshAutoplay() }
+        // The queue is saved when it changes; here only the position moves. Resume points are saved
+        // less often (and always on pause / track change) because each write re-renders episode lists.
+        if sinceSave.truncatingRemainder(dividingBy: 5) < 0.25 { savePosition() }
+        if sinceSave >= 15 { sinceSave = 0; saveProgress() }
 
         // Sleep timer: fade out over the last 10 s.
         if case .at(let end)? = sleep {
@@ -551,6 +579,11 @@ final class Player {
     private func markFinished() {
         guard let s = current, s.isSpoken else { return }
         shows?.setPlayed(s.resumeKey, true, Int64(duration * 1000))
+    }
+
+    private func savePosition() {
+        let d = UserDefaults.standard
+        d.set(index, forKey: "queueIndex"); d.set(position, forKey: "queuePosition")
     }
 
     private func saveQueue() {
@@ -661,7 +694,12 @@ final class Player {
     }
 
     private func updateNowPlaying() {
-        onPlaybackChanged?()
+        // Widgets only show the song and play state; rebuilding them on every seek or buffering
+        // change re-sorted the whole library on the main thread.
+        if lastPublished?.id != current?.id || lastPublished?.playing != isPlaying {
+            lastPublished = (current?.id, isPlaying)
+            onPlaybackChanged?()
+        }
         guard hasStartedPlayback else { return }
         let c = MPRemoteCommandCenter.shared()
         let spoken = current?.isSpoken == true

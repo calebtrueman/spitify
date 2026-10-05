@@ -88,10 +88,13 @@ struct SharedPlaylistView: View {
     @State private var message: String?
     @State private var ownCopy: SharedPlaylist?
     @State private var replacing: SharedTrack?
+    @State private var deleting = false
+    @Environment(\.dismiss) private var dismiss
     private var missing: [SharedTrack] { playlist.tracks.filter { PlaylistMatches.shared.failed.contains(PlaylistMatches.key($0)) } }
     @State private var playback: Task<Void, Never>?
     private var playlist: SharedPlaylist { app.social.state.playlists[initial.key] ?? initial }
-    private var matchingRevision: String { playlist.key + ":" + String(playlist.revision) + ":" + app.library.library.songs.map { $0.id + $0.title + $0.artist }.joined(separator: "|") }
+    // Re-match when the playlist or the library changes, without joining every song into a string on each redraw.
+    private var matchingRevision: String { playlist.key + ":" + String(playlist.revision) + ":" + String(app.library.libraryRevision) }
     private var saved: Bool { app.social.state.playlists[initial.key] != nil }
 
     var body: some View {
@@ -133,6 +136,9 @@ struct SharedPlaylistView: View {
 
         }
         .sheet(item: $replacing) { track in NavigationStack { LocalMatchPicker(track: track) } }
+        .confirmationDialog(playlist.owner == app.social.publicKey ? "Delete “\(playlist.name)”?" : "Remove “\(playlist.name)”?", isPresented: $deleting, titleVisibility: .visible) {
+            Button(playlist.owner == app.social.publicKey ? "Delete playlist" : "Remove", role: .destructive) { app.social.remove(playlist); dismiss() }
+        } message: { Text(playlist.owner == app.social.publicKey ? "Only the playlist is removed. Your songs stay in your library." : "You can save it again from the original link.") }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if saved || playlist.owner != app.social.publicKey { Menu {
@@ -144,6 +150,9 @@ struct SharedPlaylistView: View {
                     }
                     if saved, playlist.owner == app.social.publicKey || playlist.editors.contains(app.social.publicKey) {
                         NavigationLink { SharedPlaylistEditor(initial: playlist) } label: { Label(playlist.kind == "mix" ? "Contribute songs" : "Edit playlist", systemImage: "pencil") }
+                    }
+                    if saved {
+                        Button(playlist.owner == app.social.publicKey ? "Delete playlist" : "Remove from Your Library", systemImage: "trash", role: .destructive) { deleting = true }
                     }
                 } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(Rectangle()) }
                     .accessibilityLabel("Playlist options") }

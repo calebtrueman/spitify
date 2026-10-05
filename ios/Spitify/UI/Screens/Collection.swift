@@ -133,9 +133,10 @@ struct PlaylistView: View {
     @State private var name = ""
     var body: some View {
         if let pl = app.library.playlists.first(where: { $0.id == id }) {
-            let songs = app.library.songs(of: pl)
+            let entries = app.library.entries(of: pl)
+            let songs = entries.map(\.song)
             CollectionView(title: pl.name, kind: "Playlist", subtitle: "Your playlist", art: songs.first, songs: songs, removeLabel: "Remove from this playlist",
-                           onRemove: { app.library.remove(at: $0, from: pl.id) }, customArtKey: app.library.playlistArtworkKey(pl.id))
+                           onRemove: { i in if entries.indices.contains(i) { app.library.remove(at: entries[i].raw, from: pl.id) } }, customArtKey: app.library.playlistArtworkKey(pl.id))
                 .toolbar {
                     Menu {
                         PhotosPicker(selection: $photo, matching: .images) { Label("Change artwork", systemImage: "photo") }
@@ -161,9 +162,15 @@ struct PlaylistView: View {
 struct MixView: View {
     var id: String
     @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var deleting = false
     var body: some View {
         if let m = app.mixes.first(where: { $0.id == id }) {
-            CollectionView(title: m.title, kind: "Made for you", subtitle: m.description, art: m.cover, songs: m.songs, mix: m)
+            CollectionView(title: m.title, kind: "Made for you", subtitle: m.description, art: m.cover, songs: m.songs, mix: m,
+                           toolbarExtra: AnyView(IconControl(title: "Delete playlist", symbol: "trash") { deleting = true }))
+                .confirmationDialog("Delete “\(m.title)”?", isPresented: $deleting, titleVisibility: .visible) {
+                    Button("Delete playlist", role: .destructive) { app.deleteMix(m.id); dismiss() }
+                } message: { Text("It won't be made for you again. You can bring deleted mixes back in Settings.") }
         } else { EmptyState(title: "Mix not ready", message: "Keep listening — this one refreshes soon.", icon: "sparkles") }
     }
 }

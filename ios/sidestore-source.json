@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.22",
+          "buildVersion": "26",
+          "date": "2026-10-05T17:03:51Z",
+          "localizedDescription": "Spitify 1.0.22 makes streaming smooth on Android, replaces music videos with Canvas, and fixes bugs on both phones.\n\n- **Canvas:** the camera button beside the song title loops a few silent seconds of the song's official music video behind the player, in 1080p for most modern videos. Clips come from Apple's music-video previews, so they belong to the exact song; songs without a video show their artwork. Playback is native and cached, with no web view.\n- **Smooth streaming on Android:** podcasts and streamed songs no longer make the app lag. Cover art is sized for the lock screen, autoplay works in the background instead of blocking the screen, and a hidden YouTube page no longer loads on every song.\n- **Lighter player on both phones:** lyrics, the mini player and widgets only redraw when something visible changes. Streams show a spinner while buffering.\n- **Delete any playlist:** imported and shared playlists can be deleted or removed, and generated mixes can be deleted (bring them back in Settings).\n- **Fixes:** \"Remove from this playlist\" could remove the wrong song. Album-to-album navigation broke Back on Android. Plain-http podcasts were blocked on iPhone. Audiobooks with no chapters crashed. Android re-asked to edit audio files on every launch, and some podcast downloads crashed it.\n\nThe iPhone download is unsigned for SideStore/AltStore. The Android APK installs directly.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.22/Spitify-1.0.22-unsigned.ipa",
+          "size": 120328532,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.21",
           "buildVersion": "25",
           "date": "2026-10-05T14:11:23Z",

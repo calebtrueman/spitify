@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// The only part of the mini player that reads the position, so the 4-per-second ticks redraw
+/// this line instead of the whole mini player (there's one per tab).
+private struct MiniProgress: View {
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        let progress = app.player.duration > 0 ? app.player.position / app.player.duration : 0
+        GeometryReader { g in
+            Capsule().fill(.white.opacity(0.2)).overlay(alignment: .leading) { Capsule().fill(.white).frame(width: g.size.width * progress) }
+        }
+    }
+}
+
 struct MiniPlayer: View {
     @Environment(AppModel.self) private var app
     @Environment(Router.self) private var router
@@ -8,7 +20,6 @@ struct MiniPlayer: View {
 
     var body: some View {
         if let s = app.player.current {
-            let progress = app.player.duration > 0 ? app.player.position / app.player.duration : 0
             Button { router.playerOpen = true } label: {
                 VStack(spacing: 0) {
                     HStack(spacing: 10) {
@@ -22,12 +33,11 @@ struct MiniPlayer: View {
                         Button { Haptics.tap(); app.player.toggle() } label: {
                             Image(systemName: app.player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
                                 .contentTransition(.symbolEffect(.replace)).frame(width: 44, height: 44).contentShape(Rectangle())
+                                .overlay { if app.player.isBuffering { ProgressView().tint(.white).scaleEffect(1.4) } }
                         }
                     }
                     .padding(.horizontal, 8).padding(.vertical, 7)
-                    GeometryReader { g in
-                        Capsule().fill(.white.opacity(0.2)).overlay(alignment: .leading) { Capsule().fill(.white).frame(width: g.size.width * progress) }
-                    }.frame(height: 2).padding(.horizontal, 8).padding(.bottom, 2)
+                    MiniProgress().frame(height: 2).padding(.horizontal, 8).padding(.bottom, 2)
                 }
                 .background(tint.mix(.black, 0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .offset(x: drag)
@@ -92,7 +102,7 @@ struct NowPlayingView: View {
                 }
             }
         }
-        .background { if videoOpen && player.current?.isSpoken == false { MusicVideoBackdrop() } else { Backdrop(song: player.current, tint: tint) } }
+        .background { if videoOpen && player.current?.isSpoken == false { CanvasBackdrop() } else { Backdrop(song: player.current, tint: tint) } }
         .overlay { ThemeFrame() }
         .offset(y: max(0, dragDown))
         .simultaneousGesture(DragGesture(minimumDistance: 14).onChanged { value in
@@ -145,7 +155,7 @@ struct NowPlayingView: View {
             if !s.isSpoken {
                 HStack(spacing: 8) {
                     ArtworkStyleButton(videoEnabled: videoOpen)
-                    Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "photo" : "video").font(.system(size: 22)).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Show album art" : "Watch music video")
+                    Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "video.fill" : "video.slash").font(.system(size: 22)).foregroundStyle(videoOpen ? Color.accentColor : .white).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Turn off Canvas" : "Turn on Canvas")
                     Spacer()
                     PlaylistButton(song: s)
                 }
@@ -427,7 +437,9 @@ struct Transport: View {
                 Image(systemName: p.isPlaying ? "pause.fill" : "play.fill").font(.system(size: large ? 30 : 24, weight: .bold)).foregroundStyle(.black)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: large ? 72 : 58, height: large ? 72 : 58).background(.white, in: Circle()).shadow(color: .black.opacity(0.3), radius: 12, y: 6)
-            }.buttonStyle(.pressable(0.9)).accessibilityLabel(p.isPlaying ? "Pause" : "Play")
+                    // Streams can take a moment to start or re-buffer; show it instead of looking stuck.
+                    .overlay { if p.isBuffering { ProgressView().tint(.black).scaleEffect(1.6) } }
+            }.buttonStyle(.pressable(0.9)).accessibilityLabel(p.isBuffering ? "Loading" : p.isPlaying ? "Pause" : "Play")
             Spacer()
             Button { Haptics.tap(); p.next() } label: { Image(systemName: "forward.end.fill").font(.system(size: large ? 32 : 26)).frame(width: 44, height: 44).contentShape(Rectangle()) }.accessibilityLabel("Next")
             Spacer()
@@ -513,10 +525,7 @@ struct LyricsCard: View {
             Card(title: "Lyrics") {
                 switch app.lyrics.states[song.id] {
                 case .found(let l)?:
-                    let active = l.synced ? max(0, LRC.activeIndex(l.lines, app.player.position + l.offset)) : 0
-                    ForEach(Array(l.lines.dropFirst(active).prefix(4).enumerated()), id: \.offset) { i, line in
-                        Text(line.text.isEmpty ? "♪" : line.text).text(.title).foregroundStyle(i == 0 && l.synced ? .white : .white.opacity(0.5)).lineLimit(2).multilineTextAlignment(.leading)
-                    }
+                    LyricsPeek(lyrics: l)
                 case .missing(let online)?: Text(online ? "No lyrics found for this song." : "No lyrics on this iPhone — tap to search online.").text(.body).foregroundStyle(.white.opacity(0.8))
                 default: ProgressView().tint(.white)
                 }
@@ -524,6 +533,25 @@ struct LyricsCard: View {
         }
         .buttonStyle(.pressable(0.98))
         .task(id: song.id) { app.lyrics.request(song, fileURL: app.library.fileURL(song)) }
+    }
+}
+
+/// Four lines from the current one; only this reads the position, and its lines re-render only on a new line.
+private struct LyricsPeek: View {
+    var lyrics: Lyrics
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        LyricsPeekLines(lyrics: lyrics, active: lyrics.synced ? max(0, LRC.activeIndex(lyrics.lines, app.player.position + lyrics.offset)) : 0).equatable()
+    }
+}
+
+private struct LyricsPeekLines: View, Equatable {
+    var lyrics: Lyrics
+    var active: Int
+    var body: some View {
+        ForEach(Array(lyrics.lines.dropFirst(active).prefix(4).enumerated()), id: \.offset) { i, line in
+            Text(line.text.isEmpty ? "♪" : line.text).text(.title).foregroundStyle(i == 0 && lyrics.synced ? .white : .white.opacity(0.5)).lineLimit(2).multilineTextAlignment(.leading)
+        }
     }
 }
 
@@ -635,29 +663,7 @@ struct LyricsView: View {
         switch app.lyrics.states[song.id] {
         case .found(let l)?:
             if l.synced {
-                let active = LRC.activeIndex(l.lines, app.player.position + l.offset)
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 14) {
-                            ForEach(Array(l.lines.enumerated()), id: \.offset) { i, line in
-                                Button { app.player.seek(max(0, line.time - l.offset)) } label: {
-                                    Text(line.text.isEmpty ? "♪" : line.text).text(lineFont).multilineTextAlignment(.leading)
-                                        .foregroundStyle(i == active ? .white : .white.opacity(i < active ? 0.55 : 0.32))
-                                        .scaleEffect(i == active ? 1 : 0.96, anchor: .leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .id(i)
-                                .animation(.easeOut(duration: 0.3), value: active)
-                            }
-                            footer(l)
-                        }.padding(.horizontal, 24).padding(.vertical, 120)
-                    }
-                    .simultaneousGesture(DragGesture().onChanged { _ in userScrolledAt = Date() })
-                    .onChange(of: active) { _, a in
-                        if a >= 0, Date().timeIntervalSince(userScrolledAt) > 3 { withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(a, anchor: UnitPoint(x: 0, y: 0.35)) } }
-                    }
-                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                }
+                ActiveLyricLine(song: song, lyrics: l, lineFont: lineFont)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
@@ -682,15 +688,67 @@ struct LyricsView: View {
         default: ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity).task { app.lyrics.request(song, fileURL: app.library.fileURL(song)) }
         }
     }
+}
 
-    private func footer(_ l: Lyrics) -> some View {
+
+/// Reads the playback position (4×/s) and hands only the active line index down, so the lyric
+/// lines below re-render when the highlighted line changes rather than on every tick.
+private struct ActiveLyricLine: View {
+    var song: Song
+    var lyrics: Lyrics
+    var lineFont: TextRole
+    @Environment(AppModel.self) private var app
+    var body: some View {
+        SyncedLyricsLines(song: song, lyrics: lyrics, lineFont: lineFont, active: LRC.activeIndex(lyrics.lines, app.player.position + lyrics.offset)).equatable()
+    }
+}
+
+private struct SyncedLyricsLines: View, Equatable {
+    var song: Song
+    var lyrics: Lyrics
+    var lineFont: TextRole
+    var active: Int
+    @Environment(AppModel.self) private var app
+    @State private var userScrolledAt = Date.distantPast
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.song.id == b.song.id && a.active == b.active && a.lyrics == b.lyrics }
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { i, line in
+                        Button { app.player.seek(max(0, line.time - lyrics.offset)) } label: {
+                            Text(line.text.isEmpty ? "♪" : line.text).text(lineFont).multilineTextAlignment(.leading)
+                                .foregroundStyle(i == active ? .white : .white.opacity(i < active ? 0.55 : 0.32))
+                                .scaleEffect(i == active ? 1 : 0.96, anchor: .leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .id(i)
+                        .animation(.easeOut(duration: 0.3), value: active)
+                    }
+                    SyncedLyricsFooter(song: song, lyrics: lyrics)
+                }.padding(.horizontal, 24).padding(.vertical, 120)
+            }
+            .simultaneousGesture(DragGesture().onChanged { _ in userScrolledAt = Date() })
+            .onChange(of: active) { _, a in
+                if a >= 0, Date().timeIntervalSince(userScrolledAt) > 3 { withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo(a, anchor: UnitPoint(x: 0, y: 0.35)) } }
+            }
+            .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+        }
+    }
+}
+
+private struct SyncedLyricsFooter: View {
+    var song: Song
+    var lyrics: Lyrics
+    @Environment(AppModel.self) private var app
+    var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Source: \(l.source)").text(.caption).foregroundStyle(.white.opacity(0.6))
+            Text("Source: \(lyrics.source)").text(.caption).foregroundStyle(.white.opacity(0.6))
             HStack {
                 Text("Timing").text(.caption).foregroundStyle(.white.opacity(0.6))
-                Button("−0.25s") { app.lyrics.setOffset(song, l.offset - 0.25) }
-                Text(String(format: "%+.2fs", l.offset)).text(.label)
-                Button("+0.25s") { app.lyrics.setOffset(song, l.offset + 0.25) }
+                Button("−0.25s") { app.lyrics.setOffset(song, lyrics.offset - 0.25) }
+                Text(String(format: "%+.2fs", lyrics.offset)).text(.label)
+                Button("+0.25s") { app.lyrics.setOffset(song, lyrics.offset + 0.25) }
             }.text(.label)
         }.padding(.top, 30)
     }

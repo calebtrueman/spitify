@@ -55,6 +55,7 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
     var options by remember { mutableStateOf(false) }
     var showSharing by remember { mutableStateOf(false) }
     var showEditor by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     LaunchedEffect(input, saved, attempt) {
         message = null
         try { initial = if (saved) app.social.state.playlists[input] ?: error("This playlist is no longer saved.") else SpotifyPlaylists.load(input, app.social.publicKey) }
@@ -117,6 +118,7 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
                     if (list.owner != app.social.publicKey) DropdownMenuItem(text = { Text("Make your own copy") }, onClick = { options = false; runCatching { actions.navigate(Routes.sharedPlaylist(app.social.copy(list).key)) }.onFailure { message = it.message } })
                     if (isSaved && list.owner == app.social.publicKey) DropdownMenuItem(text = { Text("Share with friends") }, onClick = { options = false; showSharing = !showSharing })
                     if (isSaved && (list.owner == app.social.publicKey || app.social.publicKey in list.editors)) DropdownMenuItem(text = { Text(if (list.kind == "mix") "Contribute songs" else "Edit playlist") }, onClick = { options = false; showEditor = !showEditor })
+                    if (isSaved) DropdownMenuItem(text = { Text(if (list.owner == app.social.publicKey) "Delete playlist" else "Remove from Your Library") }, onClick = { options = false; deleting = true })
                 }
             }
         },
@@ -142,6 +144,13 @@ fun PublicPlaylistScreen(input: String, saved: Boolean) {
         }
         if (list.tracks.isEmpty()) item { EmptyState("No songs yet", "Add songs from the playlist options.") }
     }
+    if (deleting) AlertDialog(
+        onDismissRequest = { deleting = false },
+        title = { Text(if (list.owner == app.social.publicKey) "Delete “${list.name}”?" else "Remove “${list.name}”?") },
+        text = { Text(if (list.owner == app.social.publicKey) "The songs stay on your device; only the playlist is removed." else "You can save it again from the original link.") },
+        confirmButton = { TextButton(onClick = { deleting = false; app.social.remove(list); actions.nav.popBackStack() }) { Text(if (list.owner == app.social.publicKey) "Delete" else "Remove") } },
+        dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
+    )
     replacing?.let { track -> AlertDialog(onDismissRequest = { replacing = null }, title = { Text("Choose your copy") }, text = {
         Column {
             Text("${track.title} · ${track.artist}")

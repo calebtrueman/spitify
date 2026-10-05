@@ -15,23 +15,20 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(router.paths[.home]?.count, 0)
     }
 
-    func testMusicVideosAllowLabelUploadsAndLongerEdits() {
-        XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller (2009 Remastered Version)", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Michael Jackson - Thriller (Official Video)", channel: "Sony Music", videoDurationMs: 840000))
-        XCTAssertTrue(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 0, videoTitle: "Michael Jackson - Thriller", channel: "Epic Records", videoDurationMs: 357000))
-        XCTAssertFalse(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Michael Jackson - Thriller cover", channel: "Someone Else", videoDurationMs: 357000))
-        XCTAssertFalse(MusicVideoLookup.matches(title: "Thriller", artist: "Michael Jackson", durationMs: 357000, videoTitle: "Another Artist - Thriller", channel: "Epic Records", videoDurationMs: 357000))
+    func testCanvasMatchesTheSameSongByTheSameArtist() {
+        XCTAssertTrue(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini", foundArtist: "Dua Lipa"))
+        XCTAssertTrue(CanvasLookup.matches(title: "BIRDS OF A FEATHER", artist: "Billie Eilish", foundTitle: "Birds of a Feather", foundArtist: "Billie Eilish"))
+        XCTAssertTrue(CanvasLookup.matches(title: "One More Time (Radio Edit)", artist: "Daft Punk", foundTitle: "One More Time", foundArtist: "Daft Punk"))
+        XCTAssertTrue(CanvasLookup.matches(title: "Blinding Lights", artist: "The Weeknd", foundTitle: "Blinding Lights (Official Video)", foundArtist: "The Weeknd"))
+        XCTAssertTrue(CanvasLookup.matches(title: "Señorita", artist: "Shawn Mendes; Camila Cabello", foundTitle: "Señorita", foundArtist: "Shawn Mendes & Camila Cabello"))
+        XCTAssertTrue(CanvasLookup.matches(title: "Houdini (Live)", artist: "Dua Lipa", foundTitle: "Houdini (Live)", foundArtist: "Dua Lipa"))
     }
-    func testMusicVideoRejectsDifferentVersionsAndWrongChannels() {
-        XCTAssertTrue(MusicVideoLookup.matches(title: "Summertime Sadness", artist: "Lana Del Rey", durationMs: 265000, videoTitle: "Lana Del Rey - Summertime Sadness (Official Music Video)", channel: "Lana Del Rey", videoDurationMs: 266000))
-        XCTAssertFalse(MusicVideoLookup.matches(title: "Summertime Sadness", artist: "Lana Del Rey", durationMs: 265000, videoTitle: "Summertime Sadness Live (Official Video)", channel: "Lana Del Rey", videoDurationMs: 266000))
-        XCTAssertFalse(MusicVideoLookup.matches(title: "Summertime Sadness", artist: "Lana Del Rey", durationMs: 265000, videoTitle: "Summertime Sadness (Official Video)", channel: "Cover Singer", videoDurationMs: 266000))
-    }
-    func testMusicVideosFromArtistChannelDoNotNeedOfficialInTitle() {
-        for title in ["Video Games", "Born To Die"] {
-            XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "Lana Del Rey", videoDurationMs: 287000))
-            XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "LanaDelReyVEVO", videoDurationMs: 287000))
-            XCTAssertTrue(MusicVideoLookup.matches(title: title, artist: "Lana Del Rey", durationMs: 282000, videoTitle: "Lana Del Rey - " + title, channel: "Lana Del Rey Fan Videos", videoDurationMs: 287000))
-        }
+    func testCanvasRejectsOtherArtistsAndOtherRecordings() {
+        XCTAssertFalse(CanvasLookup.matches(title: "One More Time", artist: "Daft Punk", foundTitle: "ONE MORE TIME", foundArtist: "blink-182"))
+        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (London Sessions)", foundArtist: "Dua Lipa"))
+        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (Live)", foundArtist: "Dua Lipa"))
+        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (Lyric Video)", foundArtist: "Dua Lipa"))
+        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Training Season", foundArtist: "Dua Lipa"))
     }
     @MainActor func testPlaylistReusesPreviouslyMatchedSongWithoutSearch() async throws {
         let app = AppModel()

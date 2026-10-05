@@ -55,7 +55,14 @@ final class AppModel {
     var autoFix = UserDefaults.standard.object(forKey: "autoFix") as? Bool ?? true { didSet { UserDefaults.standard.set(autoFix, forKey: "autoFix"); if autoFix { Task { await backgroundFixes() } } } }
     var onlineArt = UserDefaults.standard.object(forKey: "onlineArt") as? Bool ?? true { didSet { UserDefaults.standard.set(onlineArt, forKey: "onlineArt"); if onlineArt { Task { await backgroundFixes() } } } }
 
-    private(set) var mixes: [Mix] = []
+    private var generatedMixes: [Mix] = []
+    /// Generated playlists the user deleted; they stay gone even though the taste engine keeps making them.
+    private(set) var deletedMixIDs = Set(UserDefaults.standard.stringArray(forKey: "deletedMixes") ?? []) {
+        didSet { UserDefaults.standard.set(Array(deletedMixIDs), forKey: "deletedMixes") }
+    }
+    var mixes: [Mix] { generatedMixes.filter { !deletedMixIDs.contains($0.id) } }
+    func deleteMix(_ id: String) { deletedMixIDs.insert(id) }
+    func restoreDeletedMixes() { deletedMixIDs = [] }
     private(set) var model: TasteModel?
     private(set) var fixing = false
     private var mixTask: Task<Void, Never>?
@@ -68,6 +75,7 @@ final class AppModel {
     init() {
         musicStreams.onChanged = { [weak self] in self?.library.rebuild() }
         player.onPlaybackChanged = { [weak self] in self?.scheduleWidgets() }
+        player.radio = { [weak self] in self?.songRadio($0) ?? [] }
         library.onWidgetDataChanged = { [weak self] in self?.scheduleWidgets() }
         player.library = library
         player.shows = shows
@@ -134,7 +142,7 @@ final class AppModel {
             }.value
             if Task.isCancelled { return }
             self.model = m
-            self.mixes = mixes
+            self.generatedMixes = mixes
         }
     }
 

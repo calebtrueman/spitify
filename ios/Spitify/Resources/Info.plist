@@ -60,6 +60,11 @@
 			<key>LSItemContentTypes</key><array><string>public.audio</string></array>
 		</dict>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Podcast audio is often served over plain http; AVPlayer needs this to stream it. -->
+		<key>NSAllowsArbitraryLoadsForMedia</key><true/>
+	</dict>
 	<key>NSCameraUsageDescription</key><string>Take a picture of a Spotify code to open its playlist, song, or other item.</string>
 </dict>
 </plist>

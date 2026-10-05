@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,8 +95,9 @@ private fun SyncedLyrics(
     showFooter: Boolean,
 ) {
     val app = LocalApp.current
-    val position by app.player.positionMs.collectAsStateWithLifecycle()
-    val active = Lrc.activeIndex(lyrics.lines, position + lyrics.offsetMs)
+    val position = app.player.positionMs.collectAsStateWithLifecycle()
+    // Position ticks 4×/s; only recompose when the highlighted line actually changes.
+    val active by remember(lyrics) { derivedStateOf { Lrc.activeIndex(lyrics.lines, position.value + lyrics.offsetMs) } }
     val listState = rememberLazyListState()
     var lastUserScroll by remember { mutableLongStateOf(0L) }
 
@@ -213,7 +215,11 @@ private fun LyricsMissing(song: Song, searchedOnline: Boolean, modifier: Modifie
 fun LyricsCard(song: Song, color: Color, onExpand: () -> Unit, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val state = rememberLyrics(song)
-    val position by app.player.positionMs.collectAsStateWithLifecycle()
+    val position = app.player.positionMs.collectAsStateWithLifecycle()
+    val found = state as? LyricsState.Found
+    val activeLine by remember(found) {
+        derivedStateOf { if (found != null && found.lyrics.synced) Lrc.activeIndex(found.lyrics.lines, position.value + found.lyrics.offsetMs).coerceAtLeast(0) else 0 }
+    }
     Column(
         modifier
             .fillMaxWidth()
@@ -230,7 +236,7 @@ fun LyricsCard(song: Song, color: Color, onExpand: () -> Unit, modifier: Modifie
         when (state) {
             is LyricsState.Found -> {
                 val lines = state.lyrics.lines
-                val active = if (state.lyrics.synced) Lrc.activeIndex(lines, position + state.lyrics.offsetMs).coerceAtLeast(0) else 0
+                val active = activeLine
                 lines.drop(active).take(4).forEachIndexed { i, l ->
                     Text(
                         l.text.ifBlank { "♪" },

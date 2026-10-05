@@ -16,8 +16,8 @@ settings:
     SWIFT_OBJC_INTEROP_MODE: objcxx
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.21"
-    CURRENT_PROJECT_VERSION: "25"
+    MARKETING_VERSION: "1.0.22"
+    CURRENT_PROJECT_VERSION: "26"
     SPITIFY_BUNDLE_ID: "com.calebtrueman.spitify"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
@@ -39,10 +39,6 @@ targets:
         type: folder
         buildPhase: resources
       - path: ../shared/icons/icon-catalog.json
-        buildPhase: resources
-      - path: ../shared/video/music-video.html
-        buildPhase: resources
-      - path: ../shared/video/video-controls.js
         buildPhase: resources
     dependencies:
       - target: SpitifyWidgets

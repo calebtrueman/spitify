@@ -86,6 +86,8 @@ data class Playlist(
     val updatedAt: Long,
     val artwork: String? = null,
     val artVersion: Long = 0,
+    /** Database entry id for each of [songs] (same order); entries whose song is gone are left out of both. */
+    val entryIds: List<Long> = emptyList(),
 )
 
 data class PlayStat(val songId: Long, val playCount: Int, val lastPlayed: Long, val skipCount: Int)

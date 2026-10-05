@@ -270,9 +270,8 @@ interface PlaylistDao {
     }
 
     @Transaction
-    suspend fun removeAt(id: Long, index: Int, now: Long) {
-        val current = entries(id)
-        current.getOrNull(index)?.let { deleteEntry(it.entryId) }
+    suspend fun removeEntry(id: Long, entryId: Long, now: Long) {
+        deleteEntry(entryId)
         touch(id, now)
     }
 

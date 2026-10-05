@@ -74,13 +74,24 @@ fun Modifier.quietClickable(onClick: () -> Unit): Modifier = composed {
 /** Three bouncing bars shown next to the song that's currently playing. */
 @Composable
 fun EqualizerBars(playing: Boolean, modifier: Modifier = Modifier, color: Color = LocalfyColors.Brand, size: Dp = 16.dp) {
+    // Paused (or Reduce motion): static bars, so no row keeps redrawing at 60 fps.
+    if (!playing || LocalThemeSettings.current.reduceMotion) {
+        Canvas(modifier.size(size)) {
+            val bar = this.size.width / 5
+            for (i in 0..2) {
+                val h = this.size.height * if (playing) 0.6f else 0.3f
+                drawRoundRect(color, topLeft = Offset(bar * (i * 2f), this.size.height - h), size = Size(bar, h), cornerRadius = CornerRadius(bar / 2))
+            }
+        }
+        return
+    }
     val t = rememberInfiniteTransition(label = "eq")
-    val a by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "a")
-    val b by t.animateFloat(0.9f, 0.3f, infiniteRepeatable(tween(560, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
-    val c by t.animateFloat(0.4f, 0.95f, infiniteRepeatable(tween(350, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "c")
+    val a = t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "a")
+    val b = t.animateFloat(0.9f, 0.3f, infiniteRepeatable(tween(560, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
+    val c = t.animateFloat(0.4f, 0.95f, infiniteRepeatable(tween(350, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "c")
     Canvas(modifier.size(size)) {
         val bar = this.size.width / 5
-        listOf(a, b, c).forEachIndexed { i, v ->
+        listOf(a.value, b.value, c.value).forEachIndexed { i, v ->
             val h = this.size.height * (if (playing) v else 0.3f)
             drawRoundRect(
                 color,

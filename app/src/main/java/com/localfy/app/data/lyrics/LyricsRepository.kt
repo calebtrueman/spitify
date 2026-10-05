@@ -94,6 +94,7 @@ class LyricsRepository(
 
     /** Ensures lyrics for [song] are loading/loaded; safe to call repeatedly. */
     fun request(song: Song, forceOnline: Boolean = false) {
+        if (song.isPodcast || song.isAudiobook) return // spoken word: no lyrics, and no LRCLIB lookups
         val current = _states.value[song.id]
         if (!forceOnline && current != null) return
         if (current == LyricsState.Loading) return

@@ -56,6 +56,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -99,7 +100,7 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
     val state = rememberPlayerState()
     val lookup = rememberSongLookup()
     val current = state.currentId?.let(lookup)
-    val upNext = state.upNext.mapNotNull { (i, id) -> lookup(id)?.let { i to it } }
+    val upNext = remember(state.queue, state.currentIndex, lookup) { state.upNext.mapNotNull { (i, id) -> lookup(id)?.let { i to it } } }
     fun queueGroup(index: Int) = when (index) { in state.manualQueueIndices -> 1; in state.autoplayQueueIndices -> 2; else -> 0 }
     val rowPx = with(LocalDensity.current) { QueueRowHeight.toPx() }
     var dragIndex by remember { mutableIntStateOf(-1) }
@@ -131,6 +132,10 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
                 QueueHeader(when (queueGroup(queueIndex)) { 1 -> "Added by you"; 2 -> "Autoplay · similar music"; else -> state.source?.let { "Next from: $it" } ?: "From your playback list" })
             }
             val dragging = dragIndex == pos
+            // The drag handler outlives recompositions (it's keyed on queueIndex), but this row's
+            // position in "Next up" shifts every time a song finishes; always read the latest.
+            val latestPos by rememberUpdatedState(pos)
+            val latestUpNext by rememberUpdatedState(upNext)
             QueueRow(
                 song = song,
                 isCurrent = false,
@@ -144,12 +149,14 @@ fun QueueList(modifier: Modifier = Modifier, contentPadding: PaddingValues = Pad
                     .background(if (dragging) LocalfyColors.SurfaceHighest else Color.Transparent, RoundedCornerShape(8.dp)),
                 handleModifier = Modifier.pointerInput(queueIndex) {
                     detectDragGesturesAfterLongPress(
-                        onDragStart = { dragIndex = pos; dragOffset = 0f },
+                        onDragStart = { dragIndex = latestPos; dragOffset = 0f },
                         onDragEnd = {
+                            val pos = latestPos
+                            val upNext = latestUpNext
                             val steps = (dragOffset / rowPx).roundToInt()
                             val group = upNext.indices.filter { queueGroup(upNext[it].first) == queueGroup(queueIndex) }
-                            val target = (pos + steps).coerceIn(group.first(), group.last())
-                            if (target != pos) app.player.move(queueIndex, upNext[target].first)
+                            val target = if (group.isEmpty()) pos else (pos + steps).coerceIn(group.first(), group.last())
+                            if (target != pos && target in upNext.indices) app.player.move(queueIndex, upNext[target].first)
                             dragIndex = -1; dragOffset = 0f
                         },
                         onDragCancel = { dragIndex = -1; dragOffset = 0f },
@@ -569,7 +576,8 @@ fun TabletopPlayer(posture: FoldPosture, onExit: () -> Unit) {
                 if (song == null) { EmptyState("Flex mode", "Start some music and the controls will live down here on the desk."); return@Row }
                 ArtPager(Modifier.fillMaxHeight().widthIn(max = 420.dp).aspectRatio(1f, matchHeightConstraintsFirst = true), cornerRadius = 12.dp)
                 Spacer(Modifier.width(24.dp))
-                LyricsView(song, Modifier.weight(1f).fillMaxHeight(), MaterialTheme.typography.titleLarge, PaddingValues(vertical = 8.dp), showFooter = false)
+                if (song.isPodcast) EpisodeNotes(song, Modifier.weight(1f).fillMaxHeight())
+                else LyricsView(song, Modifier.weight(1f).fillMaxHeight(), MaterialTheme.typography.titleLarge, PaddingValues(vertical = 8.dp), showFooter = false)
             }
             Spacer(Modifier.height(hinge))
             Column(

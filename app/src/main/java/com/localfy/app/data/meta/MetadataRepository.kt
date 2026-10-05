@@ -86,7 +86,13 @@ class MetadataRepository(
     private var latestSongs: List<Song> = emptyList()
 
 
+    /** Songs whose automatic tag write the user declined; never ask again for them (until auto-fix is turned back on). */
+    private val declinedWrites: MutableSet<Long> = java.util.Collections.synchronizedSet(
+        prefs.getStringSet("declinedWrites", emptySet())!!.mapNotNull { it.toLongOrNull() }.toMutableSet(),
+    )
+
     fun setAutoFix(on: Boolean) {
+        if (on && !_autoFix.value) { declinedWrites.clear(); prefs.edit { remove("declinedWrites") } }
         _autoFix.value = on
         prefs.edit { putBoolean("autoFix", on) }
         if (on) autoFixAll(latestSongs)
@@ -389,13 +395,22 @@ class MetadataRepository(
             FileTags.write(context, song, edit, jpeg, onlyMissing = true)
             pending.remove(song.id)
         } catch (error: SecurityException) {
-            if (song.uri.authority == android.provider.MediaStore.AUTHORITY) pending[song.id] = PendingWrite(song, MissingMetadata.complete(edit, pending[song.id]?.edit ?: MetadataEdit()), cover ?: pending[song.id]?.cover)
+            if (song.uri.authority == android.provider.MediaStore.AUTHORITY && song.id !in declinedWrites) pending[song.id] = PendingWrite(song, MissingMetadata.complete(edit, pending[song.id]?.edit ?: MetadataEdit()), cover ?: pending[song.id]?.cover)
         }
         _pendingWrites.value = pending.values.map { it.song.uri }.distinct()
     }
 
     fun finishAutomaticWrites(uris: List<android.net.Uri>, allowed: Boolean) = scope.launch(Dispatchers.IO) {
-        if (allowed) for (item in pending.values.toList().filter { it.song.uri in uris }) {
+        if (!allowed) {
+            // Without this, every launch re-detected the same files and showed Android's prompt again.
+            val ids = pending.values.filter { it.song.uri in uris }.map { it.song.id }
+            declinedWrites += ids
+            ids.forEach { pending.remove(it) }
+            prefs.edit { putStringSet("declinedWrites", synchronized(declinedWrites) { declinedWrites.map(Long::toString).toSet() }) }
+            _pendingWrites.value = pending.values.map { it.song.uri }.distinct()
+            return@launch
+        }
+        for (item in pending.values.toList().filter { it.song.uri in uris }) {
             runCatching { writeAutomatic(item.song, item.edit, item.cover) }
         }
         if (allowed) withContext(Dispatchers.Main) { (context.applicationContext as com.localfy.app.LocalfyApp).library.refresh() }

@@ -31,6 +31,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -90,9 +92,11 @@ class MainActivity : ComponentActivity() {
             val settings by app.theme.settings.collectAsStateWithLifecycle()
             // "Accent from album art": follow whatever is playing.
             val accentKey = if (settings.accentSource == AccentSource.Artwork) {
-                val st by app.player.state.collectAsStateWithLifecycle()
+                // Only the current song matters here; the full player state also changes on every
+                // play/pause and buffering blip, which would recompose the entire app.
+                val currentId by remember { app.player.state.map { it.currentId }.distinctUntilChanged() }.collectAsStateWithLifecycle(app.player.state.value.currentId)
                 val lib by app.library.library.collectAsStateWithLifecycle()
-                st.currentId?.let { app.resolve(it) ?: lib.songById[it] }?.artKey
+                remember(currentId, lib) { currentId?.let(app::resolve)?.artKey }
             } else null
             val artAccent = rememberArtAccent(accentKey)
             val profile by app.profiles.profile.collectAsStateWithLifecycle()

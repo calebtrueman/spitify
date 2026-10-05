@@ -87,6 +87,8 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
@@ -208,8 +210,11 @@ private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> 
             }
             IconButton(onClick = { app.addToPlaylist(listOf(song)) }) { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") }
             IconButton(onClick = { haptics(HapticFeedbackType.ContextClick); app.player.togglePlay() }) {
-                AnimatedContent(state.isPlaying, transitionSpec = { scaleIn() togetherWith scaleOut() }, label = "mini-play") { p ->
-                    Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Pause" else "Play", modifier = Modifier.size(30.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    AnimatedContent(state.isPlaying, transitionSpec = { scaleIn() togetherWith scaleOut() }, label = "mini-play") { p ->
+                        Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Pause" else "Play", modifier = Modifier.size(30.dp))
+                    }
+                    if (state.isBuffering) CircularProgressIndicator(Modifier.size(38.dp), color = Color.White.copy(alpha = 0.8f), strokeWidth = 2.dp)
                 }
             }
         }
@@ -220,6 +225,22 @@ private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> 
             drawRect(Color.White, size = androidx.compose.ui.geometry.Size(size.width * progress, size.height))
         }
     }
+}
+
+/**
+ * Progress hairline along the mini player's bottom edge. Position is read only while drawing, so
+ * the 4-per-second ticks redraw this line instead of recomposing the whole mini player.
+ */
+@Composable
+private fun MiniProgress(durationMs: Long, modifier: Modifier) {
+    val position = LocalApp.current.player.positionMs.collectAsStateWithLifecycle()
+    Box(
+        modifier.clip(CircleShape).drawBehind {
+            drawRect(Color.White.copy(alpha = 0.2f))
+            val progress = if (durationMs > 0) (position.value / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+            drawRect(Color.White, size = size.copy(width = size.width * progress))
+        },
+    )
 }
 
 /** Horizontal swipe skips tracks, with rubber-band feedback. */
@@ -454,7 +475,7 @@ private object VinylPaperTexture {
 @Composable
 fun ArtBackdrop(song: Song?, modifier: Modifier = Modifier, strength: Float = 1f) {
     val tint = rememberPlayerTint(song)
-    if (LocalApp.current.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) { Box(modifier.fillMaxSize()) { MusicVideoBackdrop() }; return }
+    if (LocalApp.current.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) { CanvasBackdrop(song, modifier); return }
     Box(modifier.fillMaxSize().clipToBounds().background(LocalfyColors.Background)) {
         if (song != null && Build.VERSION.SDK_INT >= 31 && LocalThemeSettings.current.blurBackdrop) {
             AnimatedContent(song.albumId, transitionSpec = { fadeIn(tween(900)) togetherWith fadeOut(tween(900)) }, label = "backdrop") { _ ->
@@ -548,6 +569,8 @@ fun TransportControls(modifier: Modifier = Modifier, large: Boolean = true) {
             ) { p ->
                 Icon(if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (p) "Pause" else "Play", tint = Color.Black, modifier = Modifier.size(main * 0.55f))
             }
+            // Streamed episodes can take a moment to start or re-buffer; show it instead of looking stuck.
+            if (state.isBuffering) CircularProgressIndicator(Modifier.size(main - 6.dp), color = Color.Black.copy(alpha = 0.55f), strokeWidth = 3.dp)
         }
         Icon(
             Icons.Rounded.SkipNext, "Next",
@@ -603,7 +626,7 @@ fun TitleBlock(song: Song, modifier: Modifier = Modifier, large: Boolean = false
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).then(if (onArtist != null) Modifier.pressable(pressedScale = 0.98f, onClick = onArtist) else Modifier).padding(vertical = 12.dp),
             )
-            if (!song.isPodcast && !song.isAudiobook) { ArtworkStyleButton(); MusicVideoButton() }
+            if (!song.isPodcast && !song.isAudiobook) { ArtworkStyleButton(); CanvasButton() }
         }
     }
 }

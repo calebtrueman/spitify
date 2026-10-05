@@ -99,7 +99,7 @@ fun CollectionScreen(
     val player = rememberPlayerState()
     val liked by app.repo.likedIds.collectAsStateWithLifecycle()
     val isThisPlaying = player.source == title && player.isPlaying
-    val total = catalogTracks?.sumOf { it.durationMs } ?: songs.sumOf { it.durationMs }
+    val total = remember(songs, catalogTracks) { catalogTracks?.sumOf { it.durationMs } ?: songs.sumOf { it.durationMs } }
     val count = catalogTracks?.size ?: songs.size
     val play = {
         when {

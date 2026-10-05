@@ -113,6 +113,8 @@ class PlayerConnection(
     private var continuationJob: Job? = null
     private var sourceSongs: List<Song> = emptyList()
     private var continuationFilter = ""
+    /** The queue state a refill last came back empty for; don't rebuild a radio for it again every tick. */
+    private var emptyRefillFor: String? = null
     private var clearedUpNext = false
     private val failedSongs = mutableSetOf<Long>()
     private val app get() = context.applicationContext as com.localfy.app.LocalfyApp
@@ -161,7 +163,9 @@ class PlayerConnection(
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            publish()
+            // Streams fire loading/buffering events constantly; only walk the queue when it changed.
+            publish(queueChanged = events.contains(Player.EVENT_TIMELINE_CHANGED))
+            if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_REPEAT_MODE_CHANGED)) saveQueue()
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) && !player.isPlaying) {
                 saveQueue()
                 lastSongId?.let { saveResume(it, player.currentPosition, player.duration) }
@@ -200,7 +204,6 @@ class PlayerConnection(
             }
             countedCurrent = false
             lastSongId = mediaItem?.mediaId?.toLongOrNull()
-            lastSongId?.let(resolve)?.let { com.localfy.app.data.music.MusicVideoLookup.prepare(it, context) }
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && _sleepTimer.value == SleepTimer.EndOfTrack) {
                 controller?.pause()
                 controller?.seekTo(0)
@@ -247,15 +250,17 @@ class PlayerConnection(
         if (controller?.playbackParameters?.speed != speed) controller?.setPlaybackSpeed(speed)
     }
 
-    private fun publish() {
+    private fun publish(queueChanged: Boolean = true) {
         val c = controller ?: return
-        val ids = (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
+        val ids = if (queueChanged || _state.value.queue.size != c.mediaItemCount) {
+            (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
+        } else _state.value.queue
         _state.value = _state.value.copy(
             connected = true,
             playbackState = c.playbackState,
             queue = ids,
-            manualQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.toSet(),
-            autoplayQueueIndices = (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isAutoplayItem() }.toSet(),
+            manualQueueIndices = if (ids === _state.value.queue) _state.value.manualQueueIndices else (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isManualQueueItem() }.toSet(),
+            autoplayQueueIndices = if (ids === _state.value.queue) _state.value.autoplayQueueIndices else (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isAutoplayItem() }.toSet(),
             currentIndex = if (ids.isEmpty()) -1 else c.currentMediaItemIndex,
             isPlaying = c.isPlaying,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
@@ -295,9 +300,12 @@ class PlayerConnection(
                     if (c.isPlaying) {
                         listenedMs += (TICK_MS * c.playbackParameters.speed).toLong()
                         sinceSave += TICK_MS
-                        if (sinceSave >= 5_000) {
+                        // The queue itself is saved when it changes; here only the position moves.
+                        // Resume points go to the database, whose observers re-run on every write,
+                        // so they're saved less often (and always on pause / track change).
+                        if (sinceSave % 5_000 == 0L) savePosition(c)
+                        if (sinceSave >= 15_000) {
                             sinceSave = 0
-                            saveQueue()
                             c.currentMediaItem?.mediaId?.toLongOrNull()?.let { saveResume(it, pos, dur) }
                         }
                     }
@@ -346,6 +354,7 @@ class PlayerConnection(
 
     /** Plays an audiobook from [startIndex] onward (chapters continue), resuming that chapter. */
     fun playBook(chapters: List<Song>, startIndex: Int, source: String?) {
+        if (startIndex !in chapters.indices) return // a book whose feed had no playable chapters
         scope.launch {
             val pos = podcasts.resumePosition(chapters[startIndex].resumeKey)
             playSongs(chapters, startIndex, shuffle = false, source = source, startPositionMs = pos)
@@ -588,9 +597,20 @@ class PlayerConnection(
         if (filter != continuationFilter) { continuationFilter = filter; continuationJob?.cancel(); removeAutoplayItems() }
         if (c.mediaItemCount - c.currentMediaItemIndex - 1 > 2 || continuationJob?.isActive == true) return
         val version = queueVersion
+        val attempt = "$version:${c.currentMediaItemIndex}:${c.mediaItemCount}:$filter"
+        if (attempt == emptyRefillFor) return
+        emptyRefillFor = attempt // cleared below once something is actually queued
         continuationJob = scope.launch {
-            fun allowed(song: Song) = song.playable && !song.isPodcast && !song.isAudiobook && song.id !in failedSongs && song.id !in app.taste.hiddenSongs.value && song.creditedArtists.none { it in app.taste.hiddenArtists.value }
-            var pool = (app.taste.songRadio(seed) + sourceSongs + repo.library.value.songs).filter(::allowed).distinctBy { it.id }
+            val failed = failedSongs.toSet()
+            val hiddenIds = app.taste.hiddenSongs.value
+            val hiddenNames = app.taste.hiddenArtists.value
+            fun allowed(song: Song) = song.playable && !song.isPodcast && !song.isAudiobook && song.id !in failed && song.id !in hiddenIds && song.creditedArtists.none { it in hiddenNames }
+            // Ranking a radio scores every song in the library: keep it off the main thread.
+            val sources = sourceSongs
+            val library = repo.library.value.songs
+            var pool = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                (app.taste.songRadio(seed) + sources + library).filter(::allowed).distinctBy { it.id }
+            }
             // A single streamed song should also become a station, without saving picks to the library.
             if (pool.size < 4 && seed.sourceUri?.scheme == "spitify") {
                 val online = try { withTimeoutOrNull(12_000) { com.localfy.app.data.music.Monochrome.search(seed.primaryArtist) }.orEmpty() }
@@ -610,6 +630,7 @@ class PlayerConnection(
             if (ids.isEmpty()) return@launch
             val wasEnded = c.playbackState == Player.STATE_ENDED || c.playerError != null
             val next = c.mediaItemCount
+            emptyRefillFor = null
             c.addMediaItems(ids.mapNotNull { byId[it]?.toMediaItem()?.asAutoplayItem() })
             if (wasEnded && c.playWhenReady) { c.seekTo(next, 0); c.prepare(); c.play() }
             // Keep a recent history without allowing a radio session to grow without a bound.
@@ -657,6 +678,13 @@ class PlayerConnection(
     fun saveNow() {
         saveQueue()
         lastSongId?.let { saveResume(it, controller?.currentPosition ?: lastPosition, lastDuration) }
+    }
+
+    private fun savePosition(c: MediaController) {
+        prefs.edit {
+            putInt(KEY_INDEX, c.currentMediaItemIndex)
+            putLong(KEY_POSITION, c.currentPosition)
+        }
     }
 
     private fun saveQueue() {

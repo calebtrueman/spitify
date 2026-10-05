@@ -358,5 +358,7 @@ final class StreamBackend {
     var currentTime: Double { player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0 }
     var duration: Double { let d = player.currentItem?.duration.seconds ?? 0; return d.isFinite ? d : 0 }
     var isPlaying: Bool { player.rate != 0 }
+    /// Stalled waiting for network data (shown as a spinner; not counted as listening).
+    var isWaiting: Bool { player.timeControlStatus == .waitingToPlayAtSpecifiedRate }
     var failed: Bool { player.currentItem?.status == .failed }
 }

@@ -38,7 +38,10 @@ class ArtProvider : ContentProvider() {
             }
             "remote" -> {
                 val url = uri.getQueryParameter("u") ?: return null
-                File(dir, "r_${sha1(url)}.jpg").also { f -> if (!f.isFile) download(url)?.let { f.writeBytes(it) } }
+                // Stored downscaled: feed artwork is often 3000 px, far more than any car or lock screen shows.
+                File(dir, "r2_${sha1(url)}.jpg").also { f ->
+                    if (!f.isFile) download(url)?.let { bytes -> com.localfy.app.ui.art.decodeSampled(bytes, 720)?.let { write(it, f) } }
+                }
             }
             else -> return null
         }

@@ -134,14 +134,20 @@ class PodcastRepository(
 
     fun download(episodeId: Long) = scope.launch(Dispatchers.IO) {
         val ep = dao.episode(episodeId) ?: return@launch
-        if (ep.localPath != null) return@launch
-        val ext = ep.audioUrl.substringBefore('?').substringAfterLast('.', "mp3").take(4).lowercase()
-        val request = DownloadManager.Request(Uri.parse(ep.audioUrl))
-            .setTitle(ep.title)
-            .setDescription("Spitify podcast download")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_PODCASTS, "ep_${ep.id}.$ext")
-        val id = downloads.enqueue(request)
+        if (ep.localPath != null || ep.downloadId != null) return@launch // done or already downloading
+        // Only a real extension from the last path segment ("…/456-ep" has none; ".com/…" isn't one).
+        val ext = Uri.parse(ep.audioUrl).lastPathSegment?.substringAfterLast('.', "")?.lowercase()
+            ?.takeIf { it.length in 2..4 && it.all(Char::isLetterOrDigit) } ?: "mp3"
+        // DownloadManager rejects anything but http(s) and can fail when storage is unavailable.
+        val id = runCatching {
+            downloads.enqueue(
+                DownloadManager.Request(Uri.parse(ep.audioUrl))
+                    .setTitle(ep.title)
+                    .setDescription("Spitify podcast download")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                    .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_PODCASTS, "ep_${ep.id}.$ext"),
+            )
+        }.getOrNull() ?: return@launch
         dao.setDownload(ep.id, id, null)
         _downloadProgress.value = _downloadProgress.value + (ep.id to 0f)
         watchDownloads()
@@ -174,7 +180,9 @@ class PodcastRepository(
                         when (status) {
                             DownloadManager.STATUS_SUCCESSFUL -> {
                                 val path = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))?.let { Uri.parse(it).path }
-                                dao.setDownload(ep.id, ep.downloadId, path)
+                                // No usable path would leave it "pending" forever, rewriting the episode every second.
+                                if (path != null && File(path).isFile) dao.setDownload(ep.id, ep.downloadId, path)
+                                else dao.setDownload(ep.id, null, null)
                             }
                             DownloadManager.STATUS_FAILED -> dao.setDownload(ep.id, null, null)
                             else -> progress[ep.id] = if (total > 0) done / total.toFloat() else 0f

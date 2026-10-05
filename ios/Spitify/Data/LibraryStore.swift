@@ -8,7 +8,9 @@ import AppIntents
 @MainActor @Observable
 final class LibraryStore {
     private(set) var rawSongs: [Song] = []
-    private(set) var library = Library()
+    private(set) var library = Library() { didSet { libraryRevision &+= 1 } }
+    /// Bumps whenever [library] is rebuilt; cheap to watch instead of hashing every song.
+    private(set) var libraryRevision = 0
     private(set) var books: [Song] = []
     private(set) var scanning = false
     private(set) var lastScanFound = 0
@@ -245,7 +247,12 @@ final class LibraryStore {
         return FileManager.default.fileExists(atPath: ArtCache.shared.customURL(key).path) ? key : nil
     }
     func deletePlaylist(_ id: String) { playlists.removeAll { $0.id == id }; ArtCache.shared.removeCustom("playlist:" + id) }
-    func songs(of p: Playlist) -> [Song] { p.songIds.compactMap { library.songById[$0] ?? MusicStreams.shared.lookup($0) } }
+    func songs(of p: Playlist) -> [Song] { entries(of: p).map(\.song) }
+    /// Playable entries with their position in the saved list; missing songs are skipped, so the
+    /// displayed index isn't the saved index and removals must use [raw].
+    func entries(of p: Playlist) -> [(raw: Int, song: Song)] {
+        p.songIds.enumerated().compactMap { i, id in (library.songById[id] ?? MusicStreams.shared.lookup(id)).map { (i, $0) } }
+    }
 
     func saveFiles(_ edit: MetadataOverride, for songs: [Song], artwork: Data? = nil) async throws {
         guard songs.allSatisfy({ $0.kind == .file }) else {

@@ -145,10 +145,12 @@ class LibraryRepository(
     ) { playlists, entries, lib, _ ->
         val byPlaylist = entries.groupBy { it.playlistId }
         playlists.map { p ->
+            val present = byPlaylist[p.id].orEmpty().mapNotNull { e -> (lib.songById[e.songId] ?: (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.lookup(e.songId))?.let { e.entryId to it } }
             Playlist(
                 id = p.id,
                 name = p.name,
-                songs = byPlaylist[p.id].orEmpty().mapNotNull { lib.songById[it.songId] ?: (context.applicationContext as com.localfy.app.LocalfyApp).musicStreams.lookup(it.songId) },
+                songs = present.map { it.second },
+                entryIds = present.map { it.first },
                 updatedAt = p.updatedAt,
                 artwork = playlistCover(p.id).takeIf { it.isFile }?.let { android.net.Uri.fromFile(it).buildUpon().appendQueryParameter("v", it.lastModified().toString()).build().toString() },
                 artVersion = playlistCover(p.id).lastModified(),
@@ -162,8 +164,14 @@ class LibraryRepository(
 
     /** Generated playlists, published by the taste engine. */
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
-    val mixes: StateFlow<List<Mix>> = _mixes.asStateFlow()
+    /** Generated playlists the user deleted; they stay gone even though the taste engine keeps making them. */
+    private val _hiddenMixes = MutableStateFlow(prefs.getStringSet("hiddenMixes", emptySet())!!.toSet())
+    val hiddenMixCount: StateFlow<Int> = _hiddenMixes.map { it.size }.stateIn(scope, SharingStarted.Eagerly, _hiddenMixes.value.size)
+    val mixes: StateFlow<List<Mix>> = combine(_mixes, _hiddenMixes) { list, hidden -> list.filter { it.key !in hidden } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
     fun publishMixes(list: List<Mix>) { _mixes.value = list }
+    fun deleteMix(key: String) { _hiddenMixes.value = _hiddenMixes.value + key; prefs.edit().putStringSet("hiddenMixes", _hiddenMixes.value).apply() }
+    fun restoreDeletedMixes() { _hiddenMixes.value = emptySet(); prefs.edit().remove("hiddenMixes").apply() }
 
     private var observerRegistered = false
     private var pendingRescan: Job? = null
@@ -245,8 +253,9 @@ class LibraryRepository(
         db.playlists().append(playlistId, songIds, System.currentTimeMillis())
     }
 
-    fun removeFromPlaylist(playlistId: Long, index: Int) = scope.launch {
-        db.playlists().removeAt(playlistId, index, System.currentTimeMillis())
+    /** Removes by entry id: list positions don't match the database when some songs are missing. */
+    fun removeFromPlaylist(playlistId: Long, entryId: Long) = scope.launch {
+        db.playlists().removeEntry(playlistId, entryId, System.currentTimeMillis())
     }
 
     fun reorderPlaylist(playlistId: Long, songIds: List<Long>) = scope.launch {

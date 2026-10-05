@@ -120,6 +120,15 @@ internal fun decodeSampled(file: java.io.File, px: Int): Bitmap? = runCatching {
     android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
 }.getOrNull()
 
+/** In-memory variant of [decodeSampled] for streamed images. */
+internal fun decodeSampled(bytes: ByteArray, px: Int): Bitmap? = runCatching {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= px) sample *= 2
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+}.getOrNull()
+
 /** Deterministic, pleasant fallback colour per album so missing art still looks designed. */
 fun fallbackColor(seed: Long): Color {
     val palette = listOf(

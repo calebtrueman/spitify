@@ -78,6 +78,7 @@ final class LyricsService {
     }
 
     func request(_ song: Song, fileURL: URL?, force: Bool = false) {
+        guard !song.isSpoken else { return } // podcasts and audiobooks have no lyrics
         if !force, states[song.id] != nil { return }
         states[song.id] = .loading
         Task {

@@ -18,6 +18,9 @@ struct SettingsView: View {
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
                 NavigationLink { FriendsSettingsView() } label: { Label("Sharing connection", systemImage: "network") }
                 NavigationLink { HiddenArtistsView() } label: { Label("Hidden artists", systemImage: "eye.slash") }
+                if !app.deletedMixIDs.isEmpty {
+                    Button { app.restoreDeletedMixes() } label: { Label("Bring back \(app.deletedMixIDs.count) deleted \(app.deletedMixIDs.count == 1 ? "mix" : "mixes")", systemImage: "arrow.uturn.backward") }
+                }
                 NavigationLink { VoiceHelpView() } label: { Label("Siri & Shortcuts", systemImage: "waveform") }
             }
             Section {
@@ -50,9 +53,8 @@ struct SettingsView: View {
                 Text("Settings, profiles, playlists and custom covers are included in your iPhone's device backup when it is enabled. Spitify does not need an account.")
                 Text("To remove the app and keep its data on this phone, choose Offload App in iPhone Storage. Delete App removes local data; reinstalling alone does not restore a device backup.").text(.caption)
             }
-            Section("Music video quality") {
-                LabeledContent("Last video", value: VideoQuality.shared.resolution)
-                Text("Spitify requests the highest available HD quality. A wide video is cropped to fill your screen. The original video must offer HD.").text(.caption).foregroundStyle(.secondary)
+            Section("Canvas") {
+                Text("The camera button beside the song title loops a few silent seconds of the song's official music video behind the player (HD when the video is). Songs without a video show their artwork.").text(.caption).foregroundStyle(.secondary)
             }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")

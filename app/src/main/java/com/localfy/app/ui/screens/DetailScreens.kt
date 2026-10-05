@@ -137,7 +137,7 @@ fun PlaylistScreen(id: Long) {
         subtitle = "Your playlist",
         art = playlist.artKey,
         songs = playlist.songs,
-        extrasFor = { i, _ -> SongMenuExtras("Remove from this playlist") { app.repo.removeFromPlaylist(id, i) } },
+        extrasFor = { i, _ -> SongMenuExtras("Remove from this playlist") { playlist.entryIds.getOrNull(i)?.let { app.repo.removeFromPlaylist(id, it) } } },
         headerActions = {
             androidx.compose.foundation.layout.Box {
                 TextButton(onClick = { options = true }) { Icon(Icons.Rounded.MoreVert, null); Text("Edit playlist") }
@@ -223,9 +223,13 @@ fun MixScreen(key: String) {
     val app = LocalApp.current
     val mixes by app.repo.mixes.collectAsStateWithLifecycle()
     val mix = mixes.firstOrNull { it.key == key } ?: return EmptyState("Mix not ready", "Keep listening — this one refreshes soon.")
+    var deleting by remember { mutableStateOf(false) }
     CollectionScreen(
         mix.title, "Made for you", mix.description, mix.cover.artKey, mix.songs,
         cover = { m -> com.localfy.app.ui.components.MixCover(mix, m) },
+        headerActions = {
+            IconButton(onClick = { deleting = true }) { Icon(Icons.Rounded.DeleteOutline, "Delete playlist", tint = LocalfyColors.TextSecondary) }
+        },
         beforeSongs = {
             if (mix.why != null || mix.refresh != null) item(key = "why") {
                 Text(
@@ -236,6 +240,15 @@ fun MixScreen(key: String) {
             }
         },
     )
+    if (deleting) {
+        AlertDialog(
+            onDismissRequest = { deleting = false },
+            title = { Text("Delete “${mix.title}”?") },
+            text = { Text("It won't be made for you again. You can bring deleted mixes back in Settings.") },
+            confirmButton = { TextButton(onClick = { deleting = false; app.nav.popBackStack(); app.repo.deleteMix(mix.key) }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable

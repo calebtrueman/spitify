@@ -53,7 +53,8 @@ object Routes {
     fun smart(kind: SmartCollection.Kind) = "smart/${kind.name}"
     fun mix(key: String) = "mix/${Uri.encode(key)}"
     fun genre(name: String) = "genre/${Uri.encode(name)}"
-    fun folder(path: String) = "folder/${Uri.encode(path)}"
+    /** The storage root has an empty path, which wouldn't match "folder/{path}"; it travels as "/". */
+    fun folder(path: String) = "folder/${Uri.encode(path.ifEmpty { "/" })}"
     fun show(id: Long) = "show/$id"
     fun localShow(name: String) = "localshow/${Uri.encode(name)}"
     fun book(id: Long) = "book/$id"
@@ -85,7 +86,17 @@ class AppActions(
         videoPreferences.edit().putBoolean("enabled", musicVideoEnabled.value).apply()
     }
 
-    fun navigate(route: String) = nav.navigate(route) { launchSingleTop = true }
+    /**
+     * Opens [route] unless it's exactly the page already showing. Plain launchSingleTop compares
+     * only the pattern ("album/{id}"), so album → another album replaced the page and broke Back.
+     */
+    fun navigate(route: String) {
+        val entry = nav.currentBackStackEntry
+        @Suppress("DEPRECATION")
+        val current = entry?.destination?.route?.replace(Regex("\\{(\\w+)\\}")) { m -> entry.arguments?.get(m.groupValues[1])?.toString().orEmpty() }
+        if (current != null && current == Uri.decode(route)) return
+        nav.navigate(route)
+    }
 
     /** The editor works on the song as currently shown (overrides applied), keyed by id. */
     fun rawFor(song: Song): Song = song

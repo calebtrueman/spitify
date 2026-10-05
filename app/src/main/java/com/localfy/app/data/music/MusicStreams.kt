@@ -22,6 +22,11 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
     private val tracks = linkedMapOf<String, OnlineTrack>()
     private val tracksBySongId = mutableMapOf<Long, OnlineTrack>()
     private val savedIds = prefs.getStringSet("saved", emptySet())!!.toMutableSet()
+    /** Built Songs, so lookups from the UI and the player return the same instance instead of rebuilding one. */
+    private val songs = HashMap<String, Song>()
+    /** Every track ever seen is persisted as one JSON blob; writes are coalesced off the calling (often main) thread. */
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var writePending = false
     private val _saved = MutableStateFlow<List<Song>>(emptyList())
     val saved = _saved.asStateFlow()
     init {
@@ -44,19 +49,30 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
         if (tracks[track.id] != track) {
             tracks[track.id] = track
             tracksBySongId[streamId(track.id)] = track
-            prefs.edit().putString("tracks", JSONArray(tracks.values.map { JSONObject(it.json()) }).toString()).apply()
+            songs.remove(track.id)
+            persistTracks()
         }
-        return song(track)
+        return cachedSong(track)
     }
+    private fun persistTracks() {
+        if (writePending) return
+        writePending = true
+        writer.execute {
+            Thread.sleep(500) // a search page or radio refill registers dozens of tracks at once
+            val json = synchronized(this) { writePending = false; tracks.values.map { it.json() } }
+            prefs.edit().putString("tracks", JSONArray(json.map { JSONObject(it) }).toString()).apply()
+        }
+    }
+    private fun cachedSong(track: OnlineTrack): Song = songs.getOrPut(track.id) { song(track) }
     @Synchronized fun knownTracks(): List<OnlineTrack> = tracks.values.toList()
     @Synchronized fun track(id: String): OnlineTrack? = tracks[id]
     @Synchronized fun track(song: Song): OnlineTrack? = song.sourceUri?.takeIf { it.scheme == "spitify" }?.lastPathSegment?.let(tracks::get)
-    @Synchronized fun lookup(id: Long): Song? = tracksBySongId[id]?.let(::song)
+    @Synchronized fun lookup(id: Long): Song? = tracksBySongId[id]?.let(::cachedSong)
     @Synchronized fun contains(track: OnlineTrack) = track.id in savedIds
-    @Synchronized fun save(items: List<OnlineTrack>) { items.forEach { register(it); if (savedIds.add(it.id)) prefs.edit().putLong("added:${it.id}", System.currentTimeMillis() / 1000).apply() }; persistSaved() }
+    @Synchronized fun save(items: List<OnlineTrack>) { items.forEach { register(it); if (savedIds.add(it.id)) { prefs.edit().putLong("added:${it.id}", System.currentTimeMillis() / 1000).apply(); songs.remove(it.id) } }; persistSaved() }
     @Synchronized fun remove(items: List<OnlineTrack>) { items.forEach { savedIds.remove(it.id) }; persistSaved() }
     private fun persistSaved() { prefs.edit().putStringSet("saved", savedIds.toSet()).apply(); publish() }
-    private fun publish() { _saved.value = savedIds.mapNotNull(tracks::get).map(::song) }
+    private fun publish() { _saved.value = savedIds.mapNotNull(tracks::get).map(::cachedSong) }
     fun song(track: OnlineTrack) = Song(
         id = streamId(track.id), title = track.title, artist = track.artist, album = track.album,
         albumId = streamId("album:" + track.releaseId), albumArtist = track.albumArtist ?: track.primaryArtist,
@@ -95,7 +111,7 @@ object ListeningCache {
 internal class MusicStreamDataSource(private val context: Context,
     private val sourceURL: (OnlineTrack) -> String = { it.audioURL?.takeIf(AudioFallback::validAudioURL) ?: Monochrome.audioUrl(it.id) },
     private val alternate: suspend (OnlineTrack) -> OnlineTrack? = AudioFallback::resolve,
-    private val upstreamFactory: DataSource.Factory = DefaultHttpDataSource.Factory().setConnectTimeoutMs(6_000).setReadTimeoutMs(12_000),
+    private val upstreamFactory: DataSource.Factory = DefaultHttpDataSource.Factory().setConnectTimeoutMs(6_000).setReadTimeoutMs(12_000).setAllowCrossProtocolRedirects(true),
 ) : DataSource {
     private val streams get() = (context as com.localfy.app.LocalfyApp).musicStreams
     private var source: DataSource? = null
@@ -104,12 +120,10 @@ internal class MusicStreamDataSource(private val context: Context,
     private val listeners = mutableListOf<TransferListener>()
     override fun addTransferListener(listener: TransferListener) { listeners += listener; source?.addTransferListener(listener) }
     override fun open(dataSpec: DataSpec): Long {
-        if (dataSpec.uri.scheme != "spitify") return openSource(DefaultDataSource.Factory(context).createDataSource(), dataSpec)
+        if (dataSpec.uri.scheme != "spitify") return openSource(DefaultDataSource.Factory(context, plainHttp).createDataSource(), dataSpec)
         val track = streams.track(dataSpec.uri.lastPathSegment.orEmpty()) ?: throw IOException("Song is no longer available")
-        val local = (context as com.localfy.app.LocalfyApp).library.rawSongs.value.firstOrNull {
-            SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) && AudioFallback.sameRelease(it.album, track.album)
-        }
-        if (local != null) return openSource(DefaultDataSource.Factory(context).createDataSource(), dataSpec.withUri(local.uri))
+        val local = localCopy(track)
+        if (local != null) return openSource(DefaultDataSource.Factory(context).createDataSource(), dataSpec.withUri(local))
         var candidate = streams.lastSource(track)
         var lastError: IOException? = null
         repeat(4) {
@@ -156,4 +170,29 @@ internal class MusicStreamDataSource(private val context: Context,
     override fun getResponseHeaders(): Map<String, List<String>> = source?.responseHeaders ?: emptyMap()
     override fun close() { try { source?.close() } finally { source = null; prefix = ByteArray(0); prefixOffset = 0 } }
     private fun audioHeader(bytes: ByteArray): Boolean = AudioContainer.detect(bytes) != null
+
+    /**
+     * A downloaded copy of the same song plays from disk. Matching walks the whole library, and
+     * ExoPlayer reopens the source on every seek and retry, so the answer is remembered per track.
+     */
+    private fun localCopy(track: OnlineTrack): Uri? {
+        val songs = (context as com.localfy.app.LocalfyApp).library.rawSongs.value
+        synchronized(localMatches) {
+            if (localMatchesFor !== songs) { localMatches.clear(); localMatchesFor = songs }
+            if (track.id in localMatches) return localMatches[track.id]
+        }
+        val match = songs.firstOrNull {
+            SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) && AudioFallback.sameRelease(it.album, track.album)
+        }?.uri
+        synchronized(localMatches) { if (localMatchesFor === songs) localMatches[track.id] = match }
+        return match
+    }
+
+    private companion object {
+        val plainHttp: DataSource.Factory = DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true) // podcast hosts and analytics prefixes redirect http -> https
+            .setUserAgent("Spitify/1.0 (Android)")
+        val localMatches = HashMap<String, Uri?>()
+        var localMatchesFor: Any? = null
+    }
 }

@@ -16,8 +16,8 @@ android {
         minSdk = 30
         targetSdk = 37
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        versionCode = 25
-        versionName = "1.0.21"
+        versionCode = 26
+        versionName = "1.0.22"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -41,7 +41,6 @@ android {
     }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/src/test/resources")
-    sourceSets.getByName("main").assets.srcDir("$rootDir/shared/video")
     sourceSets.getByName("main").assets.srcDir("$rootDir/shared/icons")
     sourceSets.getByName("main").assets.srcDir("$rootDir/shared/themes")
     sourceSets.getByName("main").assets.srcDir("$rootDir/licenses")
@@ -87,7 +86,6 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    implementation("androidx.webkit:webkit:1.14.0")
     implementation(libs.window)
     implementation(libs.coil.compose)
     implementation(libs.coil.network)

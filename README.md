@@ -90,14 +90,12 @@ iPhone has **Now Playing** with cover art and previous/play-pause/next controls,
 
 Settings, chosen covers, saved matches and friend details use the phone’s own backup system. Android restores depend on its backup service and the same app signing key; folder access may need to be granted again. iPhone settings belong to the device backup, and the friend key can travel in encrypted device backups. **Offload App** keeps iPhone app data; **Delete App** followed by a plain reinstall does not restore all settings automatically. There is no Spitify backup account.
 
-### Music videos
-Tap the video icon for a changing reel behind the song controls, including behind the status bar. Tap the icon again to return to album art. This choice stays set across songs and app restarts. The reel uses up to ten longer passages spread through the video, skipping its intro and credits. A typical song offers roughly two minutes of footage before repeating. The old picture stays visible while the next passage loads, then gently fades into the new one. Video stays muted and runs separately from the song's position. Pausing holds the picture and any unfinished fade, with a gentle drift; Reduce Motion turns that drift off. Resuming continues from there. Closing the view or putting the app in the background pauses the visuals.
+### Canvas
+Tap the camera icon beside the song title to show Canvas: a silent loop of a few seconds from the song's official music video, cropped to fill the screen behind the controls. It stays on across songs and restarts. Clips come from Apple's public music-video previews, so they belong to the exact song (same artist and title; live, remix and lyric versions are skipped unless the song is one). Most modern videos are 1080p; older videos are only as sharp as their original release. Songs without a video show their artwork.
 
-Video lookup starts when a song starts. Up to 100 recent matches stay in memory for one day; empty results retry after ten minutes. The app keeps one embedded player ready for reuse and only starts its video when it is on screen. This is not an offline video download. Artwork stays visible until a decoded video frame is ready, without a loading message. The embedded page hides its controls, captions and other page elements before showing that frame. The picture fills the screen. When the host allows pixel reads, the app also crops detected black bars inside the video. Words burned into the video itself cannot be removed.
+Each loop is fetched once and cached: Android keeps just the needed bytes in the listening cache, and iPhone cuts the ten seconds into a small file (about 7 MB, no audio) kept in Caches, trimmed at 300 MB. Playback is native (ExoPlayer / AVPlayer), muted, and pauses when the song pauses or the app leaves the screen. No web view is used.
 
 All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
-
-Videos use YouTube's embedded player. Spitify requests the highest available HD stream from the player inside the page and checks again if it drops to a lower quality. The source player is sized to match the part of a wide video that fills your phone. **Settings → Music video quality** shows the last decoded video resolution. The original upload must offer HD; Spitify cannot add detail to a low-resolution source. The quality control depends on YouTube's page player and may need updates if that player changes. Some songs have no matching video, and some videos block embedding. Detected ad playback is hidden. The song keeps playing if the video cannot load. Cut selection follows a timing rule; it does not understand scenes. A host that blocks pixel reads can also prevent detection of black bars already inside the source picture.
 
 ### ✨ Made for you, learned on the device
 Every listen is logged locally: how much you heard, whether you finished or skipped it, and the time of day. A taste model rebuilds from that log as you listen:
@@ -171,7 +169,7 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Accent colour:** presets or the current album art on both apps; Android also offers Material You.
 - **Look and feel:** typefaces, text sizes, artwork shape, and player style: artwork, spinning vinyl or minimal. Font choices differ by platform.
 - **Room for longer text:** Home, Search, library lists and player controls adapt to narrow screens and larger text. Selected colours stay readable in light and dark themes.
-- **Player style button:** change artwork style beside the video button. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
+- **Player style button:** change artwork style beside the Canvas button. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** one place for your photo, name, bio, privacy and shared music. New photos save at 1536 pixels; friends receive a sharper copy.
 
@@ -272,7 +270,7 @@ Your library, listening history and taste profile stay on the phone. Friends sen
 | Online music search, streaming and downloads | Monochrome Tracks; matched public backup sources, including Internet Archive |
 | Public Spotify playlist search and metadata | wolfXspotify public service; Spotify public embed as a fallback |
 | Friends and Rooms, when enabled | Public Nostr relays; editable in Friends |
-| Music video search and playback | YouTube |
+| Canvas (music-video loops) | iTunes Search (Apple music-video previews) |
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
 | Synced lyrics | LRCLIB |

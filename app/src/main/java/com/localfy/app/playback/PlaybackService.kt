@@ -29,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.flow.collectLatest
@@ -71,7 +72,7 @@ class PlaybackService : MediaLibraryService() {
         player = buildPlayer(this)
             .setAudioAttributes(attributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true) // pause when headphones are unplugged
-            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .setWakeMode(C.WAKE_MODE_NETWORK) // keeps Wi-Fi up for streamed episodes with the screen off
             .build()
 
         volume = PlaybackVolume(player)
@@ -139,12 +140,17 @@ class PlaybackService : MediaLibraryService() {
         }
         // New/updated mixes: tell connected cars to reload "For you".
         scope.launch { app.library.mixes.collect { session?.notifyChildrenChanged(AutoLibrary.TAB_HOME, it.size + 4, null) } }
+        // Only rebuild the buttons when something they show changes: every rebuild re-posts the
+        // notification, and the player state also ticks on buffering / loading changes.
         scope.launch {
-            combine(app.player.state, app.library.likedIds) { st, liked -> st to liked }.collect { (st, liked) -> refreshButtons(st.currentId, st.shuffle, liked) }
+            combine(app.player.state, app.library.likedIds) { st, liked ->
+                val id = st.currentId
+                ButtonInputs(id, id?.let(app::resolve)?.isPodcast == true, st.shuffle, id != null && id in liked)
+            }.distinctUntilChanged().collect { refreshButtons(it.currentId, it.shuffle, it.liked) }
         }
     }
 
-    private fun buttons(currentId: Long?, shuffle: Boolean, liked: Set<Long>): List<CommandButton> {
+    private fun buttons(currentId: Long?, shuffle: Boolean, liked: Boolean): List<CommandButton> {
         val song = currentId?.let(app::resolve)
         return if (song?.isPodcast == true) listOf(
             CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds").setSessionCommand(SessionCommand(CMD_BACK, Bundle.EMPTY)).setSlots(CommandButton.SLOT_BACK_SECONDARY).build(),
@@ -156,7 +162,7 @@ class PlaybackService : MediaLibraryService() {
         )
     }
 
-    private fun refreshButtons(currentId: Long?, shuffle: Boolean, liked: Set<Long>) {
+    private fun refreshButtons(currentId: Long?, shuffle: Boolean, liked: Boolean) {
         session?.setMediaButtonPreferences(buttons(currentId, shuffle, liked))
     }
 
@@ -228,7 +234,7 @@ class PlaybackService : MediaLibraryService() {
             val st = app.player.state.value
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands)
-                .setMediaButtonPreferences(buttons(st.currentId, st.shuffle, app.library.likedIds.value))
+                .setMediaButtonPreferences(buttons(st.currentId, st.shuffle, st.currentId?.let { it in app.library.likedIds.value } == true))
                 .build()
         }
 
@@ -339,7 +345,9 @@ class PlaybackService : MediaLibraryService() {
             if (uri.authority == MediaStore.AUTHORITY || uri.authority == "$packageName.art") {
                 executor.submit<Bitmap> {
                     if (uri.authority == "$packageName.art") {
-                        return@submit contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it) }
+                        // Podcast covers are often 3000 px; at full size every notification update
+                        // would carry a ~36 MB bitmap through the system and stall the app.
+                        return@submit contentResolver.openInputStream(uri)?.use { com.localfy.app.ui.art.decodeSampled(it.readBytes(), 720) }
                             ?: throw java.io.IOException("No artwork for $uri")
                     }
                     uri.lastPathSegment?.toLongOrNull()?.let { (application as com.localfy.app.LocalfyApp).metadata.customArt(it) }
@@ -390,6 +398,8 @@ fun buildPlayer(context: android.content.Context, extraAudioProcessors: Array<an
         androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalfyExtractors)
             .setDataSourceFactory(com.localfy.app.data.music.ListeningCache.factory(context)),
     )
+
+private data class ButtonInputs(val currentId: Long?, val spoken: Boolean, val shuffle: Boolean, val liked: Boolean)
 
 /** Same-process handoff of the ExoPlayer audio session so the UI can open the system equaliser. */
 object AudioSessionHolder {

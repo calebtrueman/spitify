@@ -139,6 +139,10 @@ fun SettingsScreen() {
         item { BackHeader("Settings") }
         item { SettingRow("Sharing connection", "Pause sharing or change connections") { app.navigate("friends-settings") } }
         item { SettingRow("Hidden artists", "Show artists you hid from Library") { app.navigate("hidden-artists") } }
+        item {
+            val deletedMixes by app.repo.hiddenMixCount.collectAsStateWithLifecycle()
+            if (deletedMixes > 0) SettingRow("Bring back deleted mixes", "$deletedMixes generated ${if (deletedMixes == 1) "playlist" else "playlists"} you deleted") { app.repo.restoreDeletedMixes() }
+        }
         item { SettingRow("Appearance", "Theme, accent colour, typeface, text size, artwork and player style") { app.navigate(Routes.APPEARANCE) } }
         item { SettingRow("Equaliser & sound", "10 presets, custom curve, bass boost, surround, loudness") { app.navigate(Routes.EQUALIZER) } }
         item { SectionHeader("Home") }
@@ -228,7 +232,7 @@ fun SettingsScreen() {
         }
         item { SectionHeader("Help") }
         item { SettingRow("Android Auto", "Setup for an app installed from an APK") { autoHelp = true } }
-        item { SettingRow("Music video quality", "Last video: ${com.localfy.app.ui.player.VideoQuality.resolution}. Spitify requests the highest available HD quality. A wide video is cropped to fill your screen. The original video must offer HD.") {} }
+        item { SettingRow("Canvas", "The camera button behind the song title loops a few silent seconds of the song's official music video behind the player (HD when the video is). Songs without a video show their artwork.") {} }
         item {
             val context = androidx.compose.ui.platform.LocalContext.current
             val version = androidx.compose.runtime.remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }

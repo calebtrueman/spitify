@@ -365,7 +365,7 @@ fun LocalfyRoot(activity: Activity) {
                             composable(Routes.SMART) { SmartScreen(it.arguments?.getString("kind").orEmpty()) }
                             composable(Routes.MIX) { MixScreen(it.arguments?.getString("key").orEmpty()) }
                             composable(Routes.GENRE) { GenreScreen(it.arguments?.getString("name").orEmpty()) }
-                            composable(Routes.FOLDER) { FolderScreen(it.arguments?.getString("path").orEmpty()) }
+                            composable(Routes.FOLDER) { FolderScreen(it.arguments?.getString("path").orEmpty().takeIf { p -> p != "/" }.orEmpty()) }
                         }
                         // Collection pages draw their own pinned bar; everything else gets a status-bar scrim.
                         if (route in listOf(Routes.HOME, Routes.SEARCH, Routes.LIBRARY, Routes.STATS,

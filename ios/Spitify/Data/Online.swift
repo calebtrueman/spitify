@@ -1,8 +1,14 @@
 import Foundation
 
 enum HTTP {
+    /// App Transport Security blocks plain-http requests; many podcast feeds and enclosures still
+    /// list http:// links that also work over https.
+    static func secure(_ url: URL) -> URL {
+        guard url.scheme?.lowercased() == "http", var c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        c.scheme = "https"; return c.url ?? url
+    }
     static func get(_ url: String) async -> Data? {
-        guard let u = URL(string: url) else { return nil }
+        guard let u = URL(string: url).map(secure) else { return nil }
         var req = URLRequest(url: u, timeoutInterval: 12)
         req.setValue("Spitify/1.0 (iOS music player)", forHTTPHeaderField: "User-Agent")
         guard let (data, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
@@ -10,7 +16,7 @@ enum HTTP {
     }
     /// Like [get], but throws when there's no connection (so callers can tell "offline" from "not found").
     static func fetch(_ url: String) async throws -> Data? {
-        guard let u = URL(string: url) else { return nil }
+        guard let u = URL(string: url).map(secure) else { return nil }
         var req = URLRequest(url: u, timeoutInterval: 12)
         req.setValue("Spitify/1.0 (iOS music player)", forHTTPHeaderField: "User-Agent")
         let (data, resp) = try await URLSession.shared.data(for: req)
