@@ -90,10 +90,11 @@ iPhone has **Now Playing** with cover art and previous/play-pause/next controls,
 
 Settings, chosen covers, saved matches and friend details use the phone’s own backup system. Android restores depend on its backup service and the same app signing key; folder access may need to be granted again. iPhone settings belong to the device backup, and the friend key can travel in encrypted device backups. **Offload App** keeps iPhone app data; **Delete App** followed by a plain reinstall does not restore all settings automatically. There is no Spitify backup account.
 
-### Canvas
-Tap the camera icon beside the song title to show Canvas: a silent loop of a few seconds from the song's official music video, cropped to fill the screen behind the controls. It stays on across songs and restarts. Clips come from Apple's public music-video previews, so they belong to the exact song (same artist and title; live, remix and lyric versions are skipped unless the song is one). Most modern videos are 1080p; older videos are only as sharp as their original release. Songs without a video show their artwork.
+### Downloads
+Every song row shows whether it plays offline: a green mark for songs on the phone (your own files and finished downloads), or a download button on streamed songs, which becomes a progress ring you can tap to cancel. Albums, playlists, mixes and All Songs have a **Download all** button that turns into a check once everything is offline. Search results have download buttons too.
 
-Each loop is fetched once and cached: Android keeps just the needed bytes in the listening cache, and iPhone cuts the ten seconds into a small file (about 7 MB, no audio) kept in Caches, trimmed at 300 MB. Playback is native (ExoPlayer / AVPlayer), muted, and pauses when the song pauses or the app leaves the screen. No web view is used.
+### Problem reports
+**Settings → Send problem report** shares errors the app recovered from. On Android it also includes where the app was stuck whenever the screen stopped responding, which is the quickest way to trace lag.
 
 All Songs can sort by title, artist, album, recently added, or most played. Tap the accent-coloured audio output at the bottom of the player to choose a device.
 
@@ -169,7 +170,7 @@ The following details describe Android. See [the iPhone guide](ios/README.md) fo
 - **Accent colour:** presets or the current album art on both apps; Android also offers Material You.
 - **Look and feel:** typefaces, text sizes, artwork shape, and player style: artwork, spinning vinyl or minimal. Font choices differ by platform.
 - **Room for longer text:** Home, Search, library lists and player controls adapt to narrow screens and larger text. Selected colours stay readable in light and dark themes.
-- **Player style button:** change artwork style beside the Canvas button. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
+- **Player style button:** change artwork style from the button beside the song title. Your choice stays set for music. Podcasts and audiobooks always show their cover, then your music style returns when you switch back. Vinyl keeps its scratch gesture and uses the cover as a textured paper label.
 - **Motion:** reduce motion and haptics toggles.
 - **Profile:** one place for your photo, name, bio, privacy and shared music. New photos save at 1536 pixels; friends receive a sharper copy.
 
@@ -270,7 +271,6 @@ Your library, listening history and taste profile stay on the phone. Friends sen
 | Online music search, streaming and downloads | Monochrome Tracks; matched public backup sources, including Internet Archive |
 | Public Spotify playlist search and metadata | wolfXspotify public service; Spotify public embed as a fallback |
 | Friends and Rooms, when enabled | Public Nostr relays; editable in Friends |
-| Canvas (music-video loops) | iTunes Search (Apple music-video previews) |
 | Missing album art and song info | Deezer, iTunes Search |
 | Missing book info and covers | Open Library |
 | Synced lyrics | LRCLIB |

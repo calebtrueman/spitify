@@ -18,6 +18,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 
+/** States where DownloadManager has (or is about to have) work in flight. */
+private val BUSY = setOf("queued", "finding", "downloading", "checking")
+
 private class InvalidDownloadedAudio(cause: Exception) : Exception(cause.message, cause)
 
 /** DownloadManager owns transfers; Room owns the queue; a worker publishes checked music files. */
@@ -31,6 +34,8 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     private var started = false
     private val prefs = context.getSharedPreferences("music_downloads", Context.MODE_PRIVATE)
     val jobs = dao.observe().stateIn(scope, SharingStarted.Eagerly, emptyList())
+    /** Jobs by track id, so every song row can look up its own state without scanning the list. */
+    val jobsById = jobs.map { list -> list.associateBy { it.id } }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
     private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val progress = _progress.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
@@ -59,8 +64,16 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
             }
             while (isActive) {
                 try { reconcile() } catch (e: Exception) { if (e is CancellationException) throw e; _message.value = e.message ?: "Could not update downloads." }
-                if (dao.all().any { it.active }) delay(1_000)
-                else dao.observe().first { queue -> queue.any { it.active } }
+                val all = dao.all()
+                // Poll DownloadManager only while something is moving. A job waiting to retry used to count
+                // as active, so one failed song kept this loop (and its file checks) running every second.
+                if (all.any { it.state in BUSY }) delay(1_000)
+                else {
+                    val nextRetry = all.filter { it.state == "waiting" }.minOfOrNull { it.track().retryAtMillis }
+                    val wake: suspend () -> Unit = { dao.observe().first { queue -> queue.any { it.state in BUSY } } }
+                    if (nextRetry != null) withTimeoutOrNull((nextRetry - System.currentTimeMillis()).coerceAtLeast(1_000)) { wake() }
+                    else dao.observe().first { queue -> queue.any { it.active } }
+                }
             }
         }
     }
@@ -114,11 +127,16 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
 
     private fun temp(id: String) = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Monochrome/$id.flac")
 
+    /** Finished files are checked for deletion at most once a minute (each check opens the file). */
+    private var lastFileCheck = 0L
+
     suspend fun reconcile() = withContext(Dispatchers.IO) {
         mutex.withLock {
             val progress = mutableMapOf<String, Float>()
+            val checkFiles = System.currentTimeMillis() - lastFileCheck > 60_000
+            if (checkFiles) lastFileCheck = System.currentTimeMillis()
             for (job in dao.all()) {
-                if (job.state == "complete" && !exists(job.localUri)) {
+                if (job.state == "complete" && checkFiles && !exists(job.localUri)) {
                     dao.put(job.copy(state = "failed", localUri = null, error = "The downloaded file was moved or deleted."))
                     continue
                 }

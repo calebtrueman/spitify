@@ -115,6 +115,8 @@ fun CollectionScreen(
         onShuffle = { app.player.playSongs(songs, shuffle = true, source = title) }, shuffleActive = player.shuffle,
         headerActions = {
             headerActions()
+            // Download every streamed song here (or confirm they're all offline already).
+            if (catalogTracks == null && songs.isNotEmpty()) com.localfy.app.ui.components.DownloadAllButton(songs)
             if (songs.isNotEmpty() && songs.none { it.isPodcast || it.isAudiobook }) ShareMusicButton(title, songs, if (kindLabel == "Album") "album" else if (kindLabel == "Song") "song" else "playlist")
             IconButton(onClick = { app.addToPlaylist(songs) }, enabled = songs.isNotEmpty()) {
                 Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add all to playlist", tint = LocalfyColors.TextSecondary)

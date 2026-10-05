@@ -232,7 +232,6 @@ fun SettingsScreen() {
         }
         item { SectionHeader("Help") }
         item { SettingRow("Android Auto", "Setup for an app installed from an APK") { autoHelp = true } }
-        item { SettingRow("Canvas", "The camera button behind the song title loops a few silent seconds of the song's official music video behind the player (HD when the video is). Songs without a video show their artwork.") {} }
         item {
             val context = androidx.compose.ui.platform.LocalContext.current
             val version = androidx.compose.runtime.remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }

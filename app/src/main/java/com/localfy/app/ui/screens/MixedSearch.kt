@@ -155,6 +155,7 @@ fun MixedSearchPanel(query: String) {
                     SearchSubtitle(row.type, row.creator, row.explicit)
                 }
                 row.album?.let { AlbumDownloadButton(it) }
+                row.track?.let { TrackDownloadButton(it) }
             }
         } }
     }

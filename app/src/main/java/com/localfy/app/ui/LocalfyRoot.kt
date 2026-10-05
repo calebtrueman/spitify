@@ -203,7 +203,6 @@ fun LocalfyRoot(activity: Activity) {
     var wideNow by remember { mutableStateOf(false) }
     val actions = remember(nav) {
         AppActions(
-            videoPreferences = context.getSharedPreferences("music_video", android.content.Context.MODE_PRIVATE),
             repo = container.library,
             player = container.player,
             lyrics = container.lyrics,

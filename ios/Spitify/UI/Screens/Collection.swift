@@ -48,6 +48,8 @@ struct CollectionView<Extra: View>: View {
                     }
                 }
                 IconControl(title: "Add to queue", symbol: "text.badge.plus") { app.player.addToQueue(songs) }.disabled(songs.isEmpty)
+                // Download every streamed song here (or confirm they're all offline already).
+                if catalogTracks == nil, !songs.isEmpty { DownloadAllButton(songs: songs) }
             }
         } content: {
             if let mix, mix.why != nil || mix.refresh != nil {

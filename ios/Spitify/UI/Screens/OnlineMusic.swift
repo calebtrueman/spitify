@@ -49,7 +49,7 @@ struct OnlineTrackRow: View {
         let fraction = DownloadProgress.fraction(state: job?.state, measured: app.musicDownloads.progress[track.id])
         if let onPlay {
             let playable = song ?? MusicStreams.song(track)
-                SongRow(song: playable, trackNumber: trackNumber, subtitle: track.artist, downloaded: song != nil,
+                SongRow(song: playable, trackNumber: trackNumber, subtitle: track.artist, downloaded: song != nil, showDownload: false,
                         accessory: song == nil ? AnyView(
                             Button {
                                 if job?.state.active == true { app.musicDownloads.cancel(track.id) }

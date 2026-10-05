@@ -24,15 +24,37 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
     private val savedIds = prefs.getStringSet("saved", emptySet())!!.toMutableSet()
     /** Built Songs, so lookups from the UI and the player return the same instance instead of rebuilding one. */
     private val songs = HashMap<String, Song>()
-    /** Every track ever seen is persisted as one JSON blob; writes are coalesced off the calling (often main) thread. */
+    /**
+     * Every track ever seen (search pages, radios, imported playlists) lives in its own JSON files,
+     * not SharedPreferences: Android rewrites a whole prefs file on every change, and this used to
+     * rewrite megabytes each time a stream started. Writes are coalesced on a background thread.
+     */
+    private val tracksFile = File(context.filesDir, "$storageName-tracks.json")
+    private val sourcesFile = File(context.filesDir, "$storageName-sources.json")
+    /** The source that last worked for each track, so a replay skips the fallback search. */
+    private val sources = HashMap<String, String>()
     private val writer = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var writePending = false
+    private var sourcesPending = false
     private val _saved = MutableStateFlow<List<Song>>(emptyList())
     val saved = _saved.asStateFlow()
     init {
+        // Older versions kept these in prefs; move them out once.
+        val legacy = prefs.getString("tracks", null)
         runCatching {
-            val entries = JSONArray(prefs.getString("tracks", "[]"))
+            val entries = JSONArray(if (tracksFile.isFile) tracksFile.readText() else legacy ?: "[]")
             for (i in 0 until entries.length()) Monochrome.parseTrack(entries.getJSONObject(i))?.let { tracks[it.id] = it }
+        }
+        runCatching {
+            if (sourcesFile.isFile) JSONObject(sourcesFile.readText()).let { o -> o.keys().forEach { sources[it] = o.getString(it) } }
+        }
+        val legacySources = prefs.all.filterKeys { it.startsWith("source:") }
+        legacySources.forEach { (key, value) -> (value as? String)?.let { sources.putIfAbsent(key.removePrefix("source:"), it) } }
+        if (legacy != null || legacySources.isNotEmpty()) {
+            writer.execute {
+                writeTracks(); writeSources()
+                prefs.edit().apply { remove("tracks"); legacySources.keys.forEach(::remove) }.apply()
+            }
         }
         tracks.values.forEach { tracksBySongId[streamId(it.id)] = it }
         publish()
@@ -59,9 +81,23 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
         writePending = true
         writer.execute {
             Thread.sleep(500) // a search page or radio refill registers dozens of tracks at once
-            val json = synchronized(this) { writePending = false; tracks.values.map { it.json() } }
-            prefs.edit().putString("tracks", JSONArray(json.map { JSONObject(it) }).toString()).apply()
+            synchronized(this) { writePending = false }
+            writeTracks()
         }
+    }
+    /** Copies under the lock (cheap), builds JSON outside it so lookups from the UI never wait on it. */
+    private fun writeTracks() {
+        val snapshot = synchronized(this) { tracks.values.toList() }
+        atomicWrite(tracksFile, JSONArray().apply { snapshot.forEach { put(JSONObject(it.json())) } }.toString())
+    }
+    private fun writeSources() {
+        val snapshot = synchronized(this) { HashMap(sources) }
+        atomicWrite(sourcesFile, JSONObject(snapshot as Map<*, *>).toString())
+    }
+    private fun atomicWrite(file: File, text: String) = runCatching {
+        val tmp = File(file.path + ".tmp")
+        tmp.writeText(text)
+        tmp.renameTo(file)
     }
     private fun cachedSong(track: OnlineTrack): Song = songs.getOrPut(track.id) { song(track) }
     @Synchronized fun knownTracks(): List<OnlineTrack> = tracks.values.toList()
@@ -80,10 +116,24 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
         folder = "", dateAddedSec = prefs.getLong("added:${track.id}", 0), sizeBytes = 0, mimeType = null,
         sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork, explicit = track.explicit, artistNames = track.artistNames,
     )
-    internal fun lastSource(track: OnlineTrack): OnlineTrack = prefs.getString("source:${track.id}", null)?.let {
+    internal fun lastSource(track: OnlineTrack): OnlineTrack = synchronized(this) { sources[track.id] }?.let {
         runCatching { Monochrome.parseTrack(JSONObject(it)) }.getOrNull()
     } ?: track
-    internal fun rememberSource(track: OnlineTrack) { prefs.edit().putString("source:${track.id}", track.json()).apply() }
+    /** Called on every stream start; only writes when the working source actually changed. */
+    internal fun rememberSource(track: OnlineTrack) {
+        val json = track.json()
+        synchronized(this) {
+            if (sources[track.id] == json) return
+            sources[track.id] = json
+            if (sourcesPending) return
+            sourcesPending = true
+        }
+        writer.execute {
+            Thread.sleep(500)
+            synchronized(this) { sourcesPending = false }
+            writeSources()
+        }
+    }
     companion object {
         const val CACHE_LIMIT = 1024L * 1024 * 1024
         fun streamId(id: String): Long {

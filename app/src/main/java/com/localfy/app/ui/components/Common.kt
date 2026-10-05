@@ -106,9 +106,12 @@ fun SongRow(
     subtitle: String = "${song.artist} • ${song.album}",
     onMore: (() -> Unit)? = null,
     downloaded: Boolean = false,
+    /** Off when the caller draws its own download control (online album rows). */
+    showDownload: Boolean = true,
 ) {
     val haptics = rememberHaptics()
     val app = LocalApp.current
+    val download = rememberDownloadState(song)
     var swipe by remember(song.id) { mutableFloatStateOf(0f) }
     var dragging by remember(song.id) { mutableStateOf(false) }
     val threshold = with(LocalDensity.current) { 72.dp.toPx() }
@@ -173,8 +176,9 @@ fun SongRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (downloaded) {
-                    Icon(Icons.Rounded.DownloadForOffline, "Downloaded", Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                // Every row says whether the song plays offline (Spotify's green arrow).
+                if (downloaded || download == DownloadState.OnDevice) {
+                    DownloadedMark()
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(
@@ -183,6 +187,7 @@ fun SongRow(
                 )
             }
         }
+        if (showDownload && !downloaded) SongDownloadButton(song, download)
         if (onMore != null) {
             IconButton(onClick = onMore) { Icon(Icons.Rounded.MoreVert, "More options", tint = LocalfyColors.TextSecondary) }
         }

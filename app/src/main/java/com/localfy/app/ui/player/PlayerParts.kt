@@ -275,8 +275,7 @@ fun Modifier.swipeToSkip(threshold: Dp = 80.dp): Modifier {
  */
 @Composable
 fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
-    val videoSong = rememberCurrentSong()
-    if (LocalApp.current.musicVideoEnabled.value && videoSong != null && !videoSong.isPodcast && !videoSong.isAudiobook) { Spacer(modifier); return }
+    val currentSong = rememberCurrentSong()
     val app = LocalApp.current
     val state = rememberPlayerState()
     val lookup = rememberSongLookup()
@@ -301,7 +300,7 @@ fun ArtPager(modifier: Modifier = Modifier, cornerRadius: Dp = 10.dp) {
         }
     }
     val musicStyle = LocalThemeSettings.current.playerStyle
-    val style = if (videoSong?.isPodcast == true || videoSong?.isAudiobook == true) PlayerStyle.Artwork else musicStyle
+    val style = if (currentSong?.isPodcast == true || currentSong?.isAudiobook == true) PlayerStyle.Artwork else musicStyle
     val still = LocalThemeSettings.current.reduceMotion
     val playingScale by animateFloatAsState(
         if (state.isPlaying || still || style == PlayerStyle.Vinyl) 1f else 0.88f,
@@ -475,7 +474,6 @@ private object VinylPaperTexture {
 @Composable
 fun ArtBackdrop(song: Song?, modifier: Modifier = Modifier, strength: Float = 1f) {
     val tint = rememberPlayerTint(song)
-    if (LocalApp.current.musicVideoEnabled.value && song != null && !song.isPodcast && !song.isAudiobook) { CanvasBackdrop(song, modifier); return }
     Box(modifier.fillMaxSize().clipToBounds().background(LocalfyColors.Background)) {
         if (song != null && Build.VERSION.SDK_INT >= 31 && LocalThemeSettings.current.blurBackdrop) {
             AnimatedContent(song.albumId, transitionSpec = { fadeIn(tween(900)) togetherWith fadeOut(tween(900)) }, label = "backdrop") { _ ->
@@ -626,7 +624,7 @@ fun TitleBlock(song: Song, modifier: Modifier = Modifier, large: Boolean = false
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).then(if (onArtist != null) Modifier.pressable(pressedScale = 0.98f, onClick = onArtist) else Modifier).padding(vertical = 12.dp),
             )
-            if (!song.isPodcast && !song.isAudiobook) { ArtworkStyleButton(); CanvasButton() }
+            if (!song.isPodcast && !song.isAudiobook) { ArtworkStyleButton() }
         }
     }
 }

@@ -15,21 +15,6 @@ final class SocialTests: XCTestCase {
         XCTAssertEqual(router.paths[.home]?.count, 0)
     }
 
-    func testCanvasMatchesTheSameSongByTheSameArtist() {
-        XCTAssertTrue(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini", foundArtist: "Dua Lipa"))
-        XCTAssertTrue(CanvasLookup.matches(title: "BIRDS OF A FEATHER", artist: "Billie Eilish", foundTitle: "Birds of a Feather", foundArtist: "Billie Eilish"))
-        XCTAssertTrue(CanvasLookup.matches(title: "One More Time (Radio Edit)", artist: "Daft Punk", foundTitle: "One More Time", foundArtist: "Daft Punk"))
-        XCTAssertTrue(CanvasLookup.matches(title: "Blinding Lights", artist: "The Weeknd", foundTitle: "Blinding Lights (Official Video)", foundArtist: "The Weeknd"))
-        XCTAssertTrue(CanvasLookup.matches(title: "Señorita", artist: "Shawn Mendes; Camila Cabello", foundTitle: "Señorita", foundArtist: "Shawn Mendes & Camila Cabello"))
-        XCTAssertTrue(CanvasLookup.matches(title: "Houdini (Live)", artist: "Dua Lipa", foundTitle: "Houdini (Live)", foundArtist: "Dua Lipa"))
-    }
-    func testCanvasRejectsOtherArtistsAndOtherRecordings() {
-        XCTAssertFalse(CanvasLookup.matches(title: "One More Time", artist: "Daft Punk", foundTitle: "ONE MORE TIME", foundArtist: "blink-182"))
-        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (London Sessions)", foundArtist: "Dua Lipa"))
-        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (Live)", foundArtist: "Dua Lipa"))
-        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Houdini (Lyric Video)", foundArtist: "Dua Lipa"))
-        XCTAssertFalse(CanvasLookup.matches(title: "Houdini", artist: "Dua Lipa", foundTitle: "Training Season", foundArtist: "Dua Lipa"))
-    }
     @MainActor func testPlaylistReusesPreviouslyMatchedSongWithoutSearch() async throws {
         let app = AppModel()
         let title = "Saved match " + UUID().uuidString

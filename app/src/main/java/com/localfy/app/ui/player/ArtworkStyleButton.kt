@@ -25,12 +25,11 @@ private val PlayerStyle.next: PlayerStyle
 fun ArtworkStyleButton() {
     val theme = (LocalContext.current.applicationContext as LocalfyApp).theme
     val style = LocalThemeSettings.current.playerStyle
-    val video = LocalApp.current.musicVideoEnabled.value
     val haptics = rememberHaptics()
-    val hint = if (video) "Show album art to change its style" else "Switch to ${style.next.label.lowercase()}"
+    val hint = "Switch to ${style.next.label.lowercase()}"
     TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(), state = rememberTooltipState(),
         tooltip = { PlainTooltip { Text("Artwork style: ${style.label}. $hint") } }) {
-        IconButton(enabled = !video, onClick = {
+        IconButton(onClick = {
             haptics(androidx.compose.ui.hapticfeedback.HapticFeedbackType.ContextClick)
             theme.update { it.copy(playerStyle = style.next) }
         }, modifier = Modifier.semantics { stateDescription = "${style.label}. $hint" }) {

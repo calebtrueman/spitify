@@ -5,6 +5,8 @@ struct SongRow: View {
     var trackNumber: Int? = nil
     var subtitle: String? = nil
     var downloaded = false
+    /// Off when the caller draws its own download control (online album rows).
+    var showDownload = true
     var accessory: AnyView? = nil
     var onTap: () -> Void
     var removeLabel: String? = nil
@@ -17,6 +19,7 @@ struct SongRow: View {
 
     var body: some View {
         let isCurrent = app.player.current?.id == song.id
+        let download = downloadState(song, app: app)
         Button(action: { if Date() >= suppressTapUntil { Haptics.tap(); onTap() } }) {
             HStack(spacing: MediaLayout.rowSpacing) {
                 if let n = trackNumber {
@@ -31,8 +34,10 @@ struct SongRow: View {
                     }.frame(width: MediaLayout.rowArt, height: MediaLayout.rowArt)
                 }
                 MediaRowText(title: song.title, subtitle: song.playable ? (subtitle ?? "\(song.artist) • \(song.album)") : "Unsupported format (.\(song.fileExtension))",
-                             highlighted: isCurrent, badge: downloaded ? "arrow.down.circle.fill" : nil)
+                             // Every row says whether the song plays offline (Spotify's green arrow).
+                             highlighted: isCurrent, badge: downloaded || download == .onDevice ? "arrow.down.circle.fill" : nil)
                 HStack(spacing: 0) {
+                    if showDownload && !downloaded { SongDownloadButton(song: song, state: download) }
                     SongMenu(song: song, removeLabel: removeLabel, onRemove: onRemove) {
                         IconControlLabel(symbol: "ellipsis")
                     }.accessibilityLabel("More options for \(song.title)")

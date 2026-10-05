@@ -66,7 +66,6 @@ data class SongMenuExtras(val removeLabel: String? = null, val onRemove: (() -> 
 
 @Stable
 class AppActions(
-    val videoPreferences: android.content.SharedPreferences,
     val repo: LibraryRepository,
     val player: PlayerConnection,
     val lyrics: LyricsRepository,
@@ -80,11 +79,6 @@ class AppActions(
     val editMetadata: (List<Song>, Boolean) -> Unit,
     val openPlayer: () -> Unit,
 ) {
-    val musicVideoEnabled = androidx.compose.runtime.mutableStateOf(videoPreferences.getBoolean("enabled", false))
-    fun toggleMusicVideo() {
-        musicVideoEnabled.value = !musicVideoEnabled.value
-        videoPreferences.edit().putBoolean("enabled", musicVideoEnabled.value).apply()
-    }
 
     /**
      * Opens [route] unless it's exactly the page already showing. Plain launchSingleTop compares

@@ -81,7 +81,7 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
         val playable = song ?: streams.song(track)
         val player = com.localfy.app.ui.player.rememberPlayerState()
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SongRow(song = playable, modifier = Modifier.weight(1f), trackNumber = trackNumber, subtitle = track.artist, downloaded = song != null,
+            SongRow(song = playable, modifier = Modifier.weight(1f), trackNumber = trackNumber, subtitle = track.artist, downloaded = song != null, showDownload = false,
                 isCurrent = player.currentId == playable.id, isPlaying = player.isPlaying,
                 onClick = { streams.register(track); onPlay(playable) }, onMore = { streams.register(track); actions.openSongMenu(playable, SongMenuExtras()) })
             if (song == null) IconButton(enabled = !complete, onClick = {
@@ -106,22 +106,39 @@ internal fun OnlineMusicRow(track: OnlineTrack, trackNumber: Int? = null, onPlay
                 Text(track.artist, style = MaterialTheme.typography.bodyMedium, color = com.localfy.app.ui.theme.LocalfyColors.TextSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             }
         }
-        IconButton(enabled = !complete && !preparing, onClick = {
-            if (job?.active == true) downloads.cancel(track.id)
-            else {
-                preparing = true
-                scope.launch {
-                    try {
-                        val enriched = if (track.album.isEmpty() && track.releaseId.isNotEmpty())
-                            runCatching { Monochrome.album(track.releaseId).firstOrNull { it.id == track.id } }.getOrNull() ?: track else track
-                        (downloadsContext.applicationContext as LocalfyApp).musicStreams.save(listOf(enriched))
-                        downloads.enqueue(listOf(enriched))
-                    } finally { preparing = false }
-                }
+        TrackDownloadButton(track)
+    }
+}
+
+/** Download control for an online track: download, cancel while downloading, or a done mark. */
+@Composable
+internal fun TrackDownloadButton(track: OnlineTrack) {
+    val actions = LocalApp.current
+    val downloadsContext = LocalContext.current
+    val downloads = (downloadsContext.applicationContext as LocalfyApp).musicDownloads
+    val jobs by downloads.jobs.collectAsStateWithLifecycle()
+    val progress by downloads.progress.collectAsStateWithLifecycle()
+    val library by actions.repo.library.collectAsStateWithLifecycle()
+    val job = jobs.firstOrNull { it.id == track.id }
+    val complete = savedSong(track, library.songs, jobs) != null || job?.state == "complete"
+    val fraction = DownloadProgress.fraction(job?.state, progress[track.id])
+    var preparing by remember(track.id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    IconButton(enabled = !complete && !preparing, onClick = {
+        if (job?.active == true) downloads.cancel(track.id)
+        else {
+            preparing = true
+            scope.launch {
+                try {
+                    val enriched = if (track.album.isEmpty() && track.releaseId.isNotEmpty())
+                        runCatching { Monochrome.album(track.releaseId).firstOrNull { it.id == track.id } }.getOrNull() ?: track else track
+                    (downloadsContext.applicationContext as LocalfyApp).musicStreams.save(listOf(enriched))
+                    downloads.enqueue(listOf(enriched))
+                } finally { preparing = false }
             }
-        }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
-            DownloadMark(complete, preparing || job?.active == true, fraction)
         }
+    }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (job?.active == true) "Cancel download" else "Download ${track.title}" }) {
+        DownloadMark(complete, preparing || job?.active == true, fraction)
     }
 }
 

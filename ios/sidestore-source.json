@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.23",
+          "buildVersion": "27",
+          "date": "2026-10-05T18:48:00Z",
+          "localizedDescription": "Spitify 1.0.23 makes downloads easy to find and fixes more of what made Android lag.\n\n- **Downloads everywhere:** every song row now shows whether it plays offline. A green mark means it's on your phone; a download button means it's streamed. Tap the button to download, or the progress ring to cancel. Albums, playlists, mixes and All Songs have a **Download all** button that turns into a check once everything is offline. Search results can be downloaded too.\n- **Less lag on Android:** streamed songs no longer rewrite a large settings file each time one starts. The download manager no longer checks every downloaded file each second while any download is pending or waiting to retry.\n- **Lag reports:** if Android still feels slow, use it for a few minutes, then **Settings \u2192 Send problem report**. The report now shows where the app was stuck.\n- **Music video and Canvas are off** while a better video source is chosen.\n\nThe iPhone download is unsigned for SideStore/AltStore. The Android APK installs directly.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.23/Spitify-1.0.23-unsigned.ipa",
+          "size": 120309305,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.22",
           "buildVersion": "26",
           "date": "2026-10-05T17:03:51Z",

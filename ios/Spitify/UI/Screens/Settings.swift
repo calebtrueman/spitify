@@ -53,9 +53,6 @@ struct SettingsView: View {
                 Text("Settings, profiles, playlists and custom covers are included in your iPhone's device backup when it is enabled. Spitify does not need an account.")
                 Text("To remove the app and keep its data on this phone, choose Offload App in iPhone Storage. Delete App removes local data; reinstalling alone does not restore a device backup.").text(.caption)
             }
-            Section("Canvas") {
-                Text("The camera button beside the song title loops a few silent seconds of the song's official music video behind the player (HD when the video is). Songs without a video show their artwork.").text(.caption).foregroundStyle(.secondary)
-            }
             Section("About") {
                 LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
                 Link("Source code on GitHub", destination: URL(string: "https://github.com/calebtrueman/spitify")!)

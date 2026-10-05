@@ -66,7 +66,6 @@ struct NowPlayingView: View {
     @State private var dragDown: CGFloat = 0
     @State private var scrollTop: CGFloat = 0
     @State private var canCollapse: Bool?
-    @AppStorage("musicVideoEnabled") private var videoOpen = false
     enum Sheet: String, Identifiable { case lyrics, queue, sleep, playback; var id: String { rawValue } }
 
     var body: some View {
@@ -80,8 +79,7 @@ struct NowPlayingView: View {
                         VStack(spacing: 0) {
                             VStack(spacing: 0) {
                                 header(s)
-                                if videoOpen && !s.isSpoken { Color.clear.frame(maxHeight: .infinity).padding(.vertical, 12) }
-                                else { ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * (outer.size.width < 350 ? 0.30 : 0.38)))).frame(maxHeight: .infinity).padding(.vertical, 12) }
+                                ArtPager(side: max(1, min(outer.size.width - 44, outer.size.height * (outer.size.width < 350 ? 0.30 : 0.38)))).frame(maxHeight: .infinity).padding(.vertical, 12)
                                 titleRow(s)
                                 SeekBar().padding(.top, 6)
                                 Transport().padding(.top, 2)
@@ -102,7 +100,7 @@ struct NowPlayingView: View {
                 }
             }
         }
-        .background { if videoOpen && player.current?.isSpoken == false { CanvasBackdrop() } else { Backdrop(song: player.current, tint: tint) } }
+        .background { Backdrop(song: player.current, tint: tint) }
         .overlay { ThemeFrame() }
         .offset(y: max(0, dragDown))
         .simultaneousGesture(DragGesture(minimumDistance: 14).onChanged { value in
@@ -154,8 +152,7 @@ struct NowPlayingView: View {
             .id(s.id).transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             if !s.isSpoken {
                 HStack(spacing: 8) {
-                    ArtworkStyleButton(videoEnabled: videoOpen)
-                    Button { videoOpen.toggle() } label: { Image(systemName: videoOpen ? "video.fill" : "video.slash").font(.system(size: 22)).foregroundStyle(videoOpen ? Color.accentColor : .white).frame(width: 44, height: 44) }.accessibilityLabel(videoOpen ? "Turn off Canvas" : "Turn on Canvas")
+                    ArtworkStyleButton()
                     Spacer()
                     PlaylistButton(song: s)
                 }
