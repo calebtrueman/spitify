@@ -1,5 +1,7 @@
 package com.localfy.app.ui.screens
 
+import com.localfy.app.data.uri
+
 import com.localfy.app.ui.components.MediaRow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.*
@@ -43,8 +45,8 @@ fun OnlineMusicPanel(query: String) { MixedSearchPanel(query) }
 
 internal fun savedSong(track: OnlineTrack, songs: List<Song>, jobs: List<MusicDownloadEntity>): Song? {
     val uri = jobs.firstOrNull { it.id == track.id && it.state == "complete" }?.localUri
-    return songs.filter { it.sourceUri?.scheme != "spitify" }.firstOrNull { uri != null && it.uri.toString() == uri } ?: songs.firstOrNull {
-        it.sourceUri?.scheme != "spitify" && SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) &&
+    return songs.filter { !it.isStream }.firstOrNull { uri != null && it.uri.toString() == uri } ?: songs.firstOrNull {
+        !it.isStream && SearchMatch.sameSong(it.title, it.artist, it.durationMs, track.title, track.artist, track.durationMs) &&
             (track.album.isEmpty() || AudioFallback.sameRelease(it.album, track.album))
     }
 }
@@ -219,7 +221,7 @@ fun CatalogAlbumScreen(album: OnlineAlbum, single: OnlineTrack? = null) {
             }, modifier = Modifier.semantics { contentDescription = if (complete) "Downloaded" else if (active) "Cancel downloads" else if (single == null) "Download album" else "Download song" }) {
                 DownloadMark(complete, active || adding, albumProgress)
             }
-            if (downloaded > 0) IconButton(onClick = { actions.editMetadata(songs.filter { it.sourceUri?.scheme != "spitify" }, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
+            if (downloaded > 0) IconButton(onClick = { actions.editMetadata(songs.filter { !it.isStream }, single == null) }) { Icon(androidx.compose.material.icons.Icons.Rounded.Edit, "Edit song details") }
         }, beforeSongs = {
             if (loading) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             if (failed) item { TextButton(onClick = { reload++ }) { Text("Couldn't load the full album. Try again") } }

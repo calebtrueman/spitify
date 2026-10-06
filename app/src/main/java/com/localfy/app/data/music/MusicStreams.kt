@@ -1,5 +1,7 @@
 package com.localfy.app.data.music
 
+import com.localfy.app.data.uri
+
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.util.UnstableApi
@@ -102,7 +104,7 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
     private fun cachedSong(track: OnlineTrack): Song = songs.getOrPut(track.id) { song(track) }
     @Synchronized fun knownTracks(): List<OnlineTrack> = tracks.values.toList()
     @Synchronized fun track(id: String): OnlineTrack? = tracks[id]
-    @Synchronized fun track(song: Song): OnlineTrack? = song.sourceUri?.takeIf { it.scheme == "spitify" }?.lastPathSegment?.let(tracks::get)
+    @Synchronized fun track(song: Song): OnlineTrack? = song.sourceUri?.takeIf { song.isStream }?.substringAfterLast('/')?.let(tracks::get)
     @Synchronized fun lookup(id: Long): Song? = tracksBySongId[id]?.let(::cachedSong)
     @Synchronized fun contains(track: OnlineTrack) = track.id in savedIds
     @Synchronized fun save(items: List<OnlineTrack>) { items.forEach { register(it); if (savedIds.add(it.id)) { prefs.edit().putLong("added:${it.id}", System.currentTimeMillis() / 1000).apply(); songs.remove(it.id) } }; persistSaved() }
@@ -114,7 +116,7 @@ class MusicStreams(private val context: Context, storageName: String = "music_st
         albumId = streamId("album:" + track.releaseId), albumArtist = track.albumArtist ?: track.primaryArtist,
         durationMs = track.durationMs, track = track.track, disc = track.disc, year = 0, genre = null,
         folder = "", dateAddedSec = prefs.getLong("added:${track.id}", 0), sizeBytes = 0, mimeType = null,
-        sourceUri = Uri.parse("spitify://music/${track.id}"), artUrl = track.artwork, explicit = track.explicit, artistNames = track.artistNames,
+        sourceUri = "spitify://music/${track.id}", artUrl = track.artwork, explicit = track.explicit, artistNames = track.artistNames,
     )
     internal fun lastSource(track: OnlineTrack): OnlineTrack = synchronized(this) { sources[track.id] }?.let {
         runCatching { Monochrome.parseTrack(JSONObject(it)) }.getOrNull()

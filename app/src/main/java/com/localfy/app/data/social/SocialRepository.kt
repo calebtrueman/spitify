@@ -52,7 +52,7 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
         state.playlists[playlist.key] = playlist; persist()
     }
     fun create(name: String, songs: List<com.localfy.app.data.Song>, streams: com.localfy.app.data.music.MusicStreams, kind: String = "playlist"): SharedPlaylist {
-        val playlist = SharedPlaylist(owner = publicKey, name = name, image = songs.firstOrNull()?.artUrl?.takeIf(SocialRules::publicURL), kind = kind, tracks = songs.map { SharedTrack.from(it, streams) })
+        val playlist = SharedPlaylist(owner = publicKey, name = name, image = songs.firstOrNull()?.artUrl?.takeIf(SocialRules::publicURL), kind = kind, tracks = songs.map { SharedTrack.from(it, streams.track(it)) })
         save(playlist); return playlist
     }
     fun copy(playlist: SharedPlaylist): SharedPlaylist {
@@ -132,9 +132,10 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
         rooms.rooms.clear(); rooms.rooms[room.key] = room; rooms.activeKey = room.key; changed(); return room
     }
     suspend fun joinRoom(link: SocialLink) {
-        requireConnection(); require(link.type == "room" && link.id != null && link.owner != publicKey && rooms.activeKey == null) { "Leave your current Room before joining another." }
-        rooms.requestedKey = "${link.owner}:${link.id}"; changed()
-        try { relay.send(SocialPacket("roomRequest", RoomRequest(roomID = link.id, host = link.owner, action = "join", name = state.profiles[publicKey]?.name ?: "Guest").json()), "roomJoin:${link.id}", link.owner, 120_000) }
+        requireConnection(); val roomId = link.id
+        require(link.type == "room" && roomId != null && link.owner != publicKey && rooms.activeKey == null) { "Leave your current Room before joining another." }
+        rooms.requestedKey = "${link.owner}:$roomId"; changed()
+        try { relay.send(SocialPacket("roomRequest", RoomRequest(roomID = roomId, host = link.owner, action = "join", name = state.profiles[publicKey]?.name ?: "Guest").json()), "roomJoin:${link.id}", link.owner, 120_000) }
         catch (e: Exception) { rooms.requestedKey = null; changed(); throw e }
     }
     suspend fun sendRoom(room: ListeningRoom, also: List<String> = emptyList()) {

@@ -1,8 +1,5 @@
 package com.localfy.app.data
 
-import android.content.ContentUris
-import android.net.Uri
-import android.provider.MediaStore
 
 data class Song(
     val id: Long,
@@ -22,8 +19,8 @@ data class Song(
     val mimeType: String?,
     /** File name on disk, e.g. "01 - Intro.flac" (used to find matching .lrc files). */
     val fileName: String = "",
-    /** Streams / downloaded files (podcast episodes); null means a MediaStore track. */
-    val sourceUri: Uri? = null,
+    /** Streams / downloaded files (podcast episodes) as a URI string; null means a library file (MediaStore / desktop folder). */
+    val sourceUri: String? = null,
     /** Remote artwork (podcasts); null means artwork comes from MediaStore / tags. */
     val artUrl: String? = null,
     /** Spoken word (podcast episode or audiobook chapter): resume, skip buttons, no crossfade. */
@@ -40,10 +37,9 @@ data class Song(
     val creditedArtists: List<String> get() = ArtistCredits.names(artist, artistNames, albumArtist)
     val primaryArtist: String get() = ArtistCredits.primary(artist, artistNames, albumArtist)
 
-    val uri: Uri get() = sourceUri ?: ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-
-    /** Album URI; MediaStore can produce a thumbnail for it (used for notification / lock-screen art). */
-    val albumArtUri: Uri get() = artUrl?.let(Uri::parse) ?: ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, albumId)
+    /** "spitify" for streamed music, "http(s)" for episodes, "file"/"content" for local copies, null for library files. */
+    val sourceScheme: String? get() = sourceUri?.substringBefore(':', "")?.takeIf { it.isNotEmpty() }
+    val isStream: Boolean get() = sourceScheme == "spitify"
 
     /** Formats ExoPlayer has no container support for (shown greyed out, skipped in queues). */
     val playable: Boolean get() = fileName.substringAfterLast('.', "").lowercase() !in UNSUPPORTED_EXTENSIONS

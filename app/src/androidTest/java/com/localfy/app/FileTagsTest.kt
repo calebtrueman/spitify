@@ -28,7 +28,7 @@ class FileTagsTest {
             put(MediaStore.Audio.Media.RELATIVE_PATH, "Music/SpitifyTests/")
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }))
-        val song = Song(0, "Test", "Artist", "Album", 0, "Artist", 100, 1, 1, 2026, null, "", 0, 0, "audio/flac", name, uri)
+        val song = Song(0, "Test", "Artist", "Album", 0, "Artist", 100, 1, 1, 2026, null, "", 0, 0, "audio/flac", name, uri.toString())
         try {
             val original = instrumentation.context.assets.open("tags/sample.flac").use { it.readBytes() }
             resolver.openOutputStream(uri)!!.use { it.write(original) }

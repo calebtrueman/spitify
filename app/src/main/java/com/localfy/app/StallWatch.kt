@@ -72,7 +72,7 @@ object StallWatch {
         val a = app as LocalfyApp
         val song = a.player.state.value.currentId?.let(a::resolve) ?: return "nothing"
         when {
-            song.sourceUri?.scheme == "spitify" -> "streamed song"
+            song.isStream -> "streamed song"
             song.isPodcast -> "episode"
             else -> "local song"
         }

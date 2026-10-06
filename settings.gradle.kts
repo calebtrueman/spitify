@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "Localfy"
 include(":app")
 include(":ffmpeg")
+include(":core")

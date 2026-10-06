@@ -29,7 +29,7 @@ class AutomaticMetadataTest {
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }))
         val id = uri.lastPathSegment!!.toLong()
-        val song = Song(id, "Test", "Artist", "Album", 0, "Artist", 100, 1, 1, 2026, null, "", 0, 0, "audio/flac", name, uri)
+        val song = Song(id, "Test", "Artist", "Album", 0, "Artist", 100, 1, 1, 2026, null, "", 0, 0, "audio/flac", name, uri.toString())
         try {
             instrumentation.context.assets.open("tags/sample.flac").use { input -> resolver.openOutputStream(uri)!!.use(input::copyTo) }
             resolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)

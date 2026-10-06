@@ -323,5 +323,5 @@ object PlaylistGenerator {
  * so a key with random jitter changes mid-sort; TimSort then throws "Comparison method violates its general
  * contract!" on lists of more than ~32 items (real libraries).
  */
-internal inline fun <T> Iterable<T>.rankedBy(score: (T) -> Double): List<T> =
+inline fun <T> Iterable<T>.rankedBy(score: (T) -> Double): List<T> =
     map { it to score(it) }.sortedByDescending { it.second }.map { it.first }

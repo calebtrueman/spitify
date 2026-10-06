@@ -85,7 +85,7 @@ object AudioFallback {
         track.copy(playable = true, audioURL = audio.getString("url"), audioExtension = "m4a", fallbackTried = true)
     }
 
-    internal fun request(path: String, body: JSONObject): JSONObject {
+    fun request(path: String, body: JSONObject): JSONObject {
         body.put("context", JSONObject().put("client", JSONObject().put("clientName", "WEB").put("clientVersion", VERSION)))
         val c = URI("https://www.youtube.com/youtubei/v1/$path").toURL().openConnection() as HttpURLConnection
         try {

@@ -1,7 +1,6 @@
 package com.localfy.app.data.social
 
 import com.localfy.app.data.Song
-import com.localfy.app.data.music.MusicStreams
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
@@ -10,9 +9,9 @@ import java.text.Normalizer
 import java.util.Locale
 import java.util.UUID
 
-internal fun JSONObject.text(key: String): String? = optString(key).takeIf { it.isNotEmpty() && it != "null" }
-internal fun JSONObject.strings(key: String): List<String> = optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
-internal fun <T> JSONObject.objects(key: String, parse: (JSONObject) -> T): List<T> = optJSONArray(key)?.let { a -> (0 until a.length()).map { parse(a.getJSONObject(it)) } } ?: emptyList()
+fun JSONObject.text(key: String): String? = optString(key).takeIf { it.isNotEmpty() && it != "null" }
+fun JSONObject.strings(key: String): List<String> = optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+fun <T> JSONObject.objects(key: String, parse: (JSONObject) -> T): List<T> = optJSONArray(key)?.let { a -> (0 until a.length()).map { parse(a.getJSONObject(it)) } } ?: emptyList()
 
 data class SharedTrack(
     val id: String = UUID.randomUUID().toString(), val title: String, val artist: String, val album: String = "", val durationMs: Long = 0,
@@ -23,8 +22,8 @@ data class SharedTrack(
     fun json() = JSONObject().put("id", id).put("title", title).put("artist", artist).put("album", album).put("durationMs", durationMs).put("sourceID", sourceID).put("releaseID", releaseID).put("spotifyID", spotifyID).put("isrc", isrc).put("artwork", artwork)
     companion object {
         fun parse(o: JSONObject) = SharedTrack(o.getString("id"), o.getString("title"), o.getString("artist"), o.optString("album"), o.optLong("durationMs"), o.text("sourceID"), o.text("releaseID"), o.text("spotifyID"), o.text("isrc"), o.text("artwork"))
-        fun from(song: Song, streams: MusicStreams): SharedTrack {
-            val online = streams.track(song)
+        /** [online] is the catalogue track behind a streamed song, if any. */
+        fun from(song: Song, online: com.localfy.app.data.music.OnlineTrack?): SharedTrack {
             return SharedTrack(title = song.title, artist = song.artist, album = song.album, durationMs = song.durationMs, sourceID = online?.id?.takeIf(com.localfy.app.data.music.Monochrome::validId), releaseID = online?.releaseId, artwork = song.artUrl?.takeIf(SocialRules::publicURL))
         }
     }

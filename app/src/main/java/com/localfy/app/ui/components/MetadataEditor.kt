@@ -1,5 +1,7 @@
 package com.localfy.app.ui.components
 
+import com.localfy.app.data.uri
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts

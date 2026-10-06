@@ -99,7 +99,7 @@ object Monochrome {
         return parseAlbum(get("releases/$id"), id)
     }
 
-    internal fun parseAlbum(album: JSONObject, requestedId: String): List<OnlineTrack> {
+    fun parseAlbum(album: JSONObject, requestedId: String): List<OnlineTrack> {
         val returnedId = album.optString("releaseId", album.optString("id"))
         check(returnedId.isEmpty() || returnedId == requestedId) { "The music source returned a different album. Please try again." }
         val tracks = album.getJSONArray("tracks")
@@ -107,7 +107,7 @@ object Monochrome {
             requestedId, artistNames(album), album.optString("releaseType").equals("COMPILATION", true))
     }
 
-    internal fun validateAlbumTracks(tracks: List<OnlineTrack>, releaseId: String, albumArtists: List<String>, compilation: Boolean = false): List<OnlineTrack> {
+    fun validateAlbumTracks(tracks: List<OnlineTrack>, releaseId: String, albumArtists: List<String>, compilation: Boolean = false): List<OnlineTrack> {
         val candidates = tracks.filter { it.releaseId.isBlank() || it.releaseId == releaseId }.distinctBy { it.id }
         val artists = albumArtists.map { it.trim().lowercase(java.util.Locale.ROOT) }.toSet()
         fun names(track: OnlineTrack) = track.artistNames.orEmpty().map { it.trim().lowercase(java.util.Locale.ROOT) }.toSet()

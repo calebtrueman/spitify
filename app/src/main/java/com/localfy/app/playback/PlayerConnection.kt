@@ -1,5 +1,7 @@
 package com.localfy.app.playback
 
+import com.localfy.app.data.uri
+
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
@@ -614,7 +616,7 @@ class PlayerConnection(
                 (app.taste.songRadio(seed) + sources + library).filter(::allowed).distinctBy { it.id }
             }
             // A single streamed song should also become a station, without saving picks to the library.
-            if (pool.size < 4 && seed.sourceUri?.scheme == "spitify") {
+            if (pool.size < 4 && seed.isStream) {
                 val online = try { withTimeoutOrNull(12_000) { com.localfy.app.data.music.Monochrome.search(seed.primaryArtist) }.orEmpty() }
                     catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                     catch (_: Exception) { emptyList() }

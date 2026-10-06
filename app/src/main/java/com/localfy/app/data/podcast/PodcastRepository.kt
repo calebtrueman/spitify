@@ -239,7 +239,7 @@ fun EpisodeEntity.toSong(podcast: PodcastEntity): Song = Song(
     sizeBytes = 0,
     mimeType = mimeType,
     fileName = audioUrl.substringBefore('?').substringAfterLast('/'),
-    sourceUri = localPath?.let { Uri.fromFile(File(it)) } ?: Uri.parse(audioUrl),
+    sourceUri = localPath?.let { Uri.fromFile(File(it)).toString() } ?: audioUrl,
     artUrl = artworkUrl ?: podcast.artworkUrl,
     isPodcast = true,
     isAudiobook = podcast.kind == KIND_AUDIOBOOK,

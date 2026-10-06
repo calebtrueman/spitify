@@ -1,5 +1,7 @@
 package com.localfy.app.data.meta
 
+import com.localfy.app.data.uri
+
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.edit
@@ -40,17 +42,7 @@ data class MetadataCandidate(
     val source: String,
 )
 
-/** Fields a user (or the auto-fixer) can set; null = keep the file's value. */
-data class MetadataEdit(
-    val title: String? = null,
-    val artist: String? = null,
-    val album: String? = null,
-    val albumArtist: String? = null,
-    val genre: String? = null,
-    val year: Int? = null,
-    val track: Int? = null,
-    val disc: Int? = null,
-)
+
 
 /**
  * Keeps library edits in sync with file tags. Manual saves report write failures;

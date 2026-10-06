@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.media3.extractor)
     implementation(libs.media3.inspector)
     implementation(project(":ffmpeg"))
+    implementation(project(":core"))
     implementation(libs.coroutines.guava)
 
     implementation(libs.room.runtime)

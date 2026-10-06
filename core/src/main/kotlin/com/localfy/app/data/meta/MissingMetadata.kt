@@ -1,7 +1,7 @@
 package com.localfy.app.data.meta
 
 /** A value already in the file or chosen in the app wins over an online suggestion. */
-internal object MissingMetadata {
+object MissingMetadata {
     fun fill(stored: MetadataEdit, saved: MetadataEdit = MetadataEdit(), suggested: MetadataEdit = MetadataEdit()) = MetadataEdit(
         title = text(stored.title, saved.title, suggested.title),
         artist = text(stored.artist, saved.artist, suggested.artist),

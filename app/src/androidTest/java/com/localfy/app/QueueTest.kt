@@ -32,7 +32,7 @@ class QueueTest {
         val app = instrumentation.targetContext.applicationContext as LocalfyApp
         val audio = File(app.cacheDir, "queue-test.flac")
         instrumentation.context.assets.open("tags/sample.flac").use { input -> audio.outputStream().use(input::copyTo) }
-        fun song(id: Long) = Song(id, "$id", "Test", "Test", 1, "Test", 1000, 1, 1, 0, null, "", 0, audio.length(), "audio/flac", "test.flac", Uri.fromFile(audio))
+        fun song(id: Long) = Song(id, "$id", "Test", "Test", 1, "Test", 1000, 1, 1, 0, null, "", 0, audio.length(), "audio/flac", "test.flac", Uri.fromFile(audio).toString())
         val control = main { MediaController.Builder(app, SessionToken(app, ComponentName(app, PlaybackService::class.java))).buildAsync() }.get(20, TimeUnit.SECONDS)
         val autoplay = app.player.state.value.autoplay
         try {
@@ -63,7 +63,7 @@ class QueueTest {
         val app = instrumentation.targetContext.applicationContext as LocalfyApp
         val audio = File(app.cacheDir, "autoplay-test.flac")
         instrumentation.context.assets.open("playback/quiet-24.flac").use { input -> audio.outputStream().use(input::copyTo) }
-        fun song(id: Long) = Song(id, "Song $id", "Test", "Test", 1, "Test", 1000, 1, 1, 0, null, "", 0, audio.length(), "audio/flac", "test.flac", Uri.fromFile(audio))
+        fun song(id: Long) = Song(id, "Song $id", "Test", "Test", 1, "Test", 1000, 1, 1, 0, null, "", 0, audio.length(), "audio/flac", "test.flac", Uri.fromFile(audio).toString())
         val control = main { MediaController.Builder(app, SessionToken(app, ComponentName(app, PlaybackService::class.java))).buildAsync() }.get(20, TimeUnit.SECONDS)
         val oldAutoplay = app.player.state.value.autoplay
         try {

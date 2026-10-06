@@ -17,7 +17,7 @@ data class VoiceRequest(
 
 data class VoiceSelection(val songs: List<Song>, val source: String)
 
-internal object VoiceSearch {
+object VoiceSearch {
     fun normalized(text: String) = Normalizer.normalize(text, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
         .lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 

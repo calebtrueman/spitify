@@ -1,7 +1,7 @@
 package com.localfy.app.data.music
 
 /** URLs and response labels are not reliable: use the bytes before picking an extension. */
-internal enum class AudioContainer(val extension: String, val mime: String, val label: String) {
+enum class AudioContainer(val extension: String, val mime: String, val label: String) {
     FLAC("flac", "audio/flac", "FLAC"),
     OPUS("opus", "audio/opus", "Opus"),
     OGG("ogg", "audio/ogg", "Ogg"),

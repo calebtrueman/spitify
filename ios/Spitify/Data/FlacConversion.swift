@@ -42,7 +42,7 @@ final class FlacConversion {
                 do {
                     try await AacConverter.convert(source, to: destination)
                     let tags = await TagReader.read(source)
-                    try FileTags.shared.write(destination, edit: MetadataOverride(title: tags.title, artist: tags.artist, album: tags.album,
+                    try await FileTags.shared.write(destination, edit: MetadataOverride(title: tags.title, artist: tags.artist, album: tags.album,
                         albumArtist: tags.albumArtist, genre: tags.genre, year: tags.year, track: tags.track, disc: tags.disc, source: "file"), artwork: tags.artwork)
                     let size = Int64((try? FileManager.default.attributesOfItem(atPath: destination.path)[.size] as? Int) ?? 0)
                     try FileManager.default.removeItem(at: source)

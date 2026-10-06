@@ -36,7 +36,7 @@ sealed interface DownloadState {
     data object NotApplicable : DownloadState
 }
 
-private fun Song.isStream() = sourceUri?.scheme == "spitify"
+
 
 /** Queued, finding a source, transferring or waiting to retry. */
 private val com.localfy.app.data.music.MusicDownloadEntity.inProgress: Boolean get() = state !in setOf("complete", "failed", "cancelled")
@@ -44,7 +44,7 @@ private val com.localfy.app.data.music.MusicDownloadEntity.inProgress: Boolean g
 @Composable
 fun rememberDownloadState(song: Song): DownloadState {
     if (song.isPodcast || song.isAudiobook) return DownloadState.NotApplicable
-    if (!song.isStream()) return DownloadState.OnDevice
+    if (!song.isStream) return DownloadState.OnDevice
     val app = LocalContext.current.applicationContext as LocalfyApp
     val trackId = remember(song.id) { app.musicStreams.track(song)?.id } ?: return DownloadState.Online
     val jobs by app.musicDownloads.jobsById.collectAsStateWithLifecycle()
@@ -56,7 +56,7 @@ fun rememberDownloadState(song: Song): DownloadState {
 
 /** Saves streamed songs to the library and queues them for download, reporting the result. */
 fun downloadSongs(app: LocalfyApp, songs: List<Song>) {
-    val tracks: List<OnlineTrack> = songs.mapNotNull { if (it.isStream()) app.musicStreams.track(it) else null }
+    val tracks: List<OnlineTrack> = songs.mapNotNull { if (it.isStream) app.musicStreams.track(it) else null }
     if (tracks.isEmpty()) return
     app.musicStreams.save(tracks)
     app.appScope.launch {
@@ -95,7 +95,7 @@ fun DownloadedMark(modifier: Modifier = Modifier) {
 fun DownloadAllButton(songs: List<Song>) {
     val app = LocalContext.current.applicationContext as LocalfyApp
     val jobs by app.musicDownloads.jobsById.collectAsStateWithLifecycle()
-    val streams = remember(songs) { songs.filter { it.isStream() && !it.isPodcast && !it.isAudiobook } }
+    val streams = remember(songs) { songs.filter { it.isStream && !it.isPodcast && !it.isAudiobook } }
     if (songs.none { !it.isPodcast && !it.isAudiobook }) return
     val ids = remember(streams) { streams.associateWith { app.musicStreams.track(it)?.id } }
     val waiting = streams.filter { s -> ids[s]?.let { jobs[it]?.inProgress } != true }

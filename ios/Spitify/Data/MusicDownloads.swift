@@ -235,16 +235,16 @@ final class MusicDownloads {
             let track = jobs[index].track
             let reader = try FileHandle(forReadingFrom: file)
             let header = try reader.read(upToCount: 512) ?? Data(); try reader.close()
-            guard let ext = MusicResourceLoader.audioExtension(header) else {
+            guard let detected = MusicResourceLoader.audioExtension(header) else {
                 throw MusicSourceError.message("The download did not contain a supported audio file.")
             }
-            if file.pathExtension.lowercased() != ext {
-                audioFile = file.deletingPathExtension().appendingPathExtension(ext)
+            if file.pathExtension.lowercased() != detected {
+                audioFile = file.deletingPathExtension().appendingPathExtension(detected)
                 try FileManager.default.moveItem(at: file, to: audioFile)
             }
             var quality = try await validateAudio(audioFile, track: track)
             audioChecked = true
-            var ext = ext
+            var ext = detected
             // Lossless downloads are saved as AAC 256 kbit/s .m4a to save space; anything that can't
             // be converted (e.g. surround) keeps its original format.
             if ext == "flac" {

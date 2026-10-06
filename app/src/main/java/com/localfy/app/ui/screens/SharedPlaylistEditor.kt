@@ -55,7 +55,7 @@ fun SharedPlaylistEditor(playlist: SharedPlaylist, initiallyExpanded: Boolean = 
             Text("${selected.size} selected")
             if (selected.isNotEmpty()) TextButton(onClick = { selected = emptyMap() }) { Text("Clear selection") }
             library.songs.filter { query.isBlank() || SearchMatch.score(query, it.title, it.artist, it.album) != null }.take(30).forEach { song ->
-                SharedTrackChoice(SharedTrack.from(song, app.musicStreams), song, "local:${song.id}" in selected) { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams)) else selected }
+                SharedTrackChoice(SharedTrack.from(song, app.musicStreams.track(song)), song, "local:${song.id}" in selected) { checked -> selected = if (!checked) selected - "local:${song.id}" else if (selected.size < 100) selected + ("local:${song.id}" to SharedTrack.from(song, app.musicStreams.track(song))) else selected }
             }
             Button(enabled = !busy && selected.isNotEmpty(), onClick = {
                 val tracks = selected.keys.sorted().mapNotNull { selected[it] }

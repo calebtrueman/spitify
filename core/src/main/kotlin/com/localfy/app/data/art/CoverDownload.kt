@@ -6,7 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** Keep one checked cover for both the preview and the later file save. */
-internal object CoverDownload {
+object CoverDownload {
     private const val MAX_BYTES = 20_000_000
 
     fun urls(source: String): List<String> {

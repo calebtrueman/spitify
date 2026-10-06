@@ -26,7 +26,7 @@ class ListeningRooms(private val app: LocalfyApp) {
     fun host(name: String) {
         hostTracks.clear()
         val songs = player.state.value.queue.mapNotNull(app::resolve).filter { !it.isPodcast && !it.isAudiobook }.take(200)
-        social.hostRoom(name, songs.map { SharedTrack.from(it, app.musicStreams) })
+        social.hostRoom(name, songs.map { SharedTrack.from(it, app.musicStreams.track(it)) })
         app.appScope.launch { tick() }
     }
     suspend fun approve(incoming: IncomingRoomRequest, allowed: Boolean) {
@@ -86,7 +86,7 @@ class ListeningRooms(private val app: LocalfyApp) {
         val state = player.state.value
         val entries = state.queue.mapIndexedNotNull { index, id -> app.resolve(id)?.let { index to it } }.filter { !it.second.isPodcast && !it.second.isAudiobook }.take(200)
         val songs = entries.map { it.second }
-        val tracks = songs.mapIndexed { index, song -> hostTracks.getOrPut("$index:${song.id}") { SharedTrack.from(song, app.musicStreams) } }
+        val tracks = songs.mapIndexed { index, song -> hostTracks.getOrPut("$index:${song.id}") { SharedTrack.from(song, app.musicStreams.track(song)) } }
         val keys = songs.mapIndexed { index, song -> "$index:${song.id}" }.toSet(); hostTracks.keys.retainAll(keys)
         val currentID = tracks.getOrNull(entries.indexOfFirst { it.first == state.currentIndex })?.id
         val update = current.copy(queue = tracks, currentID = currentID, positionMs = player.positionMs.value, playing = state.isPlaying && currentID != null, speed = state.speed, observedAt = SocialRules.now, revision = current.revision + 1)

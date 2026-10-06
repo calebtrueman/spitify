@@ -68,7 +68,7 @@ object SpotifyCodeLookup {
             error("Spotify's code lookup is unavailable. Try again shortly.")
         }
     }
-    internal fun totp(base32: String, seconds: Long): String {
+    fun totp(base32: String, seconds: Long): String {
         val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; val bytes = ArrayList<Byte>(); var buffer = 0L; var count = 0
         for (c in base32) { val value = alphabet.indexOf(c); if (value < 0) continue; buffer = (buffer shl 5) or value.toLong(); count += 5
             if (count >= 8) { count -= 8; bytes += ((buffer shr count) and 255).toByte() }; buffer = buffer and ((1L shl count)-1)
