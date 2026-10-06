@@ -113,6 +113,12 @@ class TasteRepository(
 
     fun hideSong(id: Long) { _hiddenSongs.value = _hiddenSongs.value + id; prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) } }
     fun hideArtist(name: String) { _hiddenArtists.value = _hiddenArtists.value + name; prefs.edit { putStringSet("hiddenArtists", _hiddenArtists.value) } }
+    /** Follows songs to their new ids after a file was replaced (e.g. converted to AAC). */
+    fun remapSongs(ids: Map<Long, Long>) {
+        if (_hiddenSongs.value.none { it in ids }) return
+        _hiddenSongs.value = _hiddenSongs.value.map { ids[it] ?: it }.toSet()
+        prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) }
+    }
     fun unhideAll() { _hiddenSongs.value = emptySet(); _hiddenArtists.value = emptySet(); prefs.edit { remove("hiddenSongs"); remove("hiddenArtists") } }
 
     fun songRadio(seed: Song): List<Song> = _model.value?.let { PlaylistGenerator.songRadio(it, seed) } ?: listOf(seed)

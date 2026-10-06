@@ -167,6 +167,13 @@ final class MusicDownloads {
 
     func resumePending() { pump() }
 
+    /// A downloaded file was replaced (e.g. converted to AAC); keep its job pointing at the new file.
+    func remapFile(from old: String, to new: String) {
+        var changed = false
+        for i in jobs.indices where jobs[i].relativePath == old { jobs[i].relativePath = new; changed = true }
+        if changed { persist() }
+    }
+
     private func pump() {
         guard !restoring else { return }
         retryWakeup?.cancel()
@@ -235,8 +242,19 @@ final class MusicDownloads {
                 audioFile = file.deletingPathExtension().appendingPathExtension(ext)
                 try FileManager.default.moveItem(at: file, to: audioFile)
             }
-            let quality = try await validateAudio(audioFile, track: track)
+            var quality = try await validateAudio(audioFile, track: track)
             audioChecked = true
+            var ext = ext
+            // Lossless downloads are saved as AAC 256 kbit/s .m4a to save space; anything that can't
+            // be converted (e.g. surround) keeps its original format.
+            if ext == "flac" {
+                let aac = audioFile.deletingPathExtension().appendingPathExtension("m4a")
+                do {
+                    try await AacConverter.convert(audioFile, to: aac)
+                    try? FileManager.default.removeItem(at: audioFile)
+                    audioFile = aac; ext = "m4a"; quality = AacConverter.label
+                } catch { try? FileManager.default.removeItem(at: aac) }
+            }
             var artwork: Data?
             if let art = track.artwork {
                 guard let data = await HTTP.get(art) else { throw MusicSourceError.message("Could not download the cover. Please retry.") }

@@ -252,7 +252,9 @@ class PlayerConnection(
 
     private fun publish(queueChanged: Boolean = true) {
         val c = controller ?: return
-        val ids = if (queueChanged || _state.value.queue.size != c.mediaItemCount) {
+        // Rebuild when the queue changed, or whenever the cached list disagrees with what's playing.
+        val stale = _state.value.queue.getOrNull(c.currentMediaItemIndex)?.toString() != c.currentMediaItem?.mediaId
+        val ids = if (queueChanged || stale || _state.value.queue.size != c.mediaItemCount) {
             (0 until c.mediaItemCount).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
         } else _state.value.queue
         _state.value = _state.value.copy(
@@ -637,6 +639,27 @@ class PlayerConnection(
             if (c.currentMediaItemIndex > 40) c.removeMediaItems(0, c.currentMediaItemIndex - 30)
             saveQueue()
         }
+    }
+
+    /**
+     * Points queue items at replacement files (e.g. a FLAC converted to AAC) so they don't try to
+     * play deleted files. The playing item is left alone; conversion never touches it.
+     */
+    /** The song the player is actually on, straight from the player (not the cached UI state). */
+    fun playingSongId(): Long? = controller?.currentMediaItem?.mediaId?.toLongOrNull() ?: _state.value.currentId
+
+    fun remapSongs(ids: Map<Long, Long>) {
+        val c = controller ?: return
+        for (i in 0 until c.mediaItemCount) {
+            if (i == c.currentMediaItemIndex) continue
+            val item = c.getMediaItemAt(i)
+            val new = item.mediaId.toLongOrNull()?.let(ids::get) ?: continue
+            val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, new)
+            c.replaceMediaItem(i, item.buildUpon().setMediaId(new.toString()).setUri(uri)
+                .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(uri).build()).build())
+        }
+        unshuffledOrder = unshuffledOrder?.map { ids[it] ?: it }
+        saveQueue()
     }
 
     private fun setSleepGain(gain: Float) {

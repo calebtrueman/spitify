@@ -595,6 +595,13 @@ final class Player {
     }
 
     /// Restores last session's queue, paused, once the library has loaded.
+    /// Points queued songs at replacement files (e.g. a FLAC converted to AAC). The playing song is left alone.
+    func remapSongs(_ replacements: [String: Song]) {
+        for i in queue.indices where i != index { if let s = replacements[queue[i].id] { queue[i] = s } }
+        unshuffled = unshuffled?.map { replacements[$0.id] ?? $0 }
+        saveQueue()
+    }
+
     func restore(lookup: (String) -> Song?) {
         guard queue.isEmpty else { return }
         let d = UserDefaults.standard

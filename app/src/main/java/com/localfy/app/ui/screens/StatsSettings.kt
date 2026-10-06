@@ -219,6 +219,7 @@ fun SettingsScreen() {
         item {
             SwitchRow("Hide short audio", "Skip voice notes, ringtones and clips under 30 seconds", hideShort, app.repo::setHideShortTracks, Modifier.padding(horizontal = 16.dp))
         }
+        item { FlacConversionRow() }
 
         item { SectionHeader("Galaxy Z Fold8") }
         item {
@@ -248,7 +249,7 @@ fun SettingsScreen() {
 }
 
 @Composable
-private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
+internal fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary)

@@ -44,6 +44,7 @@ final class AppModel {
     let lyrics = LyricsService()
     let player = Player()
     let musicDownloads = MusicDownloads.shared
+    let flacConversion = FlacConversion()
     let musicStreams = MusicStreams.shared
     let social = SocialStore()
     let artistFollows = ArtistFollows()

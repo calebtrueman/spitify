@@ -267,11 +267,13 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
     private suspend fun publish(job: MusicDownloadEntity, expectedSize: Long) {
         val originalTrack = job.track()
         val file = temp(job.id)
-        val container = try { file.inputStream().use { AudioContainer.detect(it.readNBytes(128)) } }
+        val sourceContainer = try { file.inputStream().use { AudioContainer.detect(it.readNBytes(128)) } }
             catch (e: Exception) { throw InvalidDownloadedAudio(e) }
             ?: throw InvalidDownloadedAudio(IllegalArgumentException("The source did not return a supported audio file."))
-        val track = originalTrack.copy(audioExtension = container.extension)
-        val quality = try {
+        val sourceTrack = originalTrack.copy(audioExtension = sourceContainer.extension)
+        val track = sourceTrack
+        val container = sourceContainer
+        val sourceQuality = try {
         check(expectedSize <= 0 || file.length() == expectedSize) { "The audio download is incomplete." }
         if (track.audioExtension == "flac") FlacInfo.read(file, track.durationMs).label else {
             val reader = android.media.MediaMetadataRetriever()
@@ -286,9 +288,22 @@ class MusicDownloads(private val context: Context, private val db: LocalfyDataba
             android.util.Log.w("MusicDownloads", "Audio check failed for ${job.id}", e)
             throw InvalidDownloadedAudio(e)
         }
+        // Lossless downloads are saved as AAC 256 kbit/s .m4a to save space. Anything the phone can't
+        // convert (e.g. surround or an unusual sample rate) keeps its original format.
+        val aac = if (sourceContainer == AudioContainer.FLAC) try {
+            File.createTempFile("aac-", ".m4a", context.cacheDir).also { out -> AacTranscoder.transcode({ it.setDataSource(file.path) }, out) }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.w("MusicDownloads", "Kept FLAC for ${job.id}", e); null
+        } else null
+        return publishAs(job, if (aac != null) sourceTrack.copy(audioExtension = "m4a") else track, if (aac != null) AudioContainer.M4A else container,
+            if (aac != null) AacTranscoder.LABEL else sourceQuality, aac ?: file).also { aac?.delete() }
+    }
+
+    private suspend fun publishAs(job: MusicDownloadEntity, track: OnlineTrack, container: AudioContainer, quality: String, audio: File) {
         val tagged = File.createTempFile("tagged-", ".${track.audioExtension}", context.cacheDir)
         try {
-            file.copyTo(tagged, overwrite = true)
+            audio.copyTo(tagged, overwrite = true)
             val artwork = track.artwork?.let { url ->
                 val data = com.localfy.app.data.art.CoverDownload.load(url)
                 val cover = File.createTempFile("cover-", ".jpg", context.cacheDir)

@@ -48,6 +48,7 @@ struct SettingsView: View {
                 Button(app.library.scanning ? "Scanning…" : "Rescan") { Task { await app.library.scan() } }
                 LabeledContent("Songs", value: "\(app.library.library.songs.count)")
                 LabeledContent("Albums", value: "\(app.library.library.albums.count)")
+                FlacConversionRow()
             } header: { Text("Library") } footer: { Text("Spitify plays files in Files › On My iPhone › Spitify, plus downloaded, DRM-free songs from the Music app. Apple Music streaming tracks are protected and can't be played by other apps.") }
             Section("Automatic backup") {
                 Text("Settings, profiles, playlists and custom covers are included in your iPhone's device backup when it is enabled. Spitify does not need an account.")

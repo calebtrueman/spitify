@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
                         app.player.connect()
                     }
                     AutomaticTagWritePermission(app)
+                    FlacDeleteApproval(app)
                     LocalfyRoot(this@MainActivity)
                 }
             }
@@ -266,6 +267,23 @@ private fun CrashScreen(report: String, onSend: () -> Unit, onContinue: () -> Un
         Button(onClick = onSend, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1ED760), contentColor = Color.Black)) { Text("Send crash report") }
         Spacer(Modifier.height(8.dp))
         androidx.compose.material3.TextButton(onClick = onContinue) { Text("Open Spitify", color = Color.White) }
+    }
+}
+
+/** Converting FLAC to AAC: one Android prompt to delete the originals Spitify didn't create. */
+@Composable
+private fun FlacDeleteApproval(app: LocalfyApp) {
+    val state by app.flacConversion.state.collectAsStateWithLifecycle()
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        app.flacConversion.approvalResult(result.resultCode == android.app.Activity.RESULT_OK)
+    }
+    val waiting = state as? com.localfy.app.data.music.FlacConversion.State.NeedsApproval
+    LaunchedEffect(waiting) {
+        if (waiting == null) return@LaunchedEffect
+        try {
+            val request = MediaStore.createDeleteRequest(app.contentResolver, waiting.originals)
+            launcher.launch(androidx.activity.result.IntentSenderRequest.Builder(request.intentSender).build())
+        } catch (_: Exception) { app.flacConversion.approvalResult(false) }
     }
 }
 

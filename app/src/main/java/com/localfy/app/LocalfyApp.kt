@@ -62,6 +62,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val artistFollows by lazy { com.localfy.app.data.music.ArtistFollows(this) }
     val rooms by lazy { com.localfy.app.data.social.ListeningRooms(this) }
     val social by lazy { com.localfy.app.data.social.SocialRepository(this, appScope) }
+    val flacConversion by lazy { com.localfy.app.data.music.FlacConversion(this, database, appScope) }
     val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 
     /** Resolves any queue id: MediaStore songs, local podcast files, or podcast episodes (negative ids). */
