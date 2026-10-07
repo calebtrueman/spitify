@@ -69,7 +69,7 @@ import AVFoundation
         XCTAssertTrue(snapshot.albums.contains { $0.title == imported[0].album && $0.artwork != nil })
         XCTAssertLessThanOrEqual(snapshot.mostPlayed.count, 8)
     }
-    func testPlaylistCoverWorksForEmptyPlaylistSurvivesReloadAndIsDeletedWithPlaylist() throws {
+    func testPlaylistCoverWorksForEmptyPlaylistSurvivesReloadAndIsDeletedWithPlaylist() async throws {
         let app = AppModel()
         let previous = app.library.playlists
         let playlist = app.library.createPlaylist("Cover check " + UUID().uuidString)
@@ -81,6 +81,7 @@ import AVFoundation
         ArtCache.shared.storeCustom(try XCTUnwrap(image.pngData()), key: key)
         app.library.artVersion += 1
         XCTAssertEqual(app.library.playlistArtworkKey(playlist.id), key)
+        await Store.flush() // playlists are saved in the background; reload only after they're written
         let saved = LibraryStore()
         XCTAssertNotNil(saved.playlists.first { $0.id == playlist.id })
         XCTAssertEqual(saved.playlistArtworkKey(playlist.id), key)

@@ -46,6 +46,6 @@ class SwiftFixtureTest {
         val text = out.toString(2) + "\n"
         val file = generateSequence(File("").absoluteFile) { it.parentFile }.map { File(it, "ios/SpitifyTests/Fixtures/library-sync-kotlin.json") }.first { it.parentFile.parentFile.isDirectory }
         if (System.getenv("SPITIFY_WRITE_FIXTURES") == "1") file.writeText(text)
-        assertEquals("Fixture is stale: run with SPITIFY_WRITE_FIXTURES=1", text, file.readText())
+        assertEquals("Fixture is stale: run with SPITIFY_WRITE_FIXTURES=1", text, file.readText().replace("\r\n", "\n")) // Windows checkouts use CRLF
     }
 }
