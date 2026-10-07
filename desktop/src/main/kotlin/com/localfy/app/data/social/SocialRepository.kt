@@ -62,6 +62,11 @@ class SocialRepository(
     val rooms = RoomState()
     var onRoomUpdate: ((ListeningRoom) -> Unit)? = null
     var onRoomRequest: ((IncomingRoomRequest) -> Unit)? = null
+    /** Your-devices packets ("deviceList", "devicePlayback"…), handled by DeviceSyncRepository. */
+    var onDevicePacket: ((String, SocialPacket, Boolean) -> Unit)? = null
+    /** True while devices are linked or being paired: the relay then runs even with sharing off (inbox only). */
+    var devicesNeedRelay = false
+        set(value) { if (field != value) { field = value; refresh() } }
     fun roomChanged() = changed()
     var message: String? = null; private set
     val playlists get() = state.playlists.values.sortedByDescending { it.updatedAt }
@@ -89,7 +94,19 @@ class SocialRepository(
         }
         changed()
     }
-    private fun refresh() { if (enabled) relay.start(relayAddresses, state.following, discovery) else relay.stop() }
+    private fun refresh() {
+        when {
+            enabled -> relay.start(relayAddresses, state.following, discovery)
+            devicesNeedRelay -> relay.start(relayAddresses, emptySet(), inboxOnly = true)
+            else -> relay.stop()
+        }
+    }
+    /** Sends a your-devices packet; works whether or not friend sharing is on. */
+    suspend fun sendDevicePacket(packet: SocialPacket, logical: String, recipient: String?, expiresIn: Long, extraTags: List<List<String>> = emptyList()) =
+        relay.send(packet, logical, recipient, expiresIn, extraTags)
+    /** One-off relay lookup of a pairing code's tag (see [PeerRelay.lookup]). */
+    fun lookupDeviceCode(tag: String) = relay.lookup(tag)
+
     fun configure(enabled: Boolean, discovery: Boolean = this.discovery, relays: List<String>? = null) {
         if (relays != null) { relayAddresses = relays; prefs.put("relays", relays) }
         this.enabled = enabled; this.discovery = discovery
@@ -217,6 +234,7 @@ class SocialRepository(
     private fun receive(author: String, packet: SocialPacket, encrypted: Boolean) {
         runCatching {
             when (packet.type) {
+                "deviceCode", "deviceLinkRequest", "deviceList", "deviceUnlink", "devicePlayback", "deviceCommand" -> onDevicePacket?.invoke(author, packet, encrypted)
                 "room" -> { val room = ListeningRoom.parse(packet.body); if (rooms.accept(room, author, publicKey, encrypted)) { changed(); onRoomUpdate?.invoke(room) } }
                 "roomRequest" -> if (encrypted) { val request = RoomRequest.parse(packet.body); if (rooms.receive(request, author, publicKey)) { changed(); onRoomRequest?.invoke(rooms.requests.last()) } }
                 "profileHidden" -> if (!encrypted && author != publicKey && state.profiles[author]?.isPublic != false) { state.profiles.remove(author); persist() }

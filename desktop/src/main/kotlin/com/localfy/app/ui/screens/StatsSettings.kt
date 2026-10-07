@@ -132,6 +132,11 @@ fun SettingsScreen() {
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
         item { BackHeader("Settings") }
+        item {
+            val devices = com.localfy.app.ui.player.rememberDevices()
+            val linked = devices.devices.size
+            SettingRow("Your devices", if (linked == 0) "Link your phone or other computers to continue where you left off" else "${devices.name} · $linked linked ${if (linked == 1) "device" else "devices"}") { app.navigate(com.localfy.app.ui.player.DEVICES_ROUTE) }
+        }
         item { SettingRow("Sharing connection", "Pause sharing or change connections") { app.navigate("friends-settings") } }
         item { SettingRow("Hidden artists", "Show artists you hid from Library") { app.navigate("hidden-artists") } }
         item {

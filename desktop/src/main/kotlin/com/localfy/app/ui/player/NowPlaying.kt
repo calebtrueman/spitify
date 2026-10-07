@@ -478,6 +478,8 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
         // Light theme uses dark status icons; give them a light strip to sit on over the dark pane.
 
         Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp).navigationBarsPadding()) {
+            PlayingOnBar()
+            ContinueCard()
             Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 PaneTabs(tab, { tab = it }, tabs = listOf("Playing", if (song?.isPodcast == true) "Notes" else "Lyrics", "Queue"))
                 Spacer(Modifier.weight(1f))
