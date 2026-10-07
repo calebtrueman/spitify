@@ -49,6 +49,7 @@ final class AppModel {
     let social = SocialStore()
     let artistFollows = ArtistFollows()
     let rooms = ListeningRooms()
+    let devices = DeviceSyncStore()
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes(); Task { await social.syncProfile() } } }
@@ -90,10 +91,12 @@ final class AppModel {
         started = true
         rooms.start(app: self)
         do { try social.prepare(); Task { await social.syncProfile() } } catch { social.message = error.localizedDescription }
+        devices.start(app: self)
         await library.scan()
         musicDownloads.start()
         await importDownloadedMusic(rescan: false)
         player.restore { [weak self] id in self?.lookup(id) }
+        devices.foreground()
         scheduleWidgets()
         Task { await shows.refreshAll() }
         Task { await backgroundFixes() }

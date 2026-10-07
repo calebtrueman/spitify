@@ -16,6 +16,7 @@ struct SettingsView: View {
             Section {
                 NavigationLink(value: Route.appearance) { Label("Appearance", systemImage: "paintpalette") }
                 NavigationLink(value: Route.equalizer) { Label("Equaliser & sound", systemImage: "slider.vertical.3") }
+                NavigationLink { DevicesView() } label: { Label("Your devices", systemImage: "laptopcomputer.and.iphone") }
                 NavigationLink { FriendsSettingsView() } label: { Label("Sharing connection", systemImage: "network") }
                 NavigationLink { HiddenArtistsView() } label: { Label("Hidden artists", systemImage: "eye.slash") }
                 if !app.deletedMixIDs.isEmpty {

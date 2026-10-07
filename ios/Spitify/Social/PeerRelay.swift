@@ -42,7 +42,12 @@ struct RelayOutgoing: Codable {
     private var known: Set<String> = []
     private var requestedPlaylists: [String: SocialLink] = [:]
     private var discover = false
+    private var inboxOnly = false
     private var enabled = false
+    /// One-off "#t" lookups in progress (subscription id → tag) and the authors each one found.
+    private var lookups: [String: String] = [:]
+    private var lookupHits: [String: Set<String>] = [:]
+    private var lookupCount = 0
     private let storage: String
     private let testMode: Bool
     private var seen: Set<String> = []
@@ -55,8 +60,9 @@ struct RelayOutgoing: Codable {
         self.keys = keys; self.storage = storage; self.testMode = testMode
         outgoing = Store.load([RelayOutgoing].self, storage) ?? []
     }
-    func start(relays: [String], authors: Set<String>, discover: Bool = false) {
-        self.known = Set(authors.filter(SocialRules.key)); self.discover = discover; enabled = true
+    /// `inboxOnly`: friend sharing is off but linked devices still need the encrypted inbox (`#p` = me).
+    func start(relays: [String], authors: Set<String>, discover: Bool = false, inboxOnly: Bool = false) {
+        self.known = Set(authors.filter(SocialRules.key)); self.discover = discover && !inboxOnly; self.inboxOnly = inboxOnly; enabled = true
         let allowed = relays.filter { address in
             guard let c = URLComponents(string: address), let host = c.host, c.user == nil, c.password == nil else { return false }
             return c.scheme == "wss" && host.contains(".") || testMode && c.scheme == "ws" && ["127.0.0.1", "localhost", "10.0.2.2"].contains(host)
@@ -81,6 +87,7 @@ struct RelayOutgoing: Codable {
             sockets[address] = socket; socket.resume()
             do {
                 try await subscribe(socket)
+                for (id, tag) in lookups { try await sendLookup(id, tag, on: socket) }
                 connected.insert(address); report(); delay = 1
                 await flush(socket)
                 while enabled && !Task.isCancelled {
@@ -101,6 +108,10 @@ struct RelayOutgoing: Codable {
     }
     private func subscribe(_ socket: URLSessionWebSocketTask) async throws {
         var request: [Any] = ["REQ", "spitify-v1"]
+        if inboxOnly {
+            request.append(["kinds": [30078], "#p": [publicKey], "#t": ["spitify"], "limit": 500] as [String: Any])
+            try await socket.send(.string(String(data: JSONSerialization.data(withJSONObject: request), encoding: .utf8)!)); return
+        }
         let authors = Array(known.union([publicKey])).sorted().prefix(129)
         request.append(["kinds": [30078], "authors": Array(authors), "#d": ["spitify:v1:profile"], "limit": 129] as [String: Any])
         request.append(["kinds": [30078], "authors": Array(authors), "#t": ["spitify"], "limit": 500] as [String: Any])
@@ -113,6 +124,26 @@ struct RelayOutgoing: Codable {
         if discover { request.append(["kinds": [30078], "#d": ["spitify:v1:profile"], "limit": 150] as [String: Any]) }
         try await socket.send(.string(String(data: JSONSerialization.data(withJSONObject: request), encoding: .utf8)!))
     }
+    /// Asks every connected relay once for events tagged `["t", tag]` and delivers them through
+    /// `onPacket`. Returns after `timeout` or when the calling task is cancelled.
+    func lookup(_ tag: String, timeout: Duration = .seconds(15)) async {
+        guard tag.count <= 100 else { return }
+        lookupCount += 1
+        let id = "spitify-lookup-\(lookupCount)"
+        lookups[id] = tag; lookupHits[tag] = []
+        for socket in sockets.values { try? await sendLookup(id, tag, on: socket) }
+        try? await Task.sleep(for: timeout)
+        lookups.removeValue(forKey: id)
+        if !lookups.values.contains(tag) { lookupHits.removeValue(forKey: tag) }
+        let close = "[\"CLOSE\",\"\(id)\"]"
+        for socket in sockets.values { try? await socket.send(.string(close)) }
+    }
+    /// True when an event by `author` carrying the tag of a running lookup was received.
+    func lookupFound(_ tag: String, author: String) -> Bool { lookupHits[tag]?.contains(author) == true }
+    private func sendLookup(_ id: String, _ tag: String, on socket: URLSessionWebSocketTask) async throws {
+        let request: [Any] = ["REQ", id, ["kinds": [30078], "#t": [tag], "limit": 5] as [String: Any]]
+        try await socket.send(.string(String(data: JSONSerialization.data(withJSONObject: request), encoding: .utf8)!))
+    }
     private func flush(_ socket: URLSessionWebSocketTask) async {
         outgoing.removeAll { $0.expiresAt < SocialRules.now }; persist()
         for item in outgoing {
@@ -121,7 +152,7 @@ struct RelayOutgoing: Codable {
             try? await Task.sleep(for: .milliseconds(40))
         }
     }
-    func send(_ packet: SocialPacket, logical: String, to recipient: String? = nil, expiresIn: Int64 = 30 * 24 * 60 * 60 * 1000) async throws {
+    func send(_ packet: SocialPacket, logical: String, to recipient: String? = nil, expiresIn: Int64 = 30 * 24 * 60 * 60 * 1000, extraTags: [[String]] = []) async throws {
         guard packet.v == 1, logical.count <= 220, recipient == nil || SocialRules.key(recipient!) else { throw MusicSourceError.message("That friend code is not valid.") }
         let data = try JSONEncoder().encode(packet)
         guard data.count <= 1_000_000 else { throw MusicSourceError.message("This share is too large. Try a smaller playlist.") }
@@ -141,6 +172,7 @@ struct RelayOutgoing: Codable {
             let identifier = logical == "profile" && recipient == nil ? "spitify:v1:profile" : "spitify:v1:\(prefix):\(index)"
             var tags = [["d", identifier], ["t", "spitify"], ["expiration", String((SocialRules.now + expiresIn) / 1000)]]
             if let recipient { tags.append(["p", recipient]); tags.append(["encrypted", "nip44"]) }
+            tags += extraTags
             let event = try EventBuilder(kind: Kind(kind: 30078), content: content)
                 .tags(tags: tags.map { try Tag.parse(data: $0) }).customCreatedAt(createdAt: Timestamp.fromSecs(secs: created)).finalize(signer: keys)
             prepared.append(RelayOutgoing(id: event.id().toHex(), json: try event.asJson(), logical: prefix, expiresAt: SocialRules.now + expiresIn))
@@ -164,6 +196,7 @@ struct RelayOutgoing: Codable {
         let recipients = tags.filter { $0.first == "p" && $0.count > 1 }.map { $0[1] }
         guard encrypted ? recipients == [publicKey] : recipients.isEmpty else { return }
         let author = event.author().toHex()
+        for tag in tags where tag.count > 1 && tag[0] == "t" && lookupHits[tag[1]] != nil { lookupHits[tag[1]]?.insert(author) }
         let content: String
         if encrypted { guard let opened = try? keys.nip44Decrypt(publicKey: event.author(), payload: event.content()) else { return }; content = opened }
         else { content = event.content() }

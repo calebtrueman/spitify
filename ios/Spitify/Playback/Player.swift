@@ -88,6 +88,8 @@ final class Player {
     private var resumeAfterInterruption = false
 
     var onPlaybackChanged: (() -> Void)?
+    /// Song, play state, seek, speed or queue changed (never per tick). Used by device sync.
+    @ObservationIgnored var onStateChanged: (() -> Void)?
     /// Song radio from the app's taste model, which is built off the main thread.
     var radio: ((Song) -> [Song])?
     /// The queue state a refill last came back empty for, so it isn't recomputed on every tick.
@@ -587,6 +589,7 @@ final class Player {
     }
 
     private func saveQueue() {
+        onStateChanged?()
         let d = UserDefaults.standard
         d.set(Array(automaticQueueIndices), forKey: "queueAutomaticIndices")
         d.set(Array(manualQueueIndices), forKey: "queueManualIndices")
@@ -701,6 +704,7 @@ final class Player {
     }
 
     private func updateNowPlaying() {
+        onStateChanged?()
         // Widgets only show the song and play state; rebuilding them on every seek or buffering
         // change re-sorted the whole library on the main thread.
         if lastPublished?.id != current?.id || lastPublished?.playing != isPlaying {
