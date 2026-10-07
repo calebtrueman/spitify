@@ -113,6 +113,6 @@ class AppActions(
 }
 
 /** Sidebar destinations; each keeps its own back stack. */
-val TopLevelRoutes = setOf(Routes.HOME, Routes.SEARCH, Routes.PODCASTS, Routes.BOOKS, Routes.LIBRARY, Routes.FRIENDS)
+val TopLevelRoutes = setOf(Routes.HOME, Routes.SEARCH, Routes.PODCASTS, Routes.BOOKS, Routes.LIBRARY, Routes.FRIENDS, Routes.SETTINGS)
 
 val LocalApp = staticCompositionLocalOf<AppActions> { error("AppActions not provided") }

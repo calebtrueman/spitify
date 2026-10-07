@@ -70,11 +70,6 @@ import com.localfy.app.ui.player.rememberCurrentSong
 import com.localfy.app.ui.player.rememberPlayerState
 import com.localfy.app.ui.player.rememberPlayerTint
 import java.util.Calendar
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
@@ -113,18 +108,6 @@ fun HomeScreen() {
         }
     }
 
-    val drawer = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    ModalNavigationDrawer(drawerState = drawer, drawerContent = {
-        ModalDrawerSheet {
-            Text("Spitify", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(24.dp))
-            listOf("Profile" to Routes.PROFILE, "Friends" to Routes.FRIENDS, "Settings" to Routes.SETTINGS).forEach { (label, route) ->
-                NavigationDrawerItem(label = { Text(label) }, selected = false, onClick = {
-                    scope.launch { drawer.close(); app.navigate(route) }
-                }, modifier = Modifier.padding(horizontal = 12.dp))
-            }
-        }
-    }) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 560.dp
         val tileWidth = if (wide) 164.dp else 144.dp
@@ -150,7 +133,7 @@ fun HomeScreen() {
             full("top") {
                 Column(Modifier.statusBarsPadding().padding(top = 8.dp)) {
                     Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        com.localfy.app.ui.components.Avatar(34.dp, Modifier.semantics { contentDescription = "Open menu" }.pressable { scope.launch { drawer.open() } })
+                        com.localfy.app.ui.components.Avatar(34.dp, Modifier.semantics { contentDescription = "Profile" }.pressable { app.navigate(Routes.PROFILE) })
                         Spacer(Modifier.width(10.dp))
                         LazyRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(HomeFilter.entries.toList()) { f -> Pill(f.label, filter == f, { filter = f }) }
@@ -279,8 +262,6 @@ fun HomeScreen() {
             }
         }
     }
-}
-
 }
 
 private fun LazyGridScope.full(key: String, content: @Composable () -> Unit) =

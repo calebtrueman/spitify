@@ -141,6 +141,8 @@ import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.Settings
 
 private val scrimRoutes = setOf(Routes.HOME, Routes.SEARCH, Routes.LIBRARY, Routes.STATS, Routes.SETTINGS, Routes.APPEARANCE, Routes.EQUALIZER, Routes.PODCASTS, Routes.BOOKS)
 
@@ -314,6 +316,20 @@ fun LocalfyRoot(activity: Activity) {
                                 label = { Text("Player") },
                             )
                         }
+                        Spacer(Modifier.weight(1f))
+                        NavigationRailItem(
+                            selected = route == Routes.SETTINGS,
+                            onClick = { actions.navigateTopLevel(Routes.SETTINGS) },
+                            icon = { Icon(if (route == Routes.SETTINGS) Icons.Rounded.Settings else Icons.Outlined.Settings, "Settings") },
+                            label = { Text("Settings") },
+                            colors = NavigationRailItemDefaults.colors(
+                                indicatorColor = LocalfyColors.SurfaceHigh,
+                                selectedIconColor = LocalfyColors.TextPrimary,
+                                selectedTextColor = LocalfyColors.TextPrimary,
+                                unselectedIconColor = LocalfyColors.TextTertiary,
+                                unselectedTextColor = LocalfyColors.TextTertiary,
+                            ),
+                        )
                     }
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {

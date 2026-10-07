@@ -30,12 +30,14 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Podcasts
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
@@ -103,6 +105,9 @@ private val tabs = listOf(
     Tab(Routes.LIBRARY, "Your Library", Icons.Rounded.LibraryMusic, Icons.Outlined.LibraryMusic),
     Tab(Routes.FRIENDS, "Friends", Icons.Rounded.People, Icons.Outlined.People),
 )
+
+/** Pinned to the bottom of the sidebar. */
+private val settingsTab = Tab(Routes.SETTINGS, "Settings", Icons.Rounded.Settings, Icons.Outlined.Settings)
 
 /** Keyboard shortcuts arrive at the window (Main.kt) and are routed here. */
 object ShortcutRouter {
@@ -203,7 +208,8 @@ fun LocalfyRoot() {
 
             Row(Modifier.fillMaxSize()) {
                 NavigationRail(containerColor = LocalfyColors.Background, header = { Spacer(Modifier.width(1.dp)) }) {
-                    tabs.forEach { t ->
+                    (tabs + settingsTab).forEach { t ->
+                        if (t === settingsTab) Spacer(Modifier.weight(1f))
                         val selected = currentTab == t.route
                         NavigationRailItem(
                             selected = selected,
