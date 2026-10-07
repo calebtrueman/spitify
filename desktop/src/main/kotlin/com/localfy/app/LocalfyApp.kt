@@ -2,6 +2,8 @@ package com.localfy.app
 
 import com.localfy.app.data.LibraryRepository
 import com.localfy.app.data.Song
+import com.localfy.app.data.file
+import com.localfy.app.data.music.OnlineTrack
 import com.localfy.app.data.art.ArtworkStore
 import com.localfy.app.data.art.OnlineArtRepository
 import com.localfy.app.data.lyrics.LyricsRepository
@@ -19,6 +21,8 @@ import com.localfy.app.data.social.ListeningRooms
 import com.localfy.app.data.social.PlaylistMatches
 import com.localfy.app.data.social.RoomPlayer
 import com.localfy.app.data.social.SocialRepository
+import com.localfy.app.data.sync.AppSyncedSettings
+import com.localfy.app.data.sync.LibrarySyncRepository
 import com.localfy.app.data.taste.ProfileRepository
 import com.localfy.app.data.taste.TasteRepository
 import com.localfy.app.desktop.JsonStore
@@ -30,6 +34,7 @@ import com.localfy.app.ui.theme.ThemeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -117,6 +122,17 @@ class LocalfyApp {
     val deviceSync: DeviceSyncRepository by lazy {
         DeviceSyncRepository(social, DevicePlayerAdapter(), appScope, resolveTrack = { playlistMatches.resolve(it) })
     }
+    /** Library sync: the same likes, playlists, follows, history and settings on every linked device. */
+    val librarySync: LibrarySyncRepository by lazy {
+        LibrarySyncRepository(
+            appScope, social, deviceSync, library, taste, profiles, podcasts, musicStreams, artistFollows,
+            AppSyncedSettings(theme, library, player, lyrics, onlineArt, metadata, artistFollows),
+            resolveTrack = { playlistMatches.resolve(it) },
+            forgetFailures = playlistMatches::forget,
+            online = ::onlineTrack,
+            playing = player.state.map { it.isPlaying },
+        )
+    }
     val playlistMatches: PlaylistMatches by lazy {
         PlaylistMatches(appScope, librarySongs = { library.library.value.songs }, registerStream = musicStreams::register)
     }
@@ -128,6 +144,17 @@ class LocalfyApp {
             confirmDelete = false,
         )
     }
+
+    /** The catalogue track behind a stream, or behind a finished download of one. */
+    private fun onlineTrack(song: Song): OnlineTrack? {
+        musicStreams.track(song)?.let { return it }
+        val file = song.file ?: return null
+        val jobs = musicDownloads.jobsById.value
+        val index = downloadIndex?.takeIf { it.first === jobs }?.second
+            ?: jobs.values.filter { it.state == "complete" }.mapNotNull { j -> j.localUri?.let { File(it).absolutePath to j.id } }.toMap().also { downloadIndex = jobs to it }
+        return index[file.absolutePath]?.let(musicStreams::track)
+    }
+    @Volatile private var downloadIndex: Pair<Map<String, *>, Map<String, String>>? = null
 
     /** Resolves any queue id: library songs and local books/podcasts, streamed songs, podcast episodes (negative ids). */
     fun resolve(id: Long): Song? =
@@ -149,13 +176,14 @@ class LocalfyApp {
         podcasts.start()
         appScope.launch { profiles.profile.collect { runCatching { social.syncProfile() } } }
         deviceSync.start()
+        librarySync.start()
         ioScope.launch { musicDownloads.start() }
     }
 
     /** Saves the queue position and every pending store before the process exits. */
     fun shutdown() {
         runCatching { player.saveNow() }
-        if (started) runCatching { deviceSync.flush() }
+        if (started) runCatching { deviceSync.flush(); librarySync.flush() }
         runCatching { mediaSession.close() }
         runCatching { player.release() }
         runCatching { library.flush(); lyrics.flush(); musicStreams.flush(); musicDownloads.flush() }

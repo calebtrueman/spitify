@@ -155,7 +155,7 @@ fun ProfileScreen() {
         item { SectionHeader("Shortcuts") }
         item { ProfileRow("Your stats", "Top songs, artists and albums") { app.navigate(Routes.STATS) } }
         if (hiddenSongs.isNotEmpty() || hiddenArtists.isNotEmpty()) item {
-            ProfileRow("Show hidden recommendations again", "${hiddenSongs.size} songs and ${hiddenArtists.size} artists are hidden from your mixes") { app.taste.unhideAll() }
+            ProfileRow("Show hidden recommendations again", "${hiddenSongs.size} songs and ${hiddenArtists.size} artists are hidden from your mixes") { nativeApp.librarySync.allowMassRemoval("hiddenSongs", "hiddenArtists"); app.taste.unhideAll() }
         }
     }
 

@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.localfy.app.data.social.DevicePairing
 import com.localfy.app.data.social.DeviceSyncState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.localfy.app.ui.LocalApp
+import com.localfy.app.ui.LocalContainer
+import com.localfy.app.ui.player.ago
 import com.localfy.app.ui.components.PageHeader
 import com.localfy.app.ui.components.SectionHeader
 import com.localfy.app.ui.components.insetItem
@@ -113,6 +117,11 @@ fun DevicesScreen() {
             }
         }
 
+        if (devices.devices.isNotEmpty()) {
+            item { SectionHeader("Library") }
+            insetItem { LibrarySyncStatusRow(now) }
+        }
+
         item { SectionHeader("Link a device") }
         insetItem {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -169,6 +178,43 @@ fun DevicesScreen() {
         }
         if (devices.devices.isNotEmpty()) insetItem {
             TextButton(onClick = devices::leave, modifier = Modifier.padding(top = 16.dp)) { Text("Leave this group", color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+/** "Library: in sync" or "syncing N items…", when it last synced, and songs that couldn't be found here. */
+@Composable
+private fun LibrarySyncStatusRow(now: Long) {
+    val sync = LocalContainer.current.librarySync
+    val status by sync.status.collectAsStateWithLifecycle()
+    var showMissing by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (status.syncing > 0) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            else Icon(Icons.Rounded.CloudDone, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (status.syncing > 0) "Library: syncing ${status.syncing} ${if (status.syncing == 1) "item" else "items"}…" else "Library: in sync",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    if (status.lastSync > 0) "Last synced ${ago(status.lastSync, now)}" else "Likes, playlists, follows, history and settings stay the same on your devices.",
+                    style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary,
+                )
+            }
+        }
+        if (status.unmatched.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showMissing = !showMissing }) { Text("Couldn't find on this computer (${status.unmatched.size})") }
+                TextButton(onClick = sync::retryUnmatched) { Text("Retry") }
+            }
+            if (showMissing) status.unmatched.take(100).forEach { track ->
+                Text(
+                    "${track.title} · ${track.artist}", style = MaterialTheme.typography.bodyMedium, color = LocalfyColors.TextSecondary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp),
+                )
+            }
         }
     }
 }

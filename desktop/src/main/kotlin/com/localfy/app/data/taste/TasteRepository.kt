@@ -141,6 +141,30 @@ class TasteRepository(
 
     fun hideSong(id: Long) { _hiddenSongs.value = _hiddenSongs.value + id; prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) } }
     fun hideArtist(name: String) { _hiddenArtists.value = _hiddenArtists.value + name; prefs.edit { putStringSet("hiddenArtists", _hiddenArtists.value) } }
+    fun unhideSong(id: Long) { _hiddenSongs.value = _hiddenSongs.value - id; prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) } }
+    fun unhideArtist(name: String) { _hiddenArtists.value = _hiddenArtists.value - name; prefs.edit { putStringSet("hiddenArtists", _hiddenArtists.value) } }
+
+    /**
+     * Adds listens made on your other devices (library sync), at their own times, so Recently played
+     * and the taste engine include them. Each carries its sync key in [PlayEventEntity.source]
+     * ("sync:…"); one already here is skipped.
+     */
+    suspend fun importListens(listens: List<PlayEventEntity>) {
+        if (listens.isEmpty()) return
+        ensureLoaded()
+        withContext(Dispatchers.IO) {
+            eventsLock.withLock {
+                val have = _events.value.mapNotNullTo(HashSet()) { it.source?.takeIf { s -> s.startsWith(SYNC_SOURCE) } }
+                val fresh = listens.filter { it.source == null || have.add(it.source) }.map { it.copy(id = nextEventId++) }
+                if (fresh.isEmpty()) return@withLock
+                _events.update { (it + fresh).sortedBy { e -> e.startedAt } }
+                runCatching {
+                    eventsFile.parentFile?.mkdirs()
+                    eventsFile.appendText(fresh.joinToString("") { toJson(it).toString() + "\n" })
+                }
+            }
+        }
+    }
 
     /** Follows songs to their new ids after a file was replaced (e.g. converted to AAC): hidden songs and listens. */
     fun remapSongs(ids: Map<Long, Long>) {
@@ -211,4 +235,9 @@ class TasteRepository(
         durationMs = o.optLong("durationMs"), completed = o.optBoolean("completed"), skipped = o.optBoolean("skipped"),
         source = if (o.has("source") && !o.isNull("source")) o.optString("source") else null,
     )
+
+    companion object {
+        /** Source prefix of listens made on another device (library sync). */
+        const val SYNC_SOURCE = "sync:"
+    }
 }

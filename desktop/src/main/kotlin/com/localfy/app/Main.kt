@@ -145,9 +145,12 @@ private fun ApplicationScope.SpitifyWindow(app: LocalfyApp) {
             window.background = java.awt.Color(0x09, 0x09, 0x0B)
             if (DesktopSettings.startMinimized.value && !DesktopSettings.closeToTray.value) window.isMinimized = true
             installDropTarget(window)
-            // Coming back to the window may offer to continue what another device was playing.
+            // Coming back to the window may offer to continue what another device was playing, and catches up the library.
             window.addWindowFocusListener(object : java.awt.event.WindowAdapter() {
-                override fun windowGainedFocus(e: java.awt.event.WindowEvent?) { if (app.profiles.profile.value.onboarded) app.deviceSync.checkContinue() }
+                override fun windowGainedFocus(e: java.awt.event.WindowEvent?) {
+                    if (app.profiles.profile.value.onboarded) app.deviceSync.checkContinue()
+                    app.librarySync.foreground()
+                }
             })
         }
         // Dock / taskbar icon follows the chosen app icon (the window icon above does too).

@@ -292,6 +292,10 @@ class PodcastRepository(
         putResume(ResumeEntity(key, 0, durationMs, played, System.currentTimeMillis()))
     }
 
+    /** Takes a position saved on another device (library sync). */
+    fun applyResume(key: String, positionMs: Long, durationMs: Long, played: Boolean) =
+        putResume(ResumeEntity(key, if (played) 0 else positionMs.coerceAtLeast(0), durationMs.coerceAtLeast(0), played, System.currentTimeMillis()))
+
     suspend fun resumePosition(key: String): Long = synchronized(lock) { resumes[key] }?.takeIf { !it.played }?.positionMs ?: 0L
 
     private fun putResume(r: ResumeEntity) {

@@ -49,8 +49,10 @@ class JsonStore(private val file: File) {
 }
 
 /** Simple key/value settings (the desktop stand-in for SharedPreferences). */
-class Prefs(name: String) {
-    private val store = JsonStore("prefs-$name")
+class Prefs private constructor(private val store: JsonStore) {
+    constructor(name: String) : this(JsonStore("prefs-$name"))
+    /** Settings kept in [file] (tests and a second data folder). */
+    constructor(file: File) : this(JsonStore(file))
     private val values: JSONObject = store.readObject() ?: JSONObject()
 
     @Synchronized fun getBoolean(key: String, default: Boolean) = values.optBoolean(key, default)
