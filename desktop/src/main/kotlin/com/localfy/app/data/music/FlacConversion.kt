@@ -43,6 +43,11 @@ class FlacConversion(
     private val library: LibraryRepository,
     private val remap: suspend (ids: Map<Long, Long>, fileNames: Map<Long, String>) -> Unit,
     private val playingSongId: () -> Long? = { null },
+    /**
+     * Pause in [State.NeedsApproval] before deleting the originals. The desktop settings dialog
+     * already asks "Convert and delete FLAC" before [start], so the app passes false.
+     */
+    private val confirmDelete: Boolean = true,
 ) {
     sealed interface State {
         data object Idle : State
@@ -89,6 +94,7 @@ class FlacConversion(
                 converted += c
             }
             if (converted.isEmpty()) done()
+            else if (!confirmDelete) { finish(converted); done() }
             else { waiting = converted; _state.value = State.NeedsApproval(converted.map { it.original }) }
         }
     }

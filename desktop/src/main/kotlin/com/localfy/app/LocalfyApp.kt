@@ -118,6 +118,7 @@ class LocalfyApp {
             appScope, library,
             remap = FlacConversion.standardRemap(library, metadata, lyrics, taste) { player.remapSongs(it) },
             playingSongId = player::playingSongId,
+            confirmDelete = false,
         )
     }
 

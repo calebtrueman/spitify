@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.asComposeImageBitmap
 import com.localfy.app.LocalfyApp
 import com.localfy.app.desktop.AppPaths
 import com.localfy.app.ui.BundledResources
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -44,14 +44,19 @@ object ImageLoader {
     private var memoryBytes = 0L
     /** Largest bitmap per model, so a re-shown row draws instantly while a sharper one loads. */
     private val bestBucket = HashMap<String, Int>()
-    private val inFlight = HashMap<String, CompletableDeferred<ImageBitmap?>>()
+    private val inFlight = HashMap<String, kotlinx.coroutines.Deferred<ImageBitmap?>>()
+    private val loads = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
     private val decodeSlots = Semaphore(4)
     private val networkSlots = Semaphore(6)
     private val failures = HashMap<String, Long>()
 
     private val http: HttpClient by lazy {
-        HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(12)).build()
+        // HTTP/1.1: parallel HTTP/2 streams to one host can stall mid-body in the JDK client, which left covers blank.
+        HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).followRedirects(HttpClient.Redirect.NORMAL)
+            .connectTimeout(Duration.ofSeconds(12)).build()
     }
+    /** One download per URL, shared by every size that wants it. */
+    private val downloads = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<ByteArray?>>()
     private val diskDir: File by lazy { AppPaths.cache("images") }
 
     /** Stable identity of a model, independent of the drawn size. */
@@ -102,28 +107,26 @@ object ImageLoader {
     suspend fun load(model: Any, px: Int, modelKey: String = modelKey(model)): ImageBitmap? {
         val bucket = bucket(px.coerceAtLeast(1))
         peekExact(modelKey, bucket)?.let { return it }
-        synchronized(this) { failures[modelKey]?.let { if (System.currentTimeMillis() - it < 60_000) return null } }
         val key = cacheKey(modelKey, bucket)
-        val (deferred, owner) = synchronized(this) {
-            inFlight[key]?.let { it to false } ?: CompletableDeferred<ImageBitmap?>().also { inFlight[key] = it }.let { it to true }
-        }
-        if (!owner) return deferred.await()
-        val result = try {
-            withContext(Dispatchers.IO) {
-                val bytes = fetch(model, bucket)
-                if (bytes == null) null else decodeSlots.withPermit { decode(bytes, bucket) }
+        // Loads run in the loader's own scope: a row scrolling away (or a re-measure) cancels only its wait,
+        // never the shared load other callers are waiting on.
+        val job = synchronized(this) {
+            failures[modelKey]?.let { if (System.currentTimeMillis() - it < 60_000) return null }
+            inFlight.getOrPut(key) {
+                loads.async {
+                    val result = try {
+                        val bytes = fetch(model, bucket)
+                        if (bytes == null) null else decodeSlots.withPermit { decode(bytes, bucket) }
+                    } catch (e: Throwable) { System.err.println("Spitify image: couldn't load $modelKey: $e"); null }
+                    synchronized(this@ImageLoader) {
+                        inFlight.remove(key)
+                        if (result != null) put(modelKey, bucket, result) else failures[modelKey] = System.currentTimeMillis()
+                    }
+                    result
+                }
             }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            synchronized(this) { inFlight.remove(key) }
-            deferred.complete(null)
-            throw e
-        } catch (e: Throwable) { System.err.println("Spitify image: couldn't load $modelKey: $e"); null }
-        synchronized(this) {
-            inFlight.remove(key)
-            if (result != null) put(modelKey, bucket, result) else failures[modelKey] = System.currentTimeMillis()
         }
-        deferred.complete(result)
-        return result
+        return job.await()
     }
 
     /** Clears the "recently failed" memory, e.g. when the library or connection changes. */
@@ -148,14 +151,23 @@ object ImageLoader {
 
     private suspend fun source(value: String): ByteArray? = when {
         value.startsWith("res:") -> BundledResources.bytes(value.removePrefix("res:"))
-        value.startsWith("http://") || value.startsWith("https://") -> networkSlots.withPermit { download(value) }
+        value.startsWith("http://") || value.startsWith("https://") -> download(value)
         value.startsWith("file:") -> runCatching { File(URI(value.substringBefore('?'))).takeIf { it.isFile }?.readBytes() }.getOrNull()
         value.startsWith("data:") -> runCatching { java.util.Base64.getMimeDecoder().decode(value.substringAfter(",")) }.getOrNull()
         value.isNotBlank() -> File(value).takeIf { it.isFile }?.readBytes()
         else -> null
     }
 
-    private fun download(url: String): ByteArray? {
+    private suspend fun download(url: String): ByteArray? {
+        val job = downloads.computeIfAbsent(url) {
+            loads.async {
+                try { runCatching { networkSlots.withPermit { fetchUrl(url) } }.getOrNull() } finally { downloads.remove(url) }
+            }
+        }
+        return job.await()
+    }
+
+    private fun fetchUrl(url: String): ByteArray? {
         val name = MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
         val file = File(diskDir, name)
         if (file.isFile && file.length() > 0) {
@@ -164,7 +176,8 @@ object ImageLoader {
         }
         val request = HttpRequest.newBuilder(URI(url)).timeout(Duration.ofSeconds(20))
             .header("User-Agent", "Spitify/1.0 (desktop music player)").GET().build()
-        val response = http.send(request, HttpResponse.BodyHandlers.ofByteArray())
+        // The request timeout only covers the headers; bound the whole body too.
+        val response = http.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).get(30, java.util.concurrent.TimeUnit.SECONDS)
         if (response.statusCode() != 200) return null
         val bytes = response.body().takeIf { it.isNotEmpty() } ?: return null
         runCatching {
