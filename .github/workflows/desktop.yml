@@ -1,0 +1,72 @@
+name: Desktop build
+
+on:
+  push:
+    branches: [main]
+    paths: ["desktop/**", "core/**", "shared/**", "gradle/**", "*.gradle.kts", ".github/workflows/desktop.yml"]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15          # Apple Silicon
+            label: macOS-arm64
+            task: packageReleaseDmg
+            glob: desktop/build/compose/binaries/main-release/dmg/*.dmg
+          - os: macos-15-intel
+            label: macOS-x64
+            task: packageReleaseDmg
+            glob: desktop/build/compose/binaries/main-release/dmg/*.dmg
+          - os: windows-latest
+            label: Windows-x64
+            task: packageReleaseMsi
+            glob: desktop/build/compose/binaries/main-release/msi/*.msi
+          - os: ubuntu-24.04
+            label: Linux-x64
+            task: "packageReleaseDeb packageReleaseRpm"
+            glob: "desktop/build/compose/binaries/main-release/deb/*.deb desktop/build/compose/binaries/main-release/rpm/*.rpm"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+      - name: Core and desktop tests
+        run: ./gradlew :core:test :desktop:test --no-daemon
+        shell: bash
+      - name: Package installer
+        run: ./gradlew ${{ matrix.task }} --no-daemon
+        shell: bash
+      - name: Rename installers
+        shell: bash
+        run: |
+          mkdir -p out
+          for f in ${{ matrix.glob }}; do
+            ext="${f##*.}"
+            version=$(grep -o 'packageVersion = "[^"]*"' desktop/build.gradle.kts | cut -d'"' -f2)
+            cp "$f" "out/Spitify-Desktop-${version}-${{ matrix.label }}.${ext}"
+          done
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spitify-Desktop-${{ matrix.label }}
+          path: out/*
+      - name: Attach to release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" out/* --clobber
