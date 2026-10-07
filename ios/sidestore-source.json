@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.25",
+          "buildVersion": "30",
+          "date": "2026-10-07T03:15:04Z",
+          "localizedDescription": "Spitify 1.0.25 links your phone, tablet and computers, so your music follows you.\n\n- **Your devices:** link your devices once in **Settings \u203a Your devices**. One shows an 8-character code; type it on the other and tap **Allow**. There's no account.\n- **Playing on\u2026:** when another device is playing, a **Playing on MacBook** bar appears above the player. Tap it to pause, skip or seek that device, or tap **Listen here** to move the music to this one at the same spot.\n- **One device at a time:** like Spotify, starting music on one device pauses the other, which shows where it went.\n- **Continue where you left off:** open Spitify on another device and it offers to continue what you were last playing.\n- **Private:** linked devices talk end-to-end encrypted through the same relays as Friends. It works even with friend sharing turned off.\n- **Desktop:** a Devices button in the player lists your devices and what each is playing.\n\nDesktop installers aren't signed yet:\n- **Mac:** open Spitify once, then go to System Settings \u203a Privacy & Security and click **Open Anyway**.\n- **Windows:** choose **More info \u203a Run anyway**.\n\nThe iPhone download is unsigned for SideStore/AltStore. The Android APK installs directly.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.25/Spitify-1.0.25-unsigned.ipa",
+          "size": 120478122,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.24",
           "buildVersion": "28",
           "date": "2026-10-07T02:05:10Z",
