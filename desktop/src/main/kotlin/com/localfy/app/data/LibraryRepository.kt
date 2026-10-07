@@ -169,6 +169,10 @@ class LibraryRepository(
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
 
+    private val _scanned = MutableStateFlow(false)
+    /** True once the first scan has finished (until then the library is still loading). */
+    val scanned: StateFlow<Boolean> = _scanned.asStateFlow()
+
     /** Files read so far by the running scan (for a progress line on big first scans). */
     val scanProgress: StateFlow<Int> get() = scanner.progress
 
@@ -190,6 +194,8 @@ class LibraryRepository(
     // ---------- Likes and stats ----------
 
     private val _liked = MutableStateFlow(loadLiked())
+    /** Likes as stored, with when each was made (library sync). */
+    val likedEntries: StateFlow<List<LikedEntity>> = _liked.asStateFlow()
     /** Liked songs, newest like first (like Android's `ORDER BY likedAt DESC`). */
     val likedIds: StateFlow<Set<Long>> = _liked.map(::likedOrder).stateIn(scope, SharingStarted.Eagerly, likedOrder(_liked.value))
 
@@ -198,17 +204,37 @@ class LibraryRepository(
         .mapTo(LinkedHashSet()) { it.value.songId }
 
     private val _stats = MutableStateFlow(loadStats())
-    val stats: StateFlow<Map<Long, PlayStat>> = _stats
-        .map { m -> m.mapValues { (_, it) -> PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) } }
-        .stateIn(scope, SharingStarted.Eagerly, _stats.value.mapValues { (_, it) -> PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) })
+    /** This computer's own play counts (what library sync reports for this device). */
+    val ownStats: StateFlow<Map<Long, PlayStatEntity>> = _stats.asStateFlow()
+    /** Your other devices' play counts for songs here (library sync), added to [stats]. */
+    private val _remoteStats = MutableStateFlow<Map<Long, PlayStat>>(emptyMap())
+    fun setRemoteStats(stats: Map<Long, PlayStat>) { _remoteStats.value = stats }
+
+    /** Play counts shown everywhere (On repeat, Recently played…): this computer's plus your other devices'. */
+    val stats: StateFlow<Map<Long, PlayStat>> = combine(_stats, _remoteStats, ::mergeStats)
+        .stateIn(scope, SharingStarted.Eagerly, mergeStats(_stats.value, _remoteStats.value))
+
+    private fun mergeStats(own: Map<Long, PlayStatEntity>, remote: Map<Long, PlayStat>): Map<Long, PlayStat> {
+        val out = HashMap<Long, PlayStat>(own.size + remote.size)
+        own.forEach { (id, it) -> out[id] = PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) }
+        remote.forEach { (id, r) ->
+            val s = out[id]
+            out[id] = if (s == null) r.copy(songId = id) else PlayStat(id, s.playCount + r.playCount, maxOf(s.lastPlayed, r.lastPlayed), s.skipCount + r.skipCount)
+        }
+        return out
+    }
 
     // ---------- Playlists ----------
 
-    private data class PlaylistDb(val playlists: List<PlaylistEntity>, val entries: List<PlaylistEntryEntity>, val nextId: Long, val nextEntryId: Long)
+    data class PlaylistDb(val playlists: List<PlaylistEntity>, val entries: List<PlaylistEntryEntity>, val nextId: Long, val nextEntryId: Long)
     private val _playlistDb = MutableStateFlow(loadPlaylists())
+    /** Playlists and their entries as stored, including songs that aren't on this computer now (library sync). */
+    val playlistDb: StateFlow<PlaylistDb> = _playlistDb.asStateFlow()
 
     private val playlistArtRevision = MutableStateFlow(0)
-    private fun playlistCover(id: Long) = File(coverDir.apply { mkdirs() }, "$id.jpg")
+    /** Bumped whenever a playlist cover is set or cleared. */
+    val playlistCovers: StateFlow<Int> = playlistArtRevision.asStateFlow()
+    fun playlistCover(id: Long) = File(coverDir.apply { mkdirs() }, "$id.jpg")
 
     /** Sets (an image file) or clears (null) a playlist's custom cover. */
     suspend fun setPlaylistCover(id: Long, image: File?): Boolean = withContext(Dispatchers.IO) {
@@ -246,11 +272,18 @@ class LibraryRepository(
     private val _mixes = MutableStateFlow<List<Mix>>(emptyList())
     /** Generated playlists the user deleted; they stay gone even though the taste engine keeps making them. */
     private val _hiddenMixes = MutableStateFlow(prefs.getStringSet("hiddenMixes", emptySet()).toSet())
+    /** Keys of the generated playlists the user deleted. */
+    val hiddenMixKeys: StateFlow<Set<String>> = _hiddenMixes.asStateFlow()
     val hiddenMixCount: StateFlow<Int> = _hiddenMixes.map { it.size }.stateIn(scope, SharingStarted.Eagerly, _hiddenMixes.value.size)
     val mixes: StateFlow<List<Mix>> = combine(_mixes, _hiddenMixes) { list, hidden -> list.filter { it.key !in hidden } }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
     fun publishMixes(list: List<Mix>) { _mixes.value = list }
     fun deleteMix(key: String) { _hiddenMixes.value = _hiddenMixes.value + key; prefs.edit { putStringSet("hiddenMixes", _hiddenMixes.value) } }
+    /** Deletes or brings back one generated playlist (library sync). */
+    fun setMixHidden(key: String, hidden: Boolean) {
+        _hiddenMixes.value = if (hidden) _hiddenMixes.value + key else _hiddenMixes.value - key
+        prefs.edit { putStringSet("hiddenMixes", _hiddenMixes.value) }
+    }
     fun restoreDeletedMixes() { _hiddenMixes.value = emptySet(); prefs.edit { remove("hiddenMixes") } }
 
     // ---------- Scanning ----------
@@ -315,6 +348,7 @@ class LibraryRepository(
             System.err.println("Spitify: scanning your library failed: $e")
         } finally {
             _scanning.value = false
+            _scanned.value = true
         }
     }
 
@@ -334,6 +368,13 @@ class LibraryRepository(
             _liked.update { list -> if (list.any { it.songId == songId }) list.filterNot { it.songId == songId } else list + LikedEntity(songId, System.currentTimeMillis()) }
             saveLiked()
         }
+    }
+
+    /** Likes or unlikes [songId] (not a toggle), keeping [likedAt] for a new like. */
+    suspend fun setLiked(songId: Long, liked: Boolean, likedAt: Long = System.currentTimeMillis()) = dbLock.withLock {
+        if (_liked.value.any { it.songId == songId } == liked) return@withLock
+        _liked.update { list -> if (liked) list + LikedEntity(songId, likedAt) else list.filterNot { it.songId == songId } }
+        saveLiked()
     }
 
     fun recordPlay(songId: Long) = scope.launch {

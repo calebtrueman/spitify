@@ -64,6 +64,8 @@ class SocialRepository(
     var onRoomRequest: ((IncomingRoomRequest) -> Unit)? = null
     /** Your-devices packets ("deviceList", "devicePlayback"…), handled by DeviceSyncRepository. */
     var onDevicePacket: ((String, SocialPacket, Boolean) -> Unit)? = null
+    /** Library sync packets ("syncDoc", "syncDigest"), handled by LibrarySyncRepository. */
+    var onSyncPacket: ((String, SocialPacket, Boolean) -> Unit)? = null
     /** True while devices are linked or being paired: the relay then runs even with sharing off (inbox only). */
     var devicesNeedRelay = false
         set(value) { if (field != value) { field = value; refresh() } }
@@ -119,6 +121,16 @@ class SocialRepository(
         state.following += link.owner; persist(); relay.requestPlaylist(link); configure(true)
     }
     fun unfollow(id: String) { state.following -= id; persist(); refresh() }
+    /**
+     * Follows or unfollows [id] because you did on another device (library sync). Unlike [follow] it
+     * doesn't turn sharing on: that stays this device's choice.
+     */
+    fun syncFollowing(id: String, follow: Boolean) {
+        if (!SocialRules.key(id) || id == publicKey || (id in state.following) == follow) return
+        if (follow && state.following.size >= 128) return
+        if (follow) state.following += id else state.following -= id
+        persist(); refresh()
+    }
     fun save(playlist: SharedPlaylist) {
         require(playlist.owner == publicKey && playlist.valid()) { "This playlist could not be saved." }
         check(state.playlists.size < 500 || playlist.key in state.playlists) { "Your shared playlist library is full." }
@@ -235,6 +247,7 @@ class SocialRepository(
         runCatching {
             when (packet.type) {
                 "deviceCode", "deviceLinkRequest", "deviceList", "deviceUnlink", "devicePlayback", "deviceCommand" -> onDevicePacket?.invoke(author, packet, encrypted)
+                "syncDoc", "syncDigest" -> onSyncPacket?.invoke(author, packet, encrypted)
                 "room" -> { val room = ListeningRoom.parse(packet.body); if (rooms.accept(room, author, publicKey, encrypted)) { changed(); onRoomUpdate?.invoke(room) } }
                 "roomRequest" -> if (encrypted) { val request = RoomRequest.parse(packet.body); if (rooms.receive(request, author, publicKey)) { changed(); onRoomRequest?.invoke(rooms.requests.last()) } }
                 "profileHidden" -> if (!encrypted && author != publicKey && state.profiles[author]?.isPublic != false) { state.profiles.remove(author); persist() }

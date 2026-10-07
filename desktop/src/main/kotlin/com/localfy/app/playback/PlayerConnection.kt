@@ -75,6 +75,10 @@ class PlayerConnection(
     )
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    private val _speeds = MutableStateFlow(prefs.getFloat(KEY_SPEED_MUSIC, 1f) to prefs.getFloat(KEY_SPEED_PODCAST, 1f))
+    /** The remembered speeds: music to spoken word (podcasts and audiobooks). */
+    val savedSpeeds: StateFlow<Pair<Float, Float>> = _speeds.asStateFlow()
+
     private val _position = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _position.asStateFlow()
 
@@ -624,9 +628,22 @@ class PlayerConnection(
     fun setSpeed(speed: Float): Unit = synchronized(lock) {
         val spoken = entries.getOrNull(index)?.song?.isSpoken == true
         prefs.edit { putFloat(if (spoken) KEY_SPEED_PODCAST else KEY_SPEED_MUSIC, speed) }
+        _speeds.value = if (spoken) _speeds.value.first to speed else speed to _speeds.value.second
         currentSpeed = speed
         engine.setSpeed(speed)
         publish(queueChanged = false)
+    }
+
+    /** Sets the remembered speed for music or spoken word (from another device); applies now when that kind is playing. */
+    fun setSavedSpeed(spoken: Boolean, speed: Float): Unit = synchronized(lock) {
+        val value = speed.takeIf { it.isFinite() }?.coerceIn(0.25f, 3f) ?: return
+        prefs.edit { putFloat(if (spoken) KEY_SPEED_PODCAST else KEY_SPEED_MUSIC, value) }
+        _speeds.value = if (spoken) _speeds.value.first to value else value to _speeds.value.second
+        if (roomSpeed == null && (entries.getOrNull(index)?.song?.isSpoken == true) == spoken) {
+            currentSpeed = value
+            engine.setSpeed(value)
+            publish(queueChanged = false)
+        }
     }
 
     fun setSkipSilence(enabled: Boolean) {

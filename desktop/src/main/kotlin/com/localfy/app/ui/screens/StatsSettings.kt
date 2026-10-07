@@ -141,7 +141,7 @@ fun SettingsScreen() {
         item { SettingRow("Hidden artists", "Show artists you hid from Library") { app.navigate("hidden-artists") } }
         item {
             val deletedMixes by app.repo.hiddenMixCount.collectAsStateWithLifecycle()
-            if (deletedMixes > 0) SettingRow("Bring back deleted mixes", "$deletedMixes generated ${if (deletedMixes == 1) "playlist" else "playlists"} you deleted") { app.repo.restoreDeletedMixes() }
+            if (deletedMixes > 0) SettingRow("Bring back deleted mixes", "$deletedMixes generated ${if (deletedMixes == 1) "playlist" else "playlists"} you deleted") { nativeApp.librarySync.allowMassRemoval("hiddenMixes"); app.repo.restoreDeletedMixes() }
         }
         item { SettingRow("Appearance", "Theme, accent colour, typeface, text size, artwork and player style") { app.navigate(Routes.APPEARANCE) } }
         item { SettingRow("Equaliser & sound", "10 presets, custom curve, bass boost, surround, loudness") { app.navigate(Routes.EQUALIZER) } }

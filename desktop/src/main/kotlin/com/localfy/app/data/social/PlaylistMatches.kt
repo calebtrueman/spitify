@@ -56,6 +56,9 @@ class PlaylistMatches(
     /** Remembers [song] as the copy to play for [track]. */
     fun choose(track: SharedTrack, song: Song) { scope.launch(confined) { chosen[key(track)] = song.id; failed.value = failed.value - key(track); save() } }
 
+    /** Lets the next [resolve] of these tracks search again after a failure (library sync's Retry). */
+    fun forget(tracks: List<SharedTrack>) { scope.launch(confined) { failed.value = failed.value - tracks.map(::key).toSet(); save() } }
+
     fun retry(playlist: SharedPlaylist) { scope.launch(confined) { failed.value = failed.value - playlist.tracks.map(::key).toSet(); save(); prepare(playlist) } }
 
     /** Starts matching every track in the background, four at a time. */

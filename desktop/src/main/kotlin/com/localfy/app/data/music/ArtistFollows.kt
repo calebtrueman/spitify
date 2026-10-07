@@ -55,6 +55,17 @@ class ArtistFollows(
         notices.addAll(0, albums.take(10).map { ReleaseNotice(artist, it) }); persist()
     }
 
+    /**
+     * Follows [artist] because you followed it on another device (library sync). Its current albums
+     * count as known, so they aren't announced as new releases; when they can't be read now, the
+     * next refresh announces only the last two weeks' releases, as for any follow.
+     */
+    suspend fun followFromSync(artist: OnlineArtist) {
+        if (contains(artist.id)) return
+        val albums = try { artistPage(artist.id).albums } catch (e: Exception) { if (e is CancellationException) throw e; emptyList() }
+        follow(artist, albums)
+    }
+
     @Synchronized fun unfollow(id: String) { following.remove(id); notices.removeAll { it.artist.id == id }; known.removeAll { it.startsWith("$id:") }; persist() }
 
     suspend fun refresh() {
