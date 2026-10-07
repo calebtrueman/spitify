@@ -16,3 +16,6 @@ ios/build/
 ios/Spitify.xcodeproj/
 ios/*.xcworkspace
 xcuserdata/
+
+# Claude Code agent worktrees
+.claude/
