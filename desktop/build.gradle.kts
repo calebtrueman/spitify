@@ -67,3 +67,8 @@ compose.desktop {
         }
     }
 }
+
+tasks.test {
+    // Full assertion messages in CI logs.
+    testLogging { events("failed"); exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL; showStandardStreams = false }
+}
