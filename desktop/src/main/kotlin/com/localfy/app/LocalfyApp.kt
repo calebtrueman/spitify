@@ -127,7 +127,12 @@ class LocalfyApp {
         else library.library.value.songById[id] ?: library.localPodcasts.value.firstOrNull { it.id == id }
             ?: library.localBooks.value.firstOrNull { it.id == id }
 
+    private var started = false
+
+    /** Starts scanning, playback and background work (once; safe to call again). */
     fun start() {
+        if (started) return
+        started = true
         EqStore.init()
         library.ensureStarted()
         player.connect()

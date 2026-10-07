@@ -36,7 +36,7 @@ class MusicDownloads(
     private val alternate: suspend (OnlineTrack) -> OnlineTrack? = AudioFallback::resolve,
     private val downloadURL: (OnlineTrack) -> String = { track -> track.audioURL?.takeIf(AudioFallback::validAudioURL) ?: Monochrome.audioUrl(track.id) },
     private val transport: DownloadTransport = HttpDownloadTransport(),
-    private val downloadsDir: File = AppPaths.downloadsDir,
+    downloadsDir: File = AppPaths.downloadsDir,
     private val workDir: File = File(AppPaths.cacheDir, "music-downloads"),
     storeFile: File = AppPaths.data("music_downloads.json"),
     private val retryDelay: (Int) -> Long = DownloadRetry::delayMillis,
@@ -66,11 +66,16 @@ class MusicDownloads(
     private val _wifiOnly: MutableStateFlow<Boolean>
     /** Kept for parity with the phones; desktop can't tell Wi-Fi from other networks, so it isn't enforced. */
     val wifiOnly: StateFlow<Boolean>
+    private val _folder: MutableStateFlow<File>
+    /** Where finished downloads are saved (new downloads only; earlier ones stay where they are). */
+    val folder: StateFlow<File>
 
     init {
         val saved = store.readObject() ?: JSONObject()
         _wifiOnly = MutableStateFlow(saved.optBoolean("wifiOnly", true))
         wifiOnly = _wifiOnly.asStateFlow()
+        _folder = MutableStateFlow(saved.optString("folder").takeIf { it.isNotBlank() }?.let(::File) ?: downloadsDir)
+        folder = _folder.asStateFlow()
         val rows = saved.optJSONArray("jobs") ?: JSONArray()
         for (i in 0 until rows.length()) {
             val job = rows.optJSONObject(i)?.let(MusicDownloadEntity::fromJson) ?: continue
@@ -80,6 +85,7 @@ class MusicDownloads(
     }
 
     fun setWifiOnly(value: Boolean) { _wifiOnly.value = value; persist() }
+    fun setFolder(dir: File) { _folder.value = dir; persist() }
 
     fun start() {
         synchronized(this) { if (started) return; started = true }
@@ -300,7 +306,7 @@ class MusicDownloads(
             // The tag writer does not support Opus or raw AAC: keep those bytes untagged rather than reject them.
             if (container !in setOf(AudioContainer.OPUS, AudioContainer.AAC)) MusicFileTags.tag(tagged, track.title, track.artist, track.album.ifEmpty { null },
                 track.albumArtist ?: track.primaryArtist, track.track.takeIf { it > 0 }, track.disc, artwork)
-            val folder = File(downloadsDir, track.releaseId.takeIf(Monochrome::validId) ?: "Singles").also { it.mkdirs() }
+            val folder = File(_folder.value, track.releaseId.takeIf(Monochrome::validId) ?: "Singles").also { it.mkdirs() }
             val dest = File(folder, "${job.id}.${track.audioExtension}")
             currentCoroutineContext().ensureActive()
             val landed = mutex.withLock {
@@ -330,7 +336,7 @@ class MusicDownloads(
     private fun persist() {
         store.save(300) {
             val snapshot = _jobs.value
-            JSONObject().put("wifiOnly", _wifiOnly.value).put("jobs", JSONArray(snapshot.map { it.toJson() })).toString()
+            JSONObject().put("wifiOnly", _wifiOnly.value).put("folder", _folder.value.path).put("jobs", JSONArray(snapshot.map { it.toJson() })).toString()
         }
     }
 

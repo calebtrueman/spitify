@@ -43,6 +43,9 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.17.0") // macOS Now Playing (MediaPlayer.framework via the ObjC runtime)
     implementation("com.github.hypfvieh:dbus-java-core:5.1.1") // Linux MPRIS media keys / now playing
     implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.1.1")
+
+    // ui deps
+    implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.9.6")
 }
 
 compose.desktop {
@@ -56,10 +59,9 @@ compose.desktop {
             description = "Your music, podcasts and audiobooks"
             vendor = "Spitify"
             modules("java.sql", "java.naming", "jdk.crypto.ec", "java.net.http", "jdk.unsupported")
-            macOS { bundleID = "com.calebtrueman.spitify.desktop" }
-            windows { menuGroup = "Spitify"; upgradeUuid = "8f2b6c4e-3a51-4d7b-9a0e-5c1d2e7f9b13"; perUserInstall = true }
-            linux { packageName = "spitify" }
+            macOS { bundleID = "com.calebtrueman.spitify.desktop"; iconFile.set(project.file("icons/Spitify.icns")) }
+            windows { menuGroup = "Spitify"; upgradeUuid = "8f2b6c4e-3a51-4d7b-9a0e-5c1d2e7f9b13"; perUserInstall = true; iconFile.set(project.file("icons/Spitify.ico")) }
+            linux { packageName = "spitify"; iconFile.set(project.file("icons/Spitify.png")) }
         }
     }
 }
-
