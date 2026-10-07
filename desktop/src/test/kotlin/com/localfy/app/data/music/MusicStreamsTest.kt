@@ -45,7 +45,7 @@ class MusicStreamsTest {
         assertEquals("https://archive.org/download/item/x.flac", again.lastSource(track("2")).audioURL)
     }
 
-    @Test fun streamUrlPrefersLocalCopyThenWorkingSourceThenFallback() = runBlocking {
+    @Test fun streamUrlPlaysAtOnceAndFallsBackAfterAFailure() = runBlocking {
         val d = dir()
         val probed = mutableListOf<String>()
         var working = setOf<String>()
@@ -53,11 +53,13 @@ class MusicStreamsTest {
         val streams = MusicStreams(d, probe = { probed += it; it in working }, alternate = { if (it.audioURL == null) fallback else null })
         val song = streams.register(track("2"))
 
-        // 1. The Monochrome stream works.
+        // 1. The usual stream is returned straight away, unchecked (checking costs a whole request).
         working = setOf(Monochrome.audioUrl("2"))
         assertEquals(Monochrome.audioUrl("2"), streams.streamUrl(song))
+        assertTrue(probed.isEmpty())
 
-        // 2. It stops working: the fallback is found, checked and remembered.
+        // 2. The player can't open it: the fallback is found, checked and remembered.
+        streams.sourceFailed(song, Monochrome.audioUrl("2"))
         working = setOf(fallback.audioURL!!)
         assertEquals(fallback.audioURL, streams.streamUrl(song))
         assertEquals(fallback.audioURL, streams.lastSource(track("2")).audioURL)
@@ -65,7 +67,8 @@ class MusicStreamsTest {
         assertEquals(fallback.audioURL, streams.streamUrl(song))
         assertEquals(listOf(fallback.audioURL), probed) // replay skips the search
 
-        // 3. Nothing works: null, never an unchecked URL.
+        // 3. Everything failed: null, never a URL known not to play.
+        streams.sourceFailed(song, fallback.audioURL!!)
         working = emptySet()
         assertNull(streams.streamUrl(song))
 

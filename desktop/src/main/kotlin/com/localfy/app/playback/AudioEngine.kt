@@ -11,6 +11,8 @@ class EngineTrack(
     val title: String,
     val spoken: Boolean = false,
     val isRemote: Boolean = false,
+    /** A remote URL that couldn't be opened; [url] is asked once more and may offer another source. */
+    val failed: (suspend (String) -> Unit)? = null,
     val url: suspend () -> String?,
 )
 

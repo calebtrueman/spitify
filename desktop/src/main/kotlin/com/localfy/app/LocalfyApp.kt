@@ -85,6 +85,7 @@ class LocalfyApp {
             saveProgress = { key, pos, dur -> podcasts.saveProgress(key, pos, dur) },
             setPlayed = { key, played, dur -> podcasts.setPlayed(key, played, dur) },
             streamUrl = { musicStreams.streamUrl(it) },
+            streamFailed = { song, url -> musicStreams.sourceFailed(song, url) },
             scope = appScope,
             hiddenSongs = { taste.hiddenSongs.value },
             hiddenArtists = { taste.hiddenArtists.value },

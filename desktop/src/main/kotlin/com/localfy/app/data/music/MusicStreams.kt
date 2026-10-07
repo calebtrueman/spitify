@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -140,11 +141,15 @@ class MusicStreams(
         sourcesStore.save(500) { sourcesJson() }
     }
 
+    /** Source URLs that FFmpeg couldn't play, per track: the next [streamUrl] checks alternatives instead. */
+    private val failedUrls = HashMap<String, MutableSet<String>>()
+
     /**
-     * Something FFmpeg can open for [song]: a `file:` URI for a downloaded or cached copy, otherwise a checked
-     * https URL. Same source order as the phone's MusicStreamDataSource: local copy, the source that last
-     * worked, the Monochrome stream, then AudioFallback (another Monochrome copy, Internet Archive, YouTube),
-     * up to four sources. A source only counts when its first bytes are audio. Null when nothing plays.
+     * Something FFmpeg can open for [song]: a `file:` URI for a downloaded or cached copy, otherwise an
+     * https URL. Like the phones, the usual source is returned straight away, unchecked: the server takes
+     * seconds to answer each request, so checking first doubled the wait. When the player reports a URL
+     * as unplayable ([sourceFailed]), later calls skip it and check the alternatives (another Monochrome
+     * copy, Internet Archive, YouTube; up to four sources) by their first bytes. Null when nothing plays.
      * Non-stream songs return their own sourceUri.
      */
     suspend fun streamUrl(song: Song): String? = withContext(Dispatchers.IO) {
@@ -153,15 +158,20 @@ class MusicStreams(
         runCatching { localCopy(track) }.getOrNull()?.takeIf { it.isFile }?.let { return@withContext it.toURI().toString() }
         val lock = synchronized(resolving) { resolving.getOrPut(track.id) { Mutex() } }
         lock.withLock {
+            val failed = synchronized(failedUrls) { failedUrls[track.id]?.toSet().orEmpty() }
             var candidate = lastSource(track)
             repeat(4) {
                 val url = runCatching { sourceURL(candidate) }.getOrNull()
-                if (url != null) {
+                if (url != null && url !in failed) {
                     listeningCache?.cachedFileFor(url)?.let { rememberSource(candidate); return@withContext it.toURI().toString() }
-                    val works = try { probe(url) } catch (e: Exception) { if (e is CancellationException) throw e; false }
+                    val works = failed.isEmpty() || try { probe(url) } catch (e: Exception) { if (e is CancellationException) throw e; false }
                     if (works) {
                         rememberSource(candidate)
-                        if (cacheWhilePlaying) listeningCache?.let { cache -> background.launch { runCatching { cache.fill(url) } } }
+                        if (cacheWhilePlaying) listeningCache?.let { cache ->
+                            // After playback has its own connection going: a second full download at the
+                            // same moment would slow the start.
+                            background.launch { delay(CACHE_FILL_DELAY); runCatching { cache.fill(url) } }
+                        }
                         return@withContext url
                     }
                 }
@@ -169,6 +179,13 @@ class MusicStreams(
             }
             null
         }
+    }
+
+    /** The player couldn't open [url] for [song]; the next [streamUrl] looks elsewhere. */
+    fun sourceFailed(song: Song, url: String) {
+        val track = track(song) ?: return
+        synchronized(failedUrls) { failedUrls.getOrPut(track.id) { mutableSetOf() } += url }
+        if (runCatching { sourceURL(lastSource(track)) }.getOrNull() == url) synchronized(this) { sources.remove(track.id) }
     }
 
     /** The finished cached copy of a stream URL, when the listening cache holds one. */
@@ -179,6 +196,7 @@ class MusicStreams(
 
     companion object {
         const val CACHE_LIMIT = 1024L * 1024 * 1024
+        const val CACHE_FILL_DELAY = 20_000L
         fun streamId(id: String): Long {
             val bytes = MessageDigest.getInstance("SHA-256").digest(id.toByteArray())
             val value = java.nio.ByteBuffer.wrap(bytes).long and 0x0fffffffffffffffL

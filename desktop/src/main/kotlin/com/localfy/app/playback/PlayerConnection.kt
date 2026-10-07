@@ -44,6 +44,8 @@ class PlayerConnection(
     private val setPlayed: (key: String, played: Boolean, durMs: Long) -> Unit,
     /** An https URL for a streamed ("spitify://music/<id>") song, or null when offline. */
     private val streamUrl: suspend (Song) -> String?,
+    /** The engine couldn't open this stream URL (Android: the data source tries the next source itself). */
+    private val streamFailed: (Song, String) -> Unit = { _, _ -> },
     private val scope: CoroutineScope,
     private val hiddenSongs: () -> Set<Long> = { emptySet() },
     private val hiddenArtists: () -> Set<String> = { emptySet() },
@@ -306,9 +308,9 @@ class PlayerConnection(
     private fun trackFor(entry: QueueEntry): EngineTrack {
         val song = entry.song
         val remote = song.isStream || song.sourceScheme == "http" || song.sourceScheme == "https"
-        return EngineTrack(entry.uid, song.id, song.title, spoken = song.isSpoken, isRemote = remote) {
-            if (song.isStream) streamUrl(song) else song.sourceUri
-        }
+        return EngineTrack(entry.uid, song.id, song.title, spoken = song.isSpoken, isRemote = remote,
+            url = { if (song.isStream) streamUrl(song) else song.sourceUri },
+            failed = if (song.isStream) { url -> streamFailed(song, url) } else null)
     }
 
     /** Tells the engine what follows the current entry (gapless, or crossfaded). */

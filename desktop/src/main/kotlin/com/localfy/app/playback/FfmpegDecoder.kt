@@ -200,6 +200,28 @@ internal class TrackDecoder(
         ensureNetwork()
         val url = runBlocking { withTimeoutOrNull(30_000) { track.url() } }
             ?: throw DecodeFailure(EngineError(EngineError.Kind.NETWORK, "No stream available"))
+        try {
+            openUrl(url)
+        } catch (e: DecodeFailure) {
+            // Streams are opened unchecked (checking first costs a whole extra request); a source that
+            // turns out not to play is reported, and the track offers the next one.
+            val report = track.failed
+            if (closed || report == null || !(url.startsWith("http://") || url.startsWith("https://"))) throw e
+            val next = runBlocking { report(url); withTimeoutOrNull(30_000) { track.url() } }
+            if (closed || next == null || next == url) throw e
+            freeOpened()
+            openUrl(next)
+        }
+    }
+
+    private fun freeOpened() {
+        runCatching { frame?.let { av_frame_free(it) } }; frame = null
+        runCatching { packet?.let { av_packet_free(it) } }; packet = null
+        runCatching { codecCtx?.let { avcodec_free_context(it) } }; codecCtx = null
+        runCatching { fmt?.let { avformat_close_input(it) } }; fmt = null
+    }
+
+    private fun openUrl(url: String) {
         val target = ffmpegLocation(url)
         val remote = target.startsWith("http://") || target.startsWith("https://")
         if (!remote && !target.contains("://") && !File(target).isFile) throw DecodeFailure(EngineError(EngineError.Kind.OTHER, "File not found"))
@@ -215,6 +237,10 @@ internal class TrackDecoder(
             av_dict_set(opts, "reconnect_delay_max", "8", 0)
             av_dict_set(opts, "rw_timeout", "20000000", 0)
             av_dict_set(opts, "user_agent", "Spitify Desktop", 0)
+            // Start from the first bytes, like the phones: the default probe reads megabytes of a
+            // lossless stream before the first sample plays.
+            av_dict_set(opts, "probesize", "65536", 0)
+            av_dict_set(opts, "analyzeduration", "0", 0)
         }
         val ret = avformat_open_input(ctx, target, null, opts)
         av_dict_free(opts)
