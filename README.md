@@ -241,7 +241,7 @@ adb install -r app-release.apk
 | Windows | `Spitify-Desktop-<version>-Windows-x64.msi` |
 | Linux | `.deb` (Debian, Ubuntu) or `.rpm` (Fedora, openSUSE) |
 
-The installers aren't signed. On a Mac, Control-click Spitify in Applications, choose **Open**, then **Open** again (needed once). On Windows, choose **More info › Run anyway** if SmartScreen warns.
+The installers aren't signed. On a Mac, open Spitify once (macOS will refuse), then go to **System Settings › Privacy & Security** and click **Open Anyway** (needed once). On Windows, choose **More info › Run anyway** if SmartScreen warns.
 
 On a Fold, set **Settings › Display › Screen continuity** to *Always* for Spitify, so it keeps playing on the cover screen when you close the phone.
 
