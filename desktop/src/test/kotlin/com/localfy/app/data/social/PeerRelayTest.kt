@@ -120,6 +120,28 @@ class PeerRelayTest {
         assertEquals(1, second.pendingCount)
     }
 
+    @Test fun codeOffersCarryTheirTagAndArriveOnlyThroughALookup() = runBlocking {
+        val server = FakeRelay()
+        val (alice, _) = relay(server, "a"); val (bob, bobGot) = relay(server, "b")
+        listOf(alice, bob).forEach { it.start(listOf("wss://relay.test"), emptySet(), inboxOnly = true) }
+        eventually { alice.connectedCount == 1 && bob.connectedCount == 1 }
+        val tag = DeviceSyncState.lookupTag("K7QXM2PA")
+        alice.send(SocialPacket("deviceCode", DeviceCodeOffer(alice.publicKey, "Mac", "macos").json()), "deviceCode", null, 600_000, listOf(listOf("t", tag)))
+        eventually { server.events.isNotEmpty() }
+        val tags = server.events.single().getJSONArray("tags").toString()
+        assertTrue(tags.contains("[\"t\",\"$tag\"]") && tags.contains("[\"t\",\"spitify\"]"))
+        delay(300)
+        assertTrue("pushed without a lookup: ignored", bobGot.isEmpty())
+        bob.lookup(DeviceSyncState.lookupTag("ZZZZZZZZ"))
+        delay(300)
+        assertTrue("another code's lookup: ignored", bobGot.isEmpty())
+        bob.lookup(tag)
+        eventually { bobGot.any { it.packet.type == "deviceCode" } }
+        assertEquals(alice.publicKey, bobGot.first().author); assertFalse(bobGot.first().encrypted)
+        val lookup = server.received.first { it.contains("spitify-lookup-") && it.contains(tag) }
+        assertEquals(5, JSONArray(lookup).getJSONObject(2).getInt("limit"))
+    }
+
     @Test fun rejectsBadRecipientWithReadableMessage() = runBlocking {
         val (alice, _) = relay(FakeRelay(), "a")
         val error = runCatching { alice.send(SocialPacket("x", JSONObject()), "x", "not-a-key") }.exceptionOrNull()

@@ -79,7 +79,11 @@ import com.localfy.app.ui.components.AddToPlaylistDialog
 import com.localfy.app.ui.components.CreatePlaylistDialog
 import com.localfy.app.ui.components.MetadataEditor
 import com.localfy.app.ui.components.SongMenuSheet
+import com.localfy.app.ui.player.ContinueCard
+import com.localfy.app.ui.player.DEVICES_ROUTE
+import com.localfy.app.ui.player.LinkRequestDialog
 import com.localfy.app.ui.player.MiniPlayer
+import com.localfy.app.ui.player.PlayingOnBar
 import com.localfy.app.ui.player.NowPlayingPane
 import com.localfy.app.ui.player.TheaterPlayer
 import com.localfy.app.ui.player.rememberPlayerState
@@ -144,6 +148,7 @@ fun LocalfyRoot() {
 
     // Player messages (unsupported file, offline stream...) and the app's short notes, as snackbars.
     LaunchedEffect(Unit) { container.player.messages.collect { Toasts.show(it) } }
+    LaunchedEffect(Unit) { container.deviceSync.messages.collect { Toasts.show(it) } }
     LaunchedEffect(Unit) {
         Toasts.messages.collect { message ->
             snackbar.currentSnackbarData?.dismiss()
@@ -243,6 +248,8 @@ fun LocalfyRoot() {
                         }
                         LaunchedEffect(nav.backStack) { nav.takeDiscarded().forEach { holder.removeState(it.id) } }
                     }
+                    // Your other devices: "Playing on …" and "Continue from …" sit above the player bar.
+                    if (!paneVisible) { PlayingOnBar(); ContinueCard() }
                     if (!paneVisible && player.hasMedia) MiniPlayer(onExpand = { DesktopSettings.setPaneVisible(true) }, Modifier.padding(bottom = 4.dp))
                 }
                 if (paneVisible) {
@@ -274,6 +281,7 @@ fun LocalfyRoot() {
         }
         addToPlaylist?.let { songs -> AddToPlaylistDialog(songs) { addToPlaylist = null } }
         editing?.let { (songs, album) -> MetadataEditor(songs, album) { editing = null } }
+        LinkRequestDialog()
         if (creatingPlaylist) {
             CreatePlaylistDialog(onDismiss = { creatingPlaylist = false }, onCreated = { actions.navigate(Routes.playlist(it)) })
         }
@@ -298,6 +306,7 @@ private fun RouteContent(route: String, onCreatePlaylist: () -> Unit) {
         Routes.BOOKS -> BooksScreen()
         Routes.PROFILE -> ProfileScreen()
         Routes.FRIENDS -> FriendsScreen()
+        DEVICES_ROUTE -> DevicesScreen()
         "book" -> BookScreen(long(0))
         "localbook" -> LocalBookScreen(long(0))
         "show" -> PodcastShowScreen(long(0))

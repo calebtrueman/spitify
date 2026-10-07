@@ -13,6 +13,8 @@ import com.localfy.app.data.music.Monochrome
 import com.localfy.app.data.music.MusicDownloads
 import com.localfy.app.data.music.MusicStreams
 import com.localfy.app.data.podcast.PodcastRepository
+import com.localfy.app.data.social.DevicePlayer
+import com.localfy.app.data.social.DeviceSyncRepository
 import com.localfy.app.data.social.ListeningRooms
 import com.localfy.app.data.social.PlaylistMatches
 import com.localfy.app.data.social.RoomPlayer
@@ -110,6 +112,10 @@ class LocalfyApp {
             trackFor = musicStreams::track,
         )
     }
+    /** Your devices: "Playing on …", remote control, Listen here and continue where you left off. */
+    val deviceSync: DeviceSyncRepository by lazy {
+        DeviceSyncRepository(social, DevicePlayerAdapter(), appScope, resolveTrack = { playlistMatches.resolve(it) })
+    }
     val playlistMatches: PlaylistMatches by lazy {
         PlaylistMatches(appScope, librarySongs = { library.library.value.songs }, registerStream = musicStreams::register)
     }
@@ -141,12 +147,14 @@ class LocalfyApp {
         taste
         podcasts.start()
         appScope.launch { profiles.profile.collect { runCatching { social.syncProfile() } } }
+        deviceSync.start()
         ioScope.launch { musicDownloads.start() }
     }
 
     /** Saves the queue position and every pending store before the process exits. */
     fun shutdown() {
         runCatching { player.saveNow() }
+        if (started) runCatching { deviceSync.flush() }
         runCatching { mediaSession.close() }
         runCatching { player.release() }
         runCatching { library.flush(); lyrics.flush(); musicStreams.flush(); musicDownloads.flush() }
@@ -167,6 +175,20 @@ class LocalfyApp {
         override fun seekTo(positionMs: Long) = player.seekTo(positionMs)
         override fun removeAt(index: Int) = player.removeAt(index)
         override fun playSongs(songs: List<Song>, shuffle: Boolean, source: String) = player.playSongs(songs, shuffle = shuffle, source = source)
+        override fun appendFromSource(songs: List<Song>) = player.appendFromSource(songs)
+    }
+
+    /** Lets device sync read and drive the player. */
+    private inner class DevicePlayerAdapter : DevicePlayer {
+        override val state get() = player.state
+        override val positionMs get() = player.positionMs
+        override fun song(id: Long) = resolve(id)
+        override fun online(song: Song) = musicStreams.track(song)
+        override fun setPlaying(playing: Boolean) = player.setPlaying(playing)
+        override fun next() = player.next()
+        override fun previous() = player.previous()
+        override fun seekTo(positionMs: Long) = player.seekTo(positionMs)
+        override fun playSongs(songs: List<Song>, source: String, startPositionMs: Long) = player.playSongs(songs, 0, shuffle = false, source = source, startPositionMs = startPositionMs)
         override fun appendFromSource(songs: List<Song>) = player.appendFromSource(songs)
     }
 

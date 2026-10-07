@@ -209,6 +209,7 @@ private fun MiniPlayerContent(song: Song, state: PlayerUiState, onExpand: () -> 
                 }
             }
             IconButton(onClick = { app.player.next() }) { Icon(Icons.Rounded.SkipNext, "Next") }
+            DevicesButton()
             Spacer(Modifier.width(4.dp))
         }
         // Progress hairline along the bottom edge.
@@ -646,8 +647,9 @@ fun SecondaryControls(
         ToggleIcon(Icons.Rounded.Equalizer, "Equaliser", eqOn) { app.openEqualizer() }
         if (onLyrics != null) ToggleIcon(Icons.Rounded.Lyrics, "Lyrics", lyricsSelected, onLyrics)
         if (onQueue != null) ToggleIcon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue", queueSelected, onQueue)
+        // Spotify's Connect button: your linked devices (the phone shows its audio route here).
+        DevicesButton()
     }
-        // The phone shows its audio route here; desktop audio follows the system output device.
         Spacer(Modifier.height(8.dp))
     }
 
