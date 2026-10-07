@@ -32,7 +32,12 @@ import AVFoundation
         let count = await app.library.importItems([source], asAudiobooks: false)
         XCTAssertEqual(count, 1)
         let song = try XCTUnwrap(app.library.library.songs.first { $0.fileName == source.lastPathComponent })
-        defer { if let url = app.library.fileURL(song) { try? FileManager.default.removeItem(at: url) } }
+        let imported = app.library.fileURL(song)
+        // Delete the imported copy and rescan, so later tests (autoplay) never pick a song whose file is gone.
+        addTeardownBlock { @MainActor in
+            if let imported { try? FileManager.default.removeItem(at: imported) }
+            await app.library.scan()
+        }
         app.library.saveOverride(MetadataOverride(title: title, artist: "Match Artist", source: "user"), for: [song])
         let matched = try await SharedSongMatch.resolve(track, app: app)
         XCTAssertEqual(matched.id, song.id)

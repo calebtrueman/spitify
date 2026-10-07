@@ -114,10 +114,14 @@ class FfmpegEngineTest {
         engine.listener = events
         val wav = sineWav(seconds = 4, rate = 44_100)
         engine.load(EngineTrack(1, 1, "sine") { wav.toURI().toString() }, 0, play = true)
-        Thread.sleep(400)
+        // Startup time varies a lot on CI runners; measure real-time progress once audio is flowing.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (engine.positionMs <= 0 && System.currentTimeMillis() < deadline) Thread.sleep(10)
         assertTrue(engine.isPlaying)
-        val p1 = engine.positionMs
-        assertTrue("position $p1", p1 in 150..700)
+        val p0 = engine.positionMs
+        Thread.sleep(400)
+        val p1 = engine.positionMs - p0
+        assertTrue("advanced $p1 ms in 400 ms", p1 in 200..700)
         engine.seekTo(1_200)
         Thread.sleep(200)
         val p2 = engine.positionMs

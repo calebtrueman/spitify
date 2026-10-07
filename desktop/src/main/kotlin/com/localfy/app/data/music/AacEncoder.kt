@@ -178,7 +178,7 @@ object AacEncoder {
         val packet: AVPacket = av_packet_alloc()
         val outPacket: AVPacket = av_packet_alloc()
         val frame: AVFrame = av_frame_alloc()
-        val outLayout = AVChannelLayout()
+        val outLayout = AVChannelLayout().zero<AVChannelLayout>()
         var nextPts = 0L
         var streamIndex = -1
         var headerWritten = false
@@ -268,7 +268,7 @@ object AacEncoder {
         private fun resampler(src: AVFrame): SwrContext {
             swr?.let { return it }
             val ctx = SwrContext(null)
-            val inLayout = AVChannelLayout()
+            val inLayout = AVChannelLayout().zero<AVChannelLayout>()
             if (src.ch_layout().nb_channels() > 0) av_channel_layout_copy(inLayout, src.ch_layout())
             else av_channel_layout_default(inLayout, dec!!.ch_layout().nb_channels().coerceAtLeast(1))
             swrInRate = src.sample_rate().takeIf { it > 0 } ?: dec!!.sample_rate()

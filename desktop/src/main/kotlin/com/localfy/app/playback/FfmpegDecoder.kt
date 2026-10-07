@@ -338,13 +338,14 @@ internal class TrackDecoder(
     private fun setupResampler(f: AVFrame, channels: Int) {
         swr?.let { swr_free(it) }
         swr = null
-        val inLayout = AVChannelLayout()
-        // Initialise the (uninitialised) struct first: copy() uninits its destination.
+        val inLayout = AVChannelLayout().zero<AVChannelLayout>()
+        // Zeroed, then defaulted: copy() uninits its destination, and fresh native memory isn't zeroed on Linux/Windows.
         av_channel_layout_default(inLayout, channels)
         if (f.ch_layout().nb_channels() > 0) av_channel_layout_copy(inLayout, f.ch_layout())
-        val outLayout = AVChannelLayout()
+        val outLayout = AVChannelLayout().zero<AVChannelLayout>()
         av_channel_layout_default(outLayout, CHANNELS)
-        val holder = PointerPointer<SwrContext>(1L)
+        // Must start out null: swr_alloc_set_opts2 reuses (and frees) any context already in the slot.
+        val holder = PointerPointer<SwrContext>(1L).put(0L, null as Pointer?)
         try {
             val r = swr_alloc_set_opts2(holder, outLayout, AV_SAMPLE_FMT_FLT, SAMPLE_RATE, inLayout, f.format(), f.sample_rate(), 0, null)
             val ctx = holder.get(SwrContext::class.java, 0)
