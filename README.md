@@ -19,6 +19,7 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 |---|---|---|
 | **Android 11+** | Phones, tablets and foldables; Android Auto and car playback controls | [APK releases](../../releases) · [Android build steps](#build) |
 | **iPhone, iOS 17+** | Native SwiftUI app; Files import, Siri shortcuts, background audio and lock-screen controls | [IPA releases](../../releases) · [SideStore, AltStore and Xcode setup](ios/README.md) |
+| **Desktop** | macOS (Apple silicon and Intel), Windows 10/11 and Linux; the same app with a wide layout, keyboard shortcuts and media keys | [Desktop installers](../../releases) · [Desktop details](#desktop) |
 | **CarPlay** | System Now Playing controls; a separate Spitify browsing interface is included in the source and needs Apple-approved CarPlay signing | [CarPlay details](#carplay-and-siri) |
 
 ## Screenshots
@@ -201,6 +202,26 @@ The Android app works on regular phones and tablets as well as foldables. Its wi
 
 <img src="docs/screenshots/home-unfolded.jpg" width="720" alt="Android foldable layout with library and player side by side">
 
+## Desktop
+
+Spitify Desktop is the same app for computers, built with Kotlin and Compose Multiplatform, so it shares the phone app's code and looks the same. It plays your own music folders, streams and downloads songs, and includes podcasts, audiobooks, lyrics, Made for you mixes, Friends and Listening Rooms.
+
+- **Your music folders:** Spitify watches your Music folder and any others you add in Settings, and picks up new files on its own. You can also drag files or folders onto the window.
+- **Playback:** FFmpeg plays MP3, AAC, FLAC, ALAC, Opus, Ogg, WAV, AIFF and more, with gapless playback, crossfade, normalisation and the 10-band equaliser.
+- **Media controls:** media keys and the system Now Playing controls work on macOS, Windows and Linux (MPRIS).
+- **Wide layout:** the library sits beside a Now Playing pane with Playing, Lyrics and Queue tabs, and ⤢ opens a full-window player.
+- **Keyboard and mouse:**
+  - Space plays or pauses; ← and → seek.
+  - Cmd/Ctrl+← and → change track; Cmd/Ctrl+F searches; Cmd/Ctrl+L opens lyrics; Esc goes back.
+  - Right-click a song for its menu.
+- **Downloads:** saved as AAC 256 kbps `.m4a` in `Music/Spitify`. You can change the folder in Settings.
+
+| | Where Spitify keeps its data |
+|---|---|
+| macOS | `~/Library/Application Support/Spitify` |
+| Windows | `%APPDATA%\Spitify` |
+| Linux | `~/.local/share/spitify` |
+
 ## Install
 
 **Android:** download the APK from [Releases](../../releases) and open it on your phone, or install with:
@@ -210,6 +231,17 @@ adb install -r app-release.apk
 ```
 
 **iPhone:** download the unsigned IPA from [Releases](../../releases) and sign/install it with SideStore or AltStore. You can also add the [Spitify SideStore source](https://raw.githubusercontent.com/calebtrueman/spitify/main/ios/sidestore-source.json) to receive release updates. See the [iPhone setup and build guide](ios/README.md). An unsigned IPA cannot be installed by opening it directly.
+
+**Desktop:** download the installer for your computer from [Releases](../../releases):
+
+| Computer | File |
+|---|---|
+| Mac with Apple silicon | `Spitify-Desktop-<version>-macOS-arm64.dmg` |
+| Intel Mac | `Spitify-Desktop-<version>-macOS-x64.dmg` |
+| Windows | `Spitify-Desktop-<version>-Windows-x64.msi` |
+| Linux | `.deb` (Debian, Ubuntu) or `.rpm` (Fedora, openSUSE) |
+
+The installers aren't signed. On a Mac, Control-click Spitify in Applications, choose **Open**, then **Open** again (needed once). On Windows, choose **More info › Run anyway** if SmartScreen warns.
 
 On a Fold, set **Settings › Display › Screen continuity** to *Always* for Spitify, so it keeps playing on the cover screen when you close the phone.
 
@@ -228,6 +260,16 @@ Requirements: JDK 17, the Android SDK (platform 37), NDK 26.1 and CMake 3.22. Gr
 The release build is signed with the debug key so it can be sideloaded. Add your own signing config before distributing.
 
 FFmpeg ships as prebuilt static libraries (an LGPL build, without GPL or non-free parts). To rebuild them from source, run `scripts/build-ffmpeg.sh`.
+
+**Desktop:**
+
+```bash
+./gradlew :desktop:run                 # run from source
+./gradlew :desktop:test :core:test     # desktop and shared-code tests
+./gradlew :desktop:packageReleaseDmg   # or packageReleaseMsi / packageReleaseDeb / packageReleaseRpm
+```
+
+Each installer bundles its own Java runtime and the FFmpeg build for that system, so build each one on the system it's for. GitHub Actions builds all of them for every release (`.github/workflows/desktop.yml`).
 
 Toolchain: AGP 9.4 · Gradle 9.6 · Kotlin 2.3 · compileSdk/targetSdk 37 · minSdk 30.
 
@@ -256,6 +298,8 @@ app/src/main/java/com/localfy/app/      (internal package name predates the rena
 │  └─ lyrics/     tag reader (ID3/FLAC/Ogg/MP4), LRC parser, LRCLIB
 ├─ playback/      MediaLibraryService (Android Auto), crossfade, 10-band EQ, AIFF extractor
 └─ ui/            adaptive fold-aware shell, player, screens, theme
+core/             Kotlin shared by Android and desktop (models, mixes, catalogue, social, taste)
+desktop/          Spitify Desktop: Compose Multiplatform UI, FFmpeg (JavaCPP) playback, media keys
 ios/Spitify/      SwiftUI iPhone app, AVFoundation player, Siri shortcuts and CarPlay screens
 ios/SpitifyTests/ iPhone unit and native playback checks
 ffmpeg/           Media3 FFmpeg audio decoder module (JNI + prebuilt FFmpeg 6.0)

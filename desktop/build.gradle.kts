@@ -52,6 +52,8 @@ compose.desktop {
     application {
         mainClass = "com.localfy.app.MainKt"
         jvmArgs += listOf("-Xss2m", "-XX:+UseG1GC", "-Xmx1g")
+        // FFmpeg (JavaCPP), JNA and the nostr SDK load classes reflectively from native code; shrinking breaks them.
+        buildTypes.release.proguard { isEnabled.set(false) }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "Spitify"
