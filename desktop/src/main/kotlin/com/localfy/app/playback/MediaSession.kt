@@ -32,7 +32,7 @@ data class NowPlaying(
 enum class MediaCommand { PLAY, PAUSE, TOGGLE, NEXT, PREVIOUS, STOP }
 
 /**
- * OS media integration: media keys, the macOS Now Playing widget, Linux MPRIS. Implementations
+ * OS media integration: the macOS Now Playing widget, Linux MPRIS, Windows media keys. Implementations
  * must never throw or block the caller; [create] falls back to [NoOpMediaSession].
  */
 interface MediaSessionBridge : AutoCloseable {
@@ -47,7 +47,7 @@ interface MediaSessionBridge : AutoCloseable {
             when {
                 AppPaths.isMac -> MacNowPlaying()
                 AppPaths.isLinux -> MprisMediaSession()
-                // TODO(windows): System Media Transport Controls (SMTC) via WinRT; media keys meanwhile do nothing.
+                AppPaths.isWindows -> WindowsMediaKeys()
                 else -> NoOpMediaSession
             }
         }.getOrElse { NoOpMediaSession }

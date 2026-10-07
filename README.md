@@ -208,7 +208,7 @@ Spitify Desktop is the same app for computers, built with Kotlin and Compose Mul
 
 - **Your music folders:** Spitify watches your Music folder and any others you add in Settings, and picks up new files on its own. You can also drag files or folders onto the window.
 - **Playback:** FFmpeg plays MP3, AAC, FLAC, ALAC, Opus, Ogg, WAV, AIFF and more, with gapless playback, crossfade, normalisation and the 10-band equaliser.
-- **Media controls:** media keys and the system Now Playing controls work on macOS, Windows and Linux (MPRIS).
+- **Media controls:** media keys work everywhere. Now Playing shows in Control Center on macOS and through MPRIS on Linux. Windows doesn't show Spitify in its media overlay yet.
 - **Wide layout:** the library sits beside a Now Playing pane with Playing, Lyrics and Queue tabs, and ⤢ opens a full-window player.
 - **Keyboard and mouse:**
   - Space plays or pauses; ← and → seek.
