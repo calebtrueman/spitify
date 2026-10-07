@@ -73,8 +73,8 @@ artists.
 | `hiddenArtists` | `SearchMatch.fold(name)` | `{_name}` | |
 | `hiddenMixes` | mix key | `{}` | Deleted Made-for-you mixes. |
 | `podcasts` | feed URL, or `archive:<id>` for LibriVox | `{_show: {feedUrl, title, author, artwork, kind}}` | Followed shows and books. |
-| `progress` | resume key | `{positionMs, durationMs, played}` | Episodes, audiobook chapters and long tracks. Report it rounded down to 5 s, at most once a minute while playing, and on pause, stop and finish. |
-| `playlists` | global playlist id (UUID) | `{name, description, imageHash, _image, _createdAt}` | `_image` is a ≤ 64 KB JPEG data URL (512 px) or an https URL; `imageHash` is the first 16 hex characters of its SHA-256. A deleted playlist is a tombstone; then `forget(playlist(id))`. |
+| `progress` | resume key (see Fixed formats) | `{positionMs, durationMs, played, _at}` | Episodes, audiobook chapters and long tracks. Report it rounded down to 5 s, at most once a minute while playing, and on pause, stop and finish. |
+| `playlists` | global playlist id (UUID) | `{name, description, imageHash, _image, _createdAt}` | `_image` is a ≤ 24 KB JPEG data URL (300 px) or an https URL; `imageHash` is the first 16 hex characters of its SHA-256. A deleted playlist is a tombstone; then `forget(playlist(id))`. |
 | `playlist:<id>` | `entryKeys(tracks)[i]` | `{track, pos}` | The playlist's songs. `pos` is the index; sort by `pos`, then key. |
 | `history` | `"<first 8 chars of device>:<playedAt>:<trackKey>"` | `{track, playedAt, listenedMs, durationMs, skipped}` | Grow-only. Every finished or skipped listen; drives Recently played and the taste engine. |
 | `stats:<device>` | `trackKey` | `{track, plays, skips, lastPlayed}` | This device's own counts only. |
@@ -92,6 +92,10 @@ These must be identical on every platform.
 - Local audiobook or podcast files, and long tracks: `t:` + `trackKey(title, artist)`.
 - A key longer than 380 characters becomes its first 300 characters + `~` + the first 32 hex
   characters of SHA-256(key).
+
+**Progress `_at`:** when the position was recorded, in ms. A receiver keeps its own position if it
+recorded it later than the remote `_at`, then reports again so its newer position wins. If `_at` is
+missing, apply the remote position.
 
 **Setting values:**
 

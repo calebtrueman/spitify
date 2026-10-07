@@ -318,7 +318,8 @@ final class LibrarySync: @unchecked Sendable {
         if collection == history { return 16 }
         if collection == liked || collection == progress || collection.hasPrefix("stats:") { return 8 }
         if collection == savedTracks || collection.hasPrefix("playlist:") { return 4 }
-        if collection == savedAlbums || collection == podcasts || collection == playlists { return 2 }
+        if collection == playlists { return 8 } // covers ride along: up to 24 KB each
+        if collection == savedAlbums || collection == podcasts { return 2 }
         return 1
     }
     static func shardOf(_ collection: String, _ key: String) -> Int {

@@ -311,16 +311,16 @@ final class AppLibrarySyncHost: LibrarySyncHost {
         return track.valid() ? track : nil
     }
 
-    /// A ≤ 64 KB, 512 px JPEG data URL of a playlist cover, reusing the last one while the file is unchanged.
+    /// A ≤ 24 KB, 300 px JPEG data URL of a playlist cover, reusing the last one while the file is unchanged.
     nonisolated static func image(_ url: URL, memo: SyncPlaylistImage?) -> SyncPlaylistImage? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         let file = String(SocialRules.hash(data).prefix(32))
         if let memo, memo.file == file { return memo }
-        guard var jpeg = ArtCache.squareJPEG(data, side: 512) else { return nil }
+        guard var jpeg = ArtCache.squareJPEG(data, side: 300) else { return nil }
         var quality: CGFloat = 0.8
-        while jpeg.count > 47_000, quality > 0.2, let smaller = UIImage(data: jpeg)?.jpegData(compressionQuality: quality) { jpeg = smaller; quality -= 0.15 }
+        while jpeg.count > 17_500, quality > 0.2, let smaller = UIImage(data: jpeg)?.jpegData(compressionQuality: quality) { jpeg = smaller; quality -= 0.15 }
         let text = "data:image/jpeg;base64," + jpeg.base64EncodedString()
-        guard text.utf8.count <= 65_536 else { return nil }
+        guard text.utf8.count <= 24_000 else { return nil }
         return SyncPlaylistImage(file: file, url: text, hash: String(SocialRules.hash(Data(text.utf8)).prefix(16)))
     }
 

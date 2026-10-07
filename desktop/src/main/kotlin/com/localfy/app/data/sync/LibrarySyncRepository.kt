@@ -515,7 +515,7 @@ class LibrarySyncRepository(
 
     private fun encodeCover(file: File): Pair<String, String>? {
         val image = Images.decode(file.readBytes()) ?: return null
-        val small = Images.scale(image, 512, square = true)
+        val small = Images.scale(image, 300, square = true)
         var quality = 0.85f
         while (true) {
             val url = "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(Images.jpeg(small, quality))
@@ -922,7 +922,7 @@ class LibrarySyncRepository(
         private const val RESEND_AFTER = 30_000L
         private const val DOC_LIFETIME = 60 * DAY
         private const val DIGEST_LIFETIME = 2 * DAY
-        private const val MAX_IMAGE = 64 * 1024
+        private const val MAX_IMAGE = 24_000
         private const val MAX_COVER_BYTES = 4_000_000
 
         /** Every collection this computer reports ("stats" is this device's stats:<me>). */

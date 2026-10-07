@@ -217,7 +217,8 @@ class LibrarySync(val me: String, private val clock: () -> Long = { SocialRules.
             collection == HISTORY -> 16
             collection == LIKED || collection == PROGRESS || collection.startsWith("stats:") -> 8
             collection == SAVED_TRACKS || collection.startsWith("playlist:") -> 4
-            collection == SAVED_ALBUMS || collection == PODCASTS || collection == PLAYLISTS -> 2
+            collection == PLAYLISTS -> 8 // covers ride along: up to 24 KB each
+            collection == SAVED_ALBUMS || collection == PODCASTS -> 2
             else -> 1
         }
         fun shardOf(collection: String, key: String): Int {

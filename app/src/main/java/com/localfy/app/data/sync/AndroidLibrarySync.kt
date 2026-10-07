@@ -344,11 +344,11 @@ class AndroidLibrarySync(private val app: LocalfyApp) : LibraryHost, SyncLink {
         return Cover(file.lastModified(), imageHash(image), image).also { synchronized(this) { covers[gid] = it } }
     }
 
-    /** A JPEG data URL of at most 512 px, small enough that a few dozen playlists fit in one document. */
+    /** A JPEG data URL of at most 300 px and 24 KB, small enough that a few dozen playlists fit in one document. */
     private fun encodeCover(file: File): String? = runCatching {
         val original = BitmapFactory.decodeFile(file.path) ?: return null
         try {
-            for ((size, quality) in listOf(512 to 80, 512 to 60, 384 to 60, 256 to 60)) {
+            for ((size, quality) in listOf(300 to 80, 300 to 60, 256 to 60, 200 to 60)) {
                 val scaled = if (original.width > size) Bitmap.createScaledBitmap(original, size, size * original.height / original.width, true) else original
                 val bytes = java.io.ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
                 if (scaled !== original) scaled.recycle()
