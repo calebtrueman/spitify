@@ -33,6 +33,11 @@ dependencies {
     implementation("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}")
     implementation("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}:$nativePlatform")
     testImplementation(libs.junit)
+    // social deps
+    // Same Rust nostr SDK (UniFFI) as the Android app; the JVM jar bundles JNA natives for
+    // macOS arm64/x64, Windows x64/arm64, Linux x64/arm64 (glibc + musl) and FreeBSD.
+    implementation("org.nostrdevkit:nostr-sdk-jvm:0.45.1")
+    implementation("com.google.zxing:core:3.5.3")
 }
 
 compose.desktop {
