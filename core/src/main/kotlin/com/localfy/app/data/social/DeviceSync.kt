@@ -124,6 +124,9 @@ class DeviceSyncState(val me: String) {
         return token
     }
 
+    /** The user closed the code screen: the code stops working at once. */
+    fun cancelCode() { issued = null; pendingLinks.clear() }
+
     /** The code currently shown, or null when none or it expired. */
     fun currentCode(now: Long = SocialRules.now): String? = issued?.takeIf { now - it.second <= CODE_LIFETIME }?.first
 
@@ -164,11 +167,15 @@ class DeviceSyncState(val me: String) {
     fun unlink(id: String) { devices.remove(id); playback.remove(id) }
 
     /**
-     * "deviceUnlink" {id} from a linked device: [id] left the group. If it's us, we were removed
-     * and forget the whole group. Returns true when something changed.
+     * "deviceUnlink" {id, createdAt} from a linked device: [id] left the group. If it's us, we were
+     * removed and forget the whole group. Unlinks older than the link they'd undo are ignored:
+     * relays keep them for 30 days and replay them, which would undo a later re-link.
+     * Returns true when something changed.
      */
-    fun acceptUnlink(id: String, author: String, encrypted: Boolean): Boolean {
+    fun acceptUnlink(id: String, author: String, encrypted: Boolean, createdAt: Long = Long.MAX_VALUE): Boolean {
         if (!encrypted || author !in devices || !SocialRules.key(id)) return false
+        val linked = (if (id == me) devices[author] else devices[id])?.linkedAt ?: 0
+        if (createdAt < linked - 60_000) return false
         if (id == me) { devices.clear(); playback.clear(); return true }
         if (id !in devices) return false
         unlink(id); return true
@@ -232,6 +239,13 @@ class DeviceSyncState(val me: String) {
         const val RESUME_WINDOW = 14L * 24 * 60 * 60_000
         /** Changes are sent after this quiet period (seeks and skips come in bursts). */
         const val DEBOUNCE = 1_500L
+
+        /**
+         * The time to record as "received" for a state that just arrived: now, unless the state is
+         * old (a relay replaying it after we reconnect), then its own time, so it doesn't look live.
+         */
+        fun receivedTime(state: DevicePlayback, now: Long = SocialRules.now): Long =
+            if (now - state.observedAt > 10 * 60_000) state.observedAt.coerceAtMost(now) else now
 
         /** Where the remote device is now, from its last state. Uses receive time to avoid clock skew. */
         fun expectedPosition(state: DevicePlayback, receivedAt: Long, now: Long = SocialRules.now): Long {

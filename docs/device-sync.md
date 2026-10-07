@@ -33,7 +33,7 @@ All packets are `SocialPacket(type, body)` with `v = 1`.
 | `deviceCode` | public, with the extra tag `["t", lookupTag(code)]` | `DeviceCodeOffer` {owner, name, platform, createdAt} | `deviceCode` | 10 min |
 | `deviceLinkRequest` | the code's owner | `DeviceLinkRequest` {token, name, platform, createdAt} | `deviceLink` | 10 min |
 | `deviceList` | every device in the group | `DeviceList` {devices:[{id,name,platform,linkedAt}], revision} | `deviceList` | 30 days |
-| `deviceUnlink` | every device in the group, including the one removed | {id} | `deviceUnlink:<id>` | 30 days |
+| `deviceUnlink` | every device in the group, including the one removed | {id, createdAt} | `deviceUnlink:<id>` | 30 days |
 | `devicePlayback` | every linked device | `DevicePlayback` (see `DeviceSync.kt`) | `devicePlayback` | 14 days |
 | `deviceCommand` | the target device | `DeviceCommand` {id, target, action, positionMs, createdAt} | `deviceCommand` | 2 min |
 
@@ -49,7 +49,9 @@ and the latest command per recipient are kept. The relay's `d` tag is already
    `["REQ", "spitify-lookup-<n>", {"kinds":[30078], "#t":[tag], "limit": 5}]` on each connected
    socket and delivers matching verified events through the normal `onPacket` path. It closes the
    subscription when done. Normal `receive` validation still applies: `deviceCode` events carry
-   `["t","spitify"]` as well as the lookup tag, so they pass.
+   `["t","spitify"]` as well as the lookup tag, so they pass. A `deviceCode` offer is only used if
+   it carries the tag of a lookup that's still open. Some relays push every `#t spitify` event, so
+   offers for other people's codes arrive too.
 3. **The relay must be started when any device is linked or a code is being shown/entered,** even
    if friend sharing is turned off. With sharing off, the relay subscribes only to its own
    encrypted inbox (`#p` = me). It does not publish a profile.
@@ -80,7 +82,9 @@ and the latest command per recipient are kept. The relay's `d` tag is already
 
 **Removing a device:** a remove button on each row sends `deviceUnlink {id}` to every device,
 including the one removed, then calls `unlink(id)` locally. A "Leave this group" button sends
-`deviceUnlink {id: me}` and clears local state. Receivers use `acceptUnlink`.
+`deviceUnlink {id: me}` and clears local state. Receivers use `acceptUnlink(…, createdAt)`, which
+ignores unlinks older than the link they'd undo, because relays replay them for 30 days. Closing
+the code screen calls `cancelCode()`.
 
 ## Sharing playback
 
@@ -107,7 +111,9 @@ wake the CPU when nothing is playing.
 
 ## Receiving
 
-- Keep `receivedAt[device] = now` whenever `acceptPlayback` returns true. Persist the
+- Keep `receivedAt[device] = DeviceSyncState.receivedTime(state)` whenever `acceptPlayback` returns
+  true. That's now, except for a state that's more than 10 minutes old (replayed by a relay), so
+  it doesn't look live. Persist the
   `DeviceSyncState` JSON with `receivedAt` (Android and desktop: a small JSON file in the data dir;
   iOS: the existing Store), so "continue" survives restarts.
 - **`active(receivedAt)`, the "Playing on" bar:**

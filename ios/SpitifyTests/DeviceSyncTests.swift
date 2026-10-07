@@ -100,6 +100,20 @@ final class DeviceSyncTests: XCTestCase {
         XCTAssertTrue(me.devices.isEmpty)
     }
 
+    func testOldUnlinksDontUndoALaterLinkAndCodesCanBeCancelled() {
+        var me = DeviceSyncState(me: a)
+        me.devices = [LinkedDevice(id: b, name: "Mac", platform: "macos", linkedAt: 1_000_000), LinkedDevice(id: c, name: "iPad", platform: "ios", linkedAt: 5_000_000)]
+        XCTAssertFalse(me.acceptUnlink(c, author: b, encrypted: true, createdAt: 2_000_000), "replayed from before c was linked again")
+        XCTAssertFalse(me.acceptUnlink(a, author: b, encrypted: true, createdAt: 500_000), "replayed removal of us")
+        XCTAssertTrue(me.acceptUnlink(c, author: b, encrypted: true, createdAt: 6_000_000))
+        var host = DeviceSyncState(me: a); let code = host.newCode(now: 0); host.cancelCode()
+        XCTAssertFalse(host.receiveLink(DeviceLinkRequest(token: code, name: "PC", platform: "windows"), author: b, encrypted: true, now: 1))
+        var replay = state(b, 1); replay.observedAt = 0
+        XCTAssertEqual(DeviceSyncState.receivedTime(replay, now: 60 * 60_000), 0)
+        replay.observedAt = 900
+        XCTAssertEqual(DeviceSyncState.receivedTime(replay, now: 1_000), 1_000)
+    }
+
     func testWindowAndExpectedPosition() {
         let queue = Array(0..<100)
         let (window, index) = DevicePlayback.window(queue, current: 50)

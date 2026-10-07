@@ -239,7 +239,7 @@ class DeviceSyncRepository(
     fun cancelPairing() {
         codeJob?.cancel(); lookupJob?.cancel()
         codeShown = false; typedCode = null; pendingOffer = null; pendingOwner = null
-        sync.pendingLinks.clear()
+        sync.cancelCode()
         pairing = DevicePairing.Idle
         updateRelay(); changed()
     }
@@ -312,10 +312,7 @@ class DeviceSyncRepository(
                 }
                 "deviceUnlink" -> {
                     val id = packet.body.getString("id")
-                    // A removal older than our link with its sender is a leftover from before a re-link.
-                    val sentAt = packet.body.optLong("createdAt", Long.MAX_VALUE)
-                    if (sentAt < (sync.devices[author]?.linkedAt ?: 0) - 60_000) return
-                    if (sync.acceptUnlink(id, author, encrypted)) {
+                    if (sync.acceptUnlink(id, author, encrypted, packet.body.optLong("createdAt", Long.MAX_VALUE))) {
                         if (id == me) { focus = null; continueOffer = null; notes.tryEmit("This computer was removed from your devices.") }
                         if (focus == id) focus = null
                         if (continueOffer?.device == id) continueOffer = null
@@ -325,7 +322,7 @@ class DeviceSyncRepository(
                 "devicePlayback" -> {
                     val state = DevicePlayback.parse(packet.body)
                     if (sync.acceptPlayback(state, author, encrypted)) {
-                        receivedAt[author] = SocialRules.now
+                        receivedAt[author] = DeviceSyncState.receivedTime(state)
                         if (state.playing && !player.state.value.isPlaying) focus = author
                         if (continueOffer?.device == author && state.playing) continueOffer = null
                         persist()

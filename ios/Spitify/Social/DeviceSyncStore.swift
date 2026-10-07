@@ -253,11 +253,13 @@ final class DeviceSyncStore {
                     Task { await publish(force: true) }
                 }
             case "deviceUnlink":
-                guard state.acceptUnlink(try packet.decode(DeviceUnlink.self).id, author: author, encrypted: encrypted) else { return }
+                let unlink = try packet.decode(DeviceUnlink.self)
+                guard state.acceptUnlink(unlink.id, author: author, encrypted: encrypted, createdAt: unlink.createdAt ?? .max) else { return }
                 forgetMissing(); persist(); updateWanted()
             case "devicePlayback":
-                guard state.acceptPlayback(try packet.decode(DevicePlayback.self), author: author, encrypted: encrypted) else { return }
-                receivedAt[author] = SocialRules.now; persist()
+                let incoming = try packet.decode(DevicePlayback.self)
+                guard state.acceptPlayback(incoming, author: author, encrypted: encrypted) else { return }
+                receivedAt[author] = DeviceSyncState.receivedTime(incoming); persist()
                 if SocialRules.now <= offerUntil { checkContinue() }
             case "deviceCommand":
                 let command = try packet.decode(DeviceCommand.self)

@@ -91,6 +91,18 @@ class DeviceSyncTest {
         assertTrue(me.devices.isEmpty())
     }
 
+    @Test fun oldUnlinksDontUndoALaterLinkAndCodesCanBeCancelled() {
+        val me = DeviceSyncState(a).apply { devices[b] = LinkedDevice(b, "Mac", "macos", linkedAt = 1_000_000); devices[c] = LinkedDevice(c, "iPad", "ios", linkedAt = 5_000_000) }
+        assertFalse("replayed from before c was linked again", me.acceptUnlink(c, b, true, createdAt = 2_000_000))
+        assertFalse("replayed removal of us", me.acceptUnlink(a, b, true, createdAt = 500_000))
+        assertTrue(me.acceptUnlink(c, b, true, createdAt = 6_000_000))
+        val host = DeviceSyncState(a); val code = host.newCode(now = 0); host.cancelCode()
+        assertFalse(host.receiveLink(DeviceLinkRequest(code, "PC", "windows"), b, true, now = 1))
+        val replay = state(b, 1).copy(observedAt = 0)
+        assertEquals(0L, DeviceSyncState.receivedTime(replay, now = 60 * 60_000))
+        assertEquals(1_000L, DeviceSyncState.receivedTime(replay.copy(observedAt = 900), now = 1_000))
+    }
+
     @Test fun windowAndExpectedPosition() {
         val queue = (0 until 100).toList()
         val (window, index) = DevicePlayback.window(queue, 50)

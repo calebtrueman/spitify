@@ -187,7 +187,7 @@ class DeviceSync(private val link: DeviceLink, private val host: DeviceHost, pri
         return fresh
     }
 
-    fun hideCode() { code = null; state.pendingLinks.clear(); updateRelay(); changed() }
+    fun hideCode() { code = null; state.cancelCode(); updateRelay(); changed() }
 
     /** Enter code: finds the other device by the code and asks it to link. */
     suspend fun enterCode(text: String) {
@@ -235,7 +235,7 @@ class DeviceSync(private val link: DeviceLink, private val host: DeviceHost, pri
 
     private fun sendUnlink(id: String, recipients: List<String>) {
         lingerUntil = clock() + 30_000; updateRelay(); scheduleExpiry()
-        val body = JSONObject().put("id", id)
+        val body = JSONObject().put("id", id).put("createdAt", clock())
         scope.launch { recipients.forEach { safely { link.send(SocialPacket("deviceUnlink", body), "deviceUnlink:$id", it, 30L * 24 * 60 * 60_000) } } }
     }
 
@@ -264,7 +264,7 @@ class DeviceSync(private val link: DeviceLink, private val host: DeviceHost, pri
                 }
                 "deviceUnlink" -> {
                     val id = body.getString("id")
-                    if (state.acceptUnlink(id, author, encrypted)) {
+                    if (state.acceptUnlink(id, author, encrypted, body.optLong("createdAt", Long.MAX_VALUE))) {
                         receivedAt.keys.retainAll(state.devices.keys); if (controlled?.first !in state.devices) controlled = null
                         if (id == me) { offer = null; noteFlow.tryEmit("This device was removed from your devices.") }
                         persist(); updateRelay()
@@ -274,8 +274,7 @@ class DeviceSync(private val link: DeviceLink, private val host: DeviceHost, pri
                     val incoming = DevicePlayback.parse(body)
                     if (state.acceptPlayback(incoming, author, encrypted)) {
                         val now = clock()
-                        // A state replayed from the relay long after it was sent shouldn't look live.
-                        receivedAt[author] = if (now - incoming.observedAt > 10 * 60_000) incoming.observedAt.coerceAtMost(now) else now
+                        receivedAt[author] = DeviceSyncState.receivedTime(incoming, now)
                         if (offer?.device == author) offer = null
                         if (now - foregroundAt < 30_000) checkContinue(now)
                         persist(); scheduleExpiry()

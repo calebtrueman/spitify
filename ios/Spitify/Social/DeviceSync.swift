@@ -136,7 +136,11 @@ struct DeviceList: Codable, Hashable {
 }
 
 /// "deviceUnlink": the device `id` left the group.
-struct DeviceUnlink: Codable, Hashable { var id: String }
+struct DeviceUnlink: Codable, Hashable {
+    var id: String
+    /// Sender's clock; missing from older senders (then always accepted).
+    var createdAt: Int64? = SocialRules.now
+}
 
 /// A request that matched our code, waiting for the user to allow it.
 struct PendingDeviceLink: Identifiable, Hashable { var author: String; var request: DeviceLinkRequest; var id: String { author } }
@@ -231,10 +235,13 @@ struct DeviceSyncState {
 
     mutating func unlink(_ id: String) { devices.removeAll { $0.id == id }; playback.removeValue(forKey: id) }
 
-    /// "deviceUnlink" {id} from a linked device: `id` left the group. If it's us, we were removed
-    /// and forget the whole group. Returns true when something changed.
-    mutating func acceptUnlink(_ id: String, author: String, encrypted: Bool) -> Bool {
+    /// "deviceUnlink" {id, createdAt} from a linked device: `id` left the group. If it's us, we were
+    /// removed and forget the whole group. Unlinks older than the link they'd undo are ignored:
+    /// relays replay them for 30 days. Returns true when something changed.
+    mutating func acceptUnlink(_ id: String, author: String, encrypted: Bool, createdAt: Int64 = .max) -> Bool {
         guard encrypted, linked(author), SocialRules.key(id) else { return false }
+        let linkedAt = devices.first { $0.id == (id == me ? author : id) }?.linkedAt ?? 0
+        guard createdAt >= linkedAt - 60_000 else { return false }
         if id == me { devices = []; playback = [:]; return true }
         guard linked(id) else { return false }
         unlink(id); return true
@@ -288,6 +295,12 @@ struct DeviceSyncState {
     static func lookupTag(_ code: String) -> String { "spitify-link-" + SocialRules.hash(Data(("spitify-device-link:" + normalizeCode(code)).utf8)).prefix(32) }
 
     /// Where the remote device is now, from its last state. Uses receive time to avoid clock skew.
+    /// The time to record as "received": now, unless the state is old (a relay replaying it after
+    /// a reconnect), then its own time, so it doesn't look live.
+    static func receivedTime(_ state: DevicePlayback, now: Int64 = SocialRules.now) -> Int64 {
+        now - state.observedAt > 10 * 60_000 ? min(state.observedAt, now) : now
+    }
+
     static func expectedPosition(_ state: DevicePlayback, receivedAt: Int64, now: Int64 = SocialRules.now) -> Int64 {
         let elapsed = state.playing ? min(max(now - receivedAt, 0), 10 * 60_000) : 0
         let value = state.positionMs + Int64(Float(elapsed) * state.speed)
