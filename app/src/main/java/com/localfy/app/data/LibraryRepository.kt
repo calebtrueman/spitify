@@ -103,12 +103,32 @@ class LibraryRepository(
         .map { list -> list.mapTo(LinkedHashSet()) { it.songId } }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    val stats: StateFlow<Map<Long, PlayStat>> = db.stats().observe()
-        .map { list -> list.associate { it.songId to PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) } }
-        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+    /** Play counts from your linked devices, matched to songs here (library sync). */
+    val remoteStats = MutableStateFlow<Map<Long, PlayStat>>(emptyMap())
+
+    /** This device's counts plus every linked device's, so On repeat and Recently played are the same everywhere. */
+    val stats: StateFlow<Map<Long, PlayStat>> = combine(db.stats().observe(), remoteStats) { list, remote ->
+        val own = list.associate { it.songId to PlayStat(it.songId, it.playCount, it.lastPlayed, it.skipCount) }
+        if (remote.isEmpty()) own else (own.keys + remote.keys).associateWith { id ->
+            val a = own[id]; val b = remote[id]
+            if (a == null) b!! else if (b == null) a else PlayStat(id, a.playCount + b.playCount, maxOf(a.lastPlayed, b.lastPlayed), a.skipCount + b.skipCount)
+        }
+    }.flowOn(Dispatchers.Default).stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
+    /** True once the first scan finished (or couldn't run), so an empty library means empty, not "not read yet". */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val playlistArtRevision = MutableStateFlow(0)
-    private fun playlistCover(id: Long) = java.io.File(java.io.File(context.filesDir, "playlist_covers").apply { mkdirs() }, "$id.jpg")
+    fun playlistCover(id: Long) = java.io.File(java.io.File(context.filesDir, "playlist_covers").apply { mkdirs() }, "$id.jpg")
+    /** A playlist cover from another device (library sync): JPEG bytes, cropped and stored like a picked one. */
+    suspend fun setPlaylistCoverBytes(id: Long, bytes: ByteArray?): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val file = playlistCover(id)
+        val saved = if (bytes == null) !file.exists() || file.delete() else
+            saveSquareImage(android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(bytes)), file, 1000)
+        if (saved) playlistArtRevision.value++
+        saved
+    }
     suspend fun setPlaylistCover(id: Long, uri: android.net.Uri?): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val file = playlistCover(id)
         val saved = if (uri == null) !file.exists() || file.delete() else
@@ -149,8 +169,12 @@ class LibraryRepository(
     val mixes: StateFlow<List<Mix>> = combine(_mixes, _hiddenMixes) { list, hidden -> list.filter { it.key !in hidden } }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
     fun publishMixes(list: List<Mix>) { _mixes.value = list }
+    val hiddenMixes: StateFlow<Set<String>> = _hiddenMixes.asStateFlow()
+    /** Called when the user brings every deleted mix back, so library sync passes that on as a real edit. */
+    var onRestoredAllMixes: (() -> Unit)? = null
     fun deleteMix(key: String) { _hiddenMixes.value = _hiddenMixes.value + key; prefs.edit().putStringSet("hiddenMixes", _hiddenMixes.value).apply() }
-    fun restoreDeletedMixes() { _hiddenMixes.value = emptySet(); prefs.edit().remove("hiddenMixes").apply() }
+    fun restoreMix(key: String) { if (key !in _hiddenMixes.value) return; _hiddenMixes.value = _hiddenMixes.value - key; prefs.edit().putStringSet("hiddenMixes", _hiddenMixes.value).apply() }
+    fun restoreDeletedMixes() { onRestoredAllMixes?.invoke(); _hiddenMixes.value = emptySet(); prefs.edit().remove("hiddenMixes").apply() }
 
     private var observerRegistered = false
     private var pendingRescan: Job? = null
@@ -196,6 +220,7 @@ class LibraryRepository(
                 com.localfy.app.CrashReport.recordNonFatal(context, "Scanning your library", e)
             } finally {
                 _scanning.value = false
+                _loaded.value = true
             }
         }
     }

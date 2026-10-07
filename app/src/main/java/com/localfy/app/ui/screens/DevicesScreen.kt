@@ -76,6 +76,7 @@ fun DevicesScreen() {
                 colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
             )
         }
+        if (devices.isNotEmpty()) insetItem { LibrarySyncSection(now) }
         insetItem {
             if (code != null) {
                 val left = (sync.codeIssuedAt + DeviceSyncState.CODE_LIFETIME - now).coerceAtLeast(0) / 1000
@@ -104,6 +105,35 @@ fun DevicesScreen() {
     }
     if (leaving) AlertDialog(onDismissRequest = { leaving = false }, title = { Text("Leave this group?") }, text = { Text("This device unlinks from all your other devices.") },
         confirmButton = { TextButton(onClick = { sync.leave(); leaving = false }) { Text("Leave") } }, dismissButton = { TextButton(onClick = { leaving = false }) { Text("Cancel") } })
+}
+
+/** "Library: in sync" or "syncing N items…", and the songs from other devices that weren't found here. */
+@Composable
+private fun LibrarySyncSection(now: Long) {
+    val app = androidx.compose.ui.platform.LocalContext.current.applicationContext as com.localfy.app.LocalfyApp
+    val library = remember { app.librarySync }
+    val status by library.status.collectAsStateWithLifecycle()
+    var showMissing by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            when {
+                !status.started -> "Library: getting ready…"
+                status.syncing > 0 -> "Library: syncing ${status.syncing} ${if (status.syncing == 1) "item" else "items"}…"
+                else -> "Library: in sync"
+            },
+            style = MaterialTheme.typography.titleMedium,
+        )
+        if (status.lastSync > 0) Text("Last synced ${ago(now - status.lastSync)}", style = MaterialTheme.typography.bodySmall, color = LocalfyColors.TextSecondary)
+        if (status.unmatched.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showMissing = !showMissing }, modifier = Modifier.weight(1f)) { Text("Couldn't find on this device (${status.unmatched.size})", modifier = Modifier.fillMaxWidth()) }
+                OutlinedButton(onClick = { library.retry() }) { Text("Retry") }
+            }
+            if (showMissing) status.unmatched.take(200).forEach { track ->
+                Text("${track.title} — ${track.artist}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
+    }
 }
 
 private fun ago(ms: Long): String {

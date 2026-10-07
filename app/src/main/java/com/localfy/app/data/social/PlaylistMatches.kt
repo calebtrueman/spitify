@@ -16,6 +16,8 @@ object PlaylistMatches {
     private var restored = false
     private fun restore(app: LocalfyApp) { if (!restored) { failed.value = app.getSharedPreferences("playlist_matches", 0).getStringSet("failed", emptySet()).orEmpty().toSet(); restored = true } }
     private fun saveFailures(app: LocalfyApp) { app.getSharedPreferences("playlist_matches", 0).edit().putStringSet("failed", failed.value).apply() }
+    /** Forgets earlier failed searches for [tracks], so the next resolve searches again. */
+    fun forget(tracks: Collection<SharedTrack>, app: LocalfyApp) { restore(app); failed.value = failed.value - tracks.map(::key).toSet(); saveFailures(app) }
     fun retry(playlist: SharedPlaylist, app: LocalfyApp) { restore(app); failed.value = failed.value - playlist.tracks.map(::key).toSet(); saveFailures(app); prepare(playlist, app) }
     private val pending = mutableMapOf<String, Deferred<Song>>()
     private val warming = mutableSetOf<String>()
@@ -33,17 +35,17 @@ object PlaylistMatches {
     }
     suspend fun resolve(track: SharedTrack, app: LocalfyApp): Song = withContext(Dispatchers.Main.immediate) {
         restore(app)
-        try { resolveCopy(track, app).also { failed.value = failed.value - key(track); saveFailures(app) } }
+        try { resolveCopy(track, app).also { if (key(track) in failed.value) { failed.value = failed.value - key(track); saveFailures(app) } } }
         catch (e: Exception) { if (e !is CancellationException) { failed.value = failed.value + key(track); saveFailures(app) }; throw e }
     }
     private suspend fun resolveCopy(track: SharedTrack, app: LocalfyApp): Song = withContext(Dispatchers.Main.immediate) {
         val chosen = app.getSharedPreferences("playlist_matches", 0).getLong(key(track), Long.MIN_VALUE)
-        app.library.library.value.songs.firstOrNull { it.id == chosen }?.let { return@withContext it }
-
+        val songs = app.library.library.value.songs
         fun same(title: String, artist: String, duration: Long) = SearchMatch.fold(title) == SearchMatch.fold(track.title) && SearchMatch.fold(artist) == SearchMatch.fold(track.artist) && (track.durationMs == 0L || kotlin.math.abs(duration - track.durationMs) < 5000)
-        app.library.library.value.songs.firstOrNull { same(it.title, it.artist, it.durationMs) }?.let { return@withContext it }
+        // Folding every title in a big library is real work: never on the main thread (library sync matches hundreds).
+        withContext(Dispatchers.Default) { songs.firstOrNull { it.id == chosen } ?: songs.firstOrNull { same(it.title, it.artist, it.durationMs) } }?.let { return@withContext it }
         track.sourceID?.let { return@withContext app.musicStreams.register(OnlineTrack(it, track.title, track.artist, track.album, track.releaseID.orEmpty(), track.durationMs, 0, 1, track.artwork, true)) }
-        app.musicStreams.knownTracks().firstOrNull { same(it.title, it.artist, it.durationMs) }?.let { return@withContext app.musicStreams.song(it) }
+        withContext(Dispatchers.Default) { app.musicStreams.knownTracks().firstOrNull { same(it.title, it.artist, it.durationMs) } }?.let { return@withContext app.musicStreams.song(it) }
         check(key(track) !in failed.value) { "Choose a local copy or try matching again." }
         val key = "${SearchMatch.fold(track.title)}|${SearchMatch.fold(track.artist)}|${track.durationMs}"
         val task = pending[key] ?: app.appScope.async(start = CoroutineStart.LAZY) {

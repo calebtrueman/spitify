@@ -201,7 +201,7 @@ fun LocalfyRoot(activity: Activity) {
     LaunchedEffect(Unit) {
         container.devices.notes.collect { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() }
     }
-    androidx.lifecycle.compose.LifecycleStartEffect(Unit) { container.devices.foreground(); onStopOrDispose {} }
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) { container.devices.foreground(); container.librarySyncIfStarted?.foreground(); onStopOrDispose {} }
 
     // Re-arm the tabletop player each time the device is half-folded again.
     LaunchedEffect(posture.kind) { if (posture.kind != FoldPosture.Kind.Tabletop) tabletopDismissed = false }

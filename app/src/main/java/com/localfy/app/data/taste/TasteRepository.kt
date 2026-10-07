@@ -119,7 +119,11 @@ class TasteRepository(
         _hiddenSongs.value = _hiddenSongs.value.map { ids[it] ?: it }.toSet()
         prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) }
     }
-    fun unhideAll() { _hiddenSongs.value = emptySet(); _hiddenArtists.value = emptySet(); prefs.edit { remove("hiddenSongs"); remove("hiddenArtists") } }
+    fun unhideSong(id: Long) { if (id !in _hiddenSongs.value) return; _hiddenSongs.value = _hiddenSongs.value - id; prefs.edit { putStringSet("hiddenSongs", _hiddenSongs.value.map { it.toString() }.toSet()) } }
+    fun unhideArtist(name: String) { if (name !in _hiddenArtists.value) return; _hiddenArtists.value = _hiddenArtists.value - name; prefs.edit { putStringSet("hiddenArtists", _hiddenArtists.value) } }
+    /** Called when the user shows everything again, so library sync passes that on as a real edit. */
+    var onUnhidAll: (() -> Unit)? = null
+    fun unhideAll() { onUnhidAll?.invoke(); _hiddenSongs.value = emptySet(); _hiddenArtists.value = emptySet(); prefs.edit { remove("hiddenSongs"); remove("hiddenArtists") } }
 
     fun songRadio(seed: Song): List<Song> = _model.value?.let { PlaylistGenerator.songRadio(it, seed) } ?: listOf(seed)
     fun artistRadio(artist: String): List<Song> = _model.value?.let { PlaylistGenerator.artistRadio(it, artist) }.orEmpty()

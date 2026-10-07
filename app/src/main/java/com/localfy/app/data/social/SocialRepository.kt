@@ -25,6 +25,8 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
     var onRoomRequest: ((IncomingRoomRequest) -> Unit)? = null
     /** Linked-device packets ("device…"), handled by [DeviceSync]. */
     var onDevicePacket: ((String, SocialPacket, Boolean) -> Unit)? = null
+    /** Library sync packets ("syncDoc", "syncDigest") from your linked devices. */
+    var onSyncPacket: ((String, SocialPacket, Boolean) -> Unit)? = null
     /** Linked devices or pairing keep the relay running (inbox only) while friend sharing is off. */
     var devicesNeedRelay = false
         set(value) { if (field != value) { field = value; refresh() } }
@@ -54,6 +56,15 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
         state.following += link.owner; persist(); relay.requestPlaylist(link); configure(true)
     }
     fun unfollow(id: String) { state.following -= id; persist(); refresh() }
+    /** A follow or unfollow made on a linked device: changes who you follow without turning sharing on. */
+    fun syncFollow(id: String, follow: Boolean) {
+        if (!SocialRules.key(id) || id == publicKey || (id in state.following) == follow) return
+        if (follow && state.following.size >= 128) return
+        if (follow) state.following += id else state.following -= id
+        persist(); refresh()
+    }
+    /** Asks for a shared playlist saved on a linked device; it arrives like any share when sharing is on. */
+    fun requestShared(owner: String, id: String) { if (enabled && SocialRules.key(owner) && id.length in 1..100) relay.requestPlaylist(SocialLink("playlist", owner, id)) }
     fun save(playlist: SharedPlaylist) {
         require(playlist.owner == publicKey && playlist.valid()) { "This playlist could not be saved." }
         check(state.playlists.size < 500 || playlist.key in state.playlists) { "Your shared playlist library is full." }
@@ -164,10 +175,11 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
         (state.recipients[playlist.key].orEmpty() + current.editors).forEach { person -> val latest = state.playlists[playlist.key] ?: return; relay.send(SocialPacket("playlist", latest.json()), "playlist:${latest.id}", person) }
     }
     private fun receive(author: String, packet: SocialPacket, encrypted: Boolean) {
-        if (!enabled && !packet.type.startsWith("device")) return
+        if (!enabled && !packet.type.startsWith("device") && !packet.type.startsWith("sync")) return
         runCatching {
             when (packet.type) {
                 "deviceCode", "deviceLinkRequest", "deviceList", "deviceUnlink", "devicePlayback", "deviceCommand" -> onDevicePacket?.invoke(author, packet, encrypted)
+                "syncDoc", "syncDigest" -> onSyncPacket?.invoke(author, packet, encrypted)
                 "room" -> { val room = ListeningRoom.parse(packet.body); if (rooms.accept(room, author, publicKey, encrypted)) { changed(); onRoomUpdate?.invoke(room) } }
                 "roomRequest" -> if (encrypted) { val request = RoomRequest.parse(packet.body); if (rooms.receive(request, author, publicKey)) { changed(); onRoomRequest?.invoke(rooms.requests.last()) } }
                 "profileHidden" -> if (!encrypted && author != publicKey && state.profiles[author]?.isPublic != false) { state.profiles.remove(author); persist() }

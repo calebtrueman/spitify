@@ -128,10 +128,22 @@ data class PlayEventEntity(
     val source: String?,
 )
 
+data class EventStamp(val songId: Long, val startedAt: Long)
+
 @Dao
 interface EventDao {
     @Insert
     suspend fun insert(e: PlayEventEntity)
+
+    @Insert
+    suspend fun insertAll(e: List<PlayEventEntity>)
+
+    @Query("SELECT * FROM play_events WHERE startedAt >= :since ORDER BY startedAt")
+    suspend fun since(since: Long): List<PlayEventEntity>
+
+    /** Listens from linked devices (library sync), so one isn't added twice. */
+    @Query("SELECT songId, startedAt FROM play_events WHERE source = :source")
+    suspend fun bySource(source: String): List<EventStamp>
 
     @Query("SELECT * FROM play_events WHERE startedAt >= :since ORDER BY startedAt")
     fun observeSince(since: Long): kotlinx.coroutines.flow.Flow<List<PlayEventEntity>>
@@ -207,6 +219,15 @@ interface PodcastDao {
 
     @Query("SELECT * FROM resume WHERE mediaKey = :key")
     suspend fun resume(key: String): ResumeEntity?
+
+    @Query("SELECT * FROM resume")
+    suspend fun allResume(): List<ResumeEntity>
+
+    @Query("SELECT * FROM episodes WHERE id IN (:ids)")
+    suspend fun episodes(ids: List<Long>): List<EpisodeEntity>
+
+    @Query("SELECT * FROM episodes WHERE podcastId = :podcastId AND guid = :guid")
+    suspend fun episodeByGuid(podcastId: Long, guid: String): EpisodeEntity?
 }
 
 @Dao
@@ -262,6 +283,15 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlist_entries WHERE playlistId = :id ORDER BY position")
     suspend fun entries(id: Long): List<PlaylistEntryEntity>
 
+    @Query("SELECT * FROM playlists")
+    suspend fun all(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_entries ORDER BY playlistId, position")
+    suspend fun allEntries(): List<PlaylistEntryEntity>
+
+    @Query("SELECT * FROM playlists WHERE id = :id")
+    suspend fun playlist(id: Long): PlaylistEntity?
+
     @Transaction
     suspend fun append(id: Long, songIds: List<Long>, now: Long) {
         val start = lastPosition(id) + 1
@@ -302,6 +332,9 @@ interface LikedDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM liked WHERE songId = :songId)")
     suspend fun isLiked(songId: Long): Boolean
+
+    @Query("SELECT * FROM liked")
+    suspend fun all(): List<LikedEntity>
 }
 
 @Dao
@@ -320,6 +353,9 @@ interface StatsDao {
            ON CONFLICT(songId) DO UPDATE SET skipCount = skipCount + 1"""
     )
     suspend fun recordSkip(songId: Long)
+
+    @Query("SELECT * FROM play_stats")
+    suspend fun all(): List<PlayStatEntity>
 }
 
 @Database(

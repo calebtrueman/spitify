@@ -52,7 +52,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     }
     val lockScreenArtReady = kotlinx.coroutines.CompletableDeferred<Unit>()
     val lockScreenArt by lazy { com.localfy.app.playback.LockScreenArt(this) }
-    val player by lazy { PlayerConnection(this, library, appScope, ::resolve, podcasts) { taste.record(it) } }
+    val player by lazy { PlayerConnection(this, library, appScope, ::resolve, podcasts) { taste.record(it); librarySyncIfStarted?.played(it) } }
     val lyrics by lazy { LyricsRepository(this, database, appScope) }
     val theme by lazy { ThemeRepository(this) }
     val onlineArt: OnlineArtRepository by lazy { OnlineArtRepository(this).also { it.onDownloaded = { albumId, file -> metadata.embedArt(albumId, file) } } }
@@ -66,6 +66,10 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     private val linkedDevices by lazy { com.localfy.app.data.social.AndroidDevices(this) }
     /** Your other devices: "Playing on …", remote control and continue where you left off. */
     val devices get() = linkedDevices.sync
+    @Volatile private var librarySyncCreated: com.localfy.app.data.sync.AndroidLibrarySync? = null
+    /** The same library on every linked device (docs/library-sync.md). Created and started once a device is linked. */
+    val librarySync by lazy { com.localfy.app.data.sync.AndroidLibrarySync(this).also { librarySyncCreated = it } }
+    val librarySyncIfStarted get() = librarySyncCreated
     val flacConversion by lazy { com.localfy.app.data.music.FlacConversion(this, database, appScope) }
     val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 
