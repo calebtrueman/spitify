@@ -74,6 +74,8 @@ class PlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true) // pause when headphones are unplugged
             .setWakeMode(C.WAKE_MODE_NETWORK) // keeps Wi-Fi up for streamed episodes with the screen off
             .build()
+        // Load the start of the next song ahead of time, so skipping to it plays at once.
+        player.preloadConfiguration = androidx.media3.exoplayer.ExoPlayer.PreloadConfiguration(5_000_000L)
 
         volume = PlaybackVolume(player)
         effects = AudioEffectsEngine(this)
@@ -397,6 +399,12 @@ fun buildPlayer(context: android.content.Context, extraAudioProcessors: Array<an
             .setEnableDecoderFallback(true),
         androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalfyExtractors)
             .setDataSourceFactory(com.localfy.app.data.music.ListeningCache.factory(context)),
+    ).setLoadControl(
+        // Start as soon as half a second is buffered, like the iPhone app (the default waits for
+        // 2.5 s, which on a lossless stream is a long, visible pause after tapping a song).
+        androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(30_000, 50_000, 500, 1_500)
+            .build(),
     )
 
 private data class ButtonInputs(val currentId: Long?, val spoken: Boolean, val shuffle: Boolean, val liked: Boolean)
