@@ -25,22 +25,26 @@ class FfmpegEngineTest {
 
     /** Records everything written; optionally consumes in real time like a sound card. */
     private class FakeSink(realtime: Boolean = false, private val speedUp: Double = if (realtime) 1.0 else 0.0) : AudioSink {
-        private var owedNanos = 0L
+        private var startNanos = 0L
+        private var paced = 0L
         val bytes = ByteArrayOutputStream()
         @Volatile var running = false
         override fun open() {}
         override fun write(data: ByteArray, length: Int) {
             synchronized(bytes) { bytes.write(data, 0, length) }
             if (speedUp > 0) {
-                owedNanos += (length / 4 * 1_000_000_000L / SAMPLE_RATE / speedUp).toLong()
-                if (owedNanos > 4_000_000) { Thread.sleep(owedNanos / 1_000_000); owedNanos %= 1_000_000 }
+                // Paced against the clock, not per write: CI VMs oversleep short sleeps, which would add up.
+                if (paced == 0L) startNanos = System.nanoTime()
+                paced += length / 4
+                val ahead = (paced * 1_000_000_000L / SAMPLE_RATE / speedUp).toLong() - (System.nanoTime() - startNanos)
+                if (ahead > 4_000_000) Thread.sleep(ahead / 1_000_000)
             }
         }
         override fun queuedFrames() = 0
         override fun start() { running = true }
         override fun stop() { running = false }
         override fun drain() {}
-        override fun flush() {}
+        override fun flush() { paced = 0 }
         override fun close() {}
         val frames get() = synchronized(bytes) { bytes.size() } / 4
         fun samples(): ShortArray = synchronized(bytes) {
