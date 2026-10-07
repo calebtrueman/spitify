@@ -32,6 +32,15 @@
       },
       "versions": [
         {
+          "version": "1.0.26",
+          "buildVersion": "31",
+          "date": "2026-10-07T18:53:41Z",
+          "localizedDescription": "Spitify 1.0.26 keeps your library the same on all your devices, and streams start right away.\n\n- **Your library, everywhere:** linked devices now share Liked Songs, saved songs, playlists (with covers), followed artists and friends, hidden songs and artists, deleted mixes, followed podcasts and audiobooks and where you are in them, Recently played, play counts, your profile, and settings like theme, text size, autoplay, crossfade and playback speed. Songs aren't copied between devices: each one plays its own copy, its download or the stream, and downloads stay per device. Link devices in **Settings \u203a Your devices**.\n- **Songs found on another device:** if a song from another device can't be found here, it's listed under **Couldn't find on this device** with a Retry button.\n- **Instant streaming:** on desktop, streamed songs start in well under a second instead of several seconds. On Android, playback starts as soon as half a second is loaded, and the next song is loaded ahead.\n- **Settings in the sidebar:** on desktop and on Android tablets and unfolded foldables. On desktop, your profile picture now opens your profile.\n\nDesktop installers aren't signed yet:\n- **Mac:** open Spitify once, then go to System Settings \u203a Privacy & Security and click **Open Anyway**.\n- **Windows:** choose **More info \u203a Run anyway**.\n\nThe iPhone download is unsigned for SideStore/AltStore. The Android APK installs directly.",
+          "downloadURL": "https://github.com/calebtrueman/spitify/releases/download/v1.0.26/Spitify-1.0.26-unsigned.ipa",
+          "size": 120692065,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.0.25",
           "buildVersion": "30",
           "date": "2026-10-07T03:15:04Z",
