@@ -25,22 +25,26 @@ class FfmpegEngineTest {
 
     /** Records everything written; optionally consumes in real time like a sound card. */
     private class FakeSink(realtime: Boolean = false, private val speedUp: Double = if (realtime) 1.0 else 0.0) : AudioSink {
-        private var owedNanos = 0L
+        private var startNanos = 0L
+        private var paced = 0L
         val bytes = ByteArrayOutputStream()
         @Volatile var running = false
         override fun open() {}
         override fun write(data: ByteArray, length: Int) {
             synchronized(bytes) { bytes.write(data, 0, length) }
             if (speedUp > 0) {
-                owedNanos += (length / 4 * 1_000_000_000L / SAMPLE_RATE / speedUp).toLong()
-                if (owedNanos > 4_000_000) { Thread.sleep(owedNanos / 1_000_000); owedNanos %= 1_000_000 }
+                // Paced against the clock, not per write: CI VMs oversleep short sleeps, which would add up.
+                if (paced == 0L) startNanos = System.nanoTime()
+                paced += length / 4
+                val ahead = (paced * 1_000_000_000L / SAMPLE_RATE / speedUp).toLong() - (System.nanoTime() - startNanos)
+                if (ahead > 4_000_000) Thread.sleep(ahead / 1_000_000)
             }
         }
         override fun queuedFrames() = 0
         override fun start() { running = true }
         override fun stop() { running = false }
         override fun drain() {}
-        override fun flush() {}
+        override fun flush() { paced = 0 }
         override fun close() {}
         val frames get() = synchronized(bytes) { bytes.size() } / 4
         fun samples(): ShortArray = synchronized(bytes) {
@@ -118,10 +122,11 @@ class FfmpegEngineTest {
         val deadline = System.currentTimeMillis() + 5_000
         while (engine.positionMs <= 0 && System.currentTimeMillis() < deadline) Thread.sleep(10)
         assertTrue(engine.isPlaying)
-        val p0 = engine.positionMs
+        val p0 = engine.positionMs; val t0 = System.nanoTime()
         Thread.sleep(400)
-        val p1 = engine.positionMs - p0
-        assertTrue("advanced $p1 ms in 400 ms", p1 in 200..700)
+        val p1 = engine.positionMs - p0; val elapsed = (System.nanoTime() - t0) / 1_000_000
+        // Compare with the time that really passed (CI VMs oversleep); position moves in sink-sized steps.
+        assertTrue("advanced $p1 ms in $elapsed ms", p1 > 0 && kotlin.math.abs(p1 - elapsed) <= 300)
         engine.seekTo(1_200)
         Thread.sleep(200)
         val p2 = engine.positionMs
