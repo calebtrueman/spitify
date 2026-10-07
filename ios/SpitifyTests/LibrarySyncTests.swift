@@ -196,9 +196,9 @@ final class LibrarySyncTests: XCTestCase {
         XCTAssertEqual(LibrarySync.syncedSettings.count, 23)
     }
 
-    func testMeaningMatchesOrgJson() {
-        // org.json (Android) JSONObject.quote escapes "/" as "\/" and control characters as \u00xx.
-        XCTAssertEqual(LibrarySync.meaning(["name": .string("AC/DC \"Live\"\\"), "_x": .int(1)]), #"{"name":"AC\/DC \"Live\"\\"}"#)
+    func testMeaningUsesTheSharedQuoting() {
+        // The same quoting as Kotlin's LibrarySync.quote: "/" stays, control characters as \u00xx.
+        XCTAssertEqual(LibrarySync.meaning(["name": .string("AC/DC \"Live\"\\"), "_x": .int(1)]), #"{"name":"AC/DC \"Live\"\\"}"#)
         XCTAssertEqual(LibrarySync.meaning(["s": .string("a\u{1}b\tc\nd\u{8}e\u{C}f\rg")]), #"{"s":"a\u0001b\tc\nd\be\ff\rg"}"#)
         XCTAssertEqual(LibrarySync.meaning(["b": .bool(true), "a": .array([.int(1), .double(2.5), .null, .string("x")]), "n": .null]), #"{"a":[1,2.5,null,"x"],"b":true}"#)
         XCTAssertEqual(LibrarySync.meaning(["o": .object(["z": .int(1), "_y": .int(2), "q": .null])]), #"{"o":{"_y":2,"z":1}}"#, "only top-level _ fields are dropped")

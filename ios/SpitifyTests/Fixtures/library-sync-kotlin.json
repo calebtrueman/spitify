@@ -1,0 +1,555 @@
+{
+  "shards": [
+    [
+      "liked",
+      "song|band",
+      2
+    ],
+    [
+      "history",
+      "song|band",
+      2
+    ],
+    [
+      "playlists",
+      "song|band",
+      2
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "song|band",
+      2
+    ],
+    [
+      "liked",
+      "beyonce|beyonce",
+      6
+    ],
+    [
+      "history",
+      "beyonce|beyonce",
+      14
+    ],
+    [
+      "playlists",
+      "beyonce|beyonce",
+      6
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "beyonce|beyonce",
+      6
+    ],
+    [
+      "liked",
+      "motley|motley crue",
+      7
+    ],
+    [
+      "history",
+      "motley|motley crue",
+      15
+    ],
+    [
+      "playlists",
+      "motley|motley crue",
+      7
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "motley|motley crue",
+      7
+    ],
+    [
+      "liked",
+      "back in black|ac",
+      2
+    ],
+    [
+      "history",
+      "back in black|ac",
+      2
+    ],
+    [
+      "playlists",
+      "back in black|ac",
+      2
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "back in black|ac",
+      2
+    ],
+    [
+      "liked",
+      "the boxer|simon",
+      5
+    ],
+    [
+      "history",
+      "the boxer|simon",
+      13
+    ],
+    [
+      "playlists",
+      "the boxer|simon",
+      5
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "the boxer|simon",
+      5
+    ],
+    [
+      "liked",
+      "夜に駆ける|yoasobi",
+      5
+    ],
+    [
+      "history",
+      "夜に駆ける|yoasobi",
+      5
+    ],
+    [
+      "playlists",
+      "夜に駆ける|yoasobi",
+      5
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "夜に駆ける|yoasobi",
+      5
+    ],
+    [
+      "liked",
+      "dreams|florence the machine",
+      0
+    ],
+    [
+      "history",
+      "dreams|florence the machine",
+      0
+    ],
+    [
+      "playlists",
+      "dreams|florence the machine",
+      0
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "dreams|florence the machine",
+      0
+    ],
+    [
+      "liked",
+      "slash path quoted|tab artist",
+      6
+    ],
+    [
+      "history",
+      "slash path quoted|tab artist",
+      14
+    ],
+    [
+      "playlists",
+      "slash path quoted|tab artist",
+      6
+    ],
+    [
+      "stats:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "slash path quoted|tab artist",
+      6
+    ]
+  ],
+  "docs": [
+    {
+      "collection": "history",
+      "shard": 15,
+      "items": [{
+        "p": true,
+        "t": 1760000001009,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "listenedMs": 180000,
+          "playedAt": 1760000001000,
+          "track": {
+            "artist": "BEYONCÉ",
+            "album": "Album",
+            "id": "beyonce|beyonce",
+            "title": "Beyoncé",
+            "durationMs": 200000
+          },
+          "durationMs": 200000,
+          "skipped": false
+        },
+        "k": "aaaaaaaa:1760000001000:beyonce|beyonce"
+      }]
+    },
+    {
+      "collection": "liked",
+      "shard": 0,
+      "items": [{
+        "p": true,
+        "t": 1760000000006,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "_addedAt": 5,
+          "track": {
+            "artist": "Florence + the Machine & Guest",
+            "album": "Album",
+            "id": "dreams|florence the machine",
+            "title": "Dreams",
+            "durationMs": 200000
+          }
+        },
+        "k": "dreams|florence the machine"
+      }]
+    },
+    {
+      "collection": "liked",
+      "shard": 2,
+      "items": [
+        {
+          "p": true,
+          "t": 1760000000003,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "_addedAt": 5,
+            "track": {
+              "artist": "AC/DC",
+              "album": "Album",
+              "id": "back in black|ac",
+              "title": "Back in Black",
+              "durationMs": 200000
+            }
+          },
+          "k": "back in black|ac"
+        },
+        {
+          "p": false,
+          "t": 1760000002000,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "k": "song|band"
+        }
+      ]
+    },
+    {
+      "collection": "liked",
+      "shard": 5,
+      "items": [
+        {
+          "p": true,
+          "t": 1760000000004,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "_addedAt": 5,
+            "track": {
+              "artist": "Simon & Garfunkel",
+              "album": "Album",
+              "id": "the boxer|simon",
+              "title": "The Boxer",
+              "durationMs": 200000
+            }
+          },
+          "k": "the boxer|simon"
+        },
+        {
+          "p": true,
+          "t": 1760000000005,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "_addedAt": 5,
+            "track": {
+              "artist": "YOASOBI",
+              "album": "Album",
+              "id": "夜に駆ける|yoasobi",
+              "title": "夜に駆ける",
+              "durationMs": 200000
+            }
+          },
+          "k": "夜に駆ける|yoasobi"
+        }
+      ]
+    },
+    {
+      "collection": "liked",
+      "shard": 6,
+      "items": [
+        {
+          "p": true,
+          "t": 1760000000001,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "_addedAt": 5,
+            "track": {
+              "artist": "BEYONCÉ",
+              "album": "Album",
+              "id": "beyonce|beyonce",
+              "title": "Beyoncé",
+              "durationMs": 200000
+            }
+          },
+          "k": "beyonce|beyonce"
+        },
+        {
+          "p": true,
+          "t": 1760000000007,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "_addedAt": 5,
+            "track": {
+              "artist": "Tab\tArtist",
+              "album": "Album",
+              "id": "slash path quoted|tab artist",
+              "title": "Slash/Path \"quoted\"",
+              "durationMs": 200000
+            }
+          },
+          "k": "slash path quoted|tab artist"
+        }
+      ]
+    },
+    {
+      "collection": "liked",
+      "shard": 7,
+      "items": [{
+        "p": true,
+        "t": 1760000000002,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "_addedAt": 5,
+          "track": {
+            "artist": "Mötley Crüe",
+            "album": "Album",
+            "id": "motley|motley crue",
+            "title": "Mötley",
+            "durationMs": 200000
+          }
+        },
+        "k": "motley|motley crue"
+      }]
+    },
+    {
+      "collection": "playlist:pl-1",
+      "shard": 0,
+      "items": [{
+        "p": true,
+        "t": 1760000001001,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "pos": 0,
+          "track": {
+            "sourceID": "123",
+            "artist": "Band feat. Guest",
+            "album": "Album",
+            "id": "song|band",
+            "title": "Song (feat. Guest)",
+            "durationMs": 200000
+          }
+        },
+        "k": "song|band#1"
+      }]
+    },
+    {
+      "collection": "playlist:pl-1",
+      "shard": 1,
+      "items": [{
+        "p": true,
+        "t": 1760000001004,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "pos": 3,
+          "track": {
+            "sourceID": "123",
+            "artist": "Band feat. Guest",
+            "album": "Album",
+            "id": "song|band",
+            "title": "Song (feat. Guest)",
+            "durationMs": 200000
+          }
+        },
+        "k": "song|band#2"
+      }]
+    },
+    {
+      "collection": "playlist:pl-1",
+      "shard": 2,
+      "items": [
+        {
+          "p": true,
+          "t": 1760000001002,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "pos": 1,
+            "track": {
+              "artist": "BEYONCÉ",
+              "album": "Album",
+              "id": "beyonce|beyonce",
+              "title": "Beyoncé",
+              "durationMs": 200000
+            }
+          },
+          "k": "beyonce|beyonce#1"
+        },
+        {
+          "p": true,
+          "t": 1760000001003,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {
+            "pos": 2,
+            "track": {
+              "artist": "Mötley Crüe",
+              "album": "Album",
+              "id": "motley|motley crue",
+              "title": "Mötley",
+              "durationMs": 200000
+            }
+          },
+          "k": "motley|motley crue#1"
+        }
+      ]
+    },
+    {
+      "collection": "playlists",
+      "shard": 6,
+      "items": [{
+        "p": true,
+        "t": 1760000001000,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "name": "Road trip",
+          "description": ""
+        },
+        "k": "pl-1"
+      }]
+    },
+    {
+      "collection": "progress",
+      "shard": 3,
+      "items": [{
+        "p": true,
+        "t": 1760000001005,
+        "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "v": {
+          "_at": 1760000001000,
+          "durationMs": 1800000,
+          "played": false,
+          "positionMs": 65000
+        },
+        "k": "e:https://feed.example/rss#guid-1"
+      }]
+    },
+    {
+      "collection": "settings",
+      "shard": 0,
+      "items": [
+        {
+          "p": true,
+          "t": 1760000001008,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {"value": 6000},
+          "k": "crossfadeMs"
+        },
+        {
+          "p": true,
+          "t": 1760000001007,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {"value": 1.12},
+          "k": "textScale"
+        },
+        {
+          "p": true,
+          "t": 1760000001006,
+          "d": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "v": {"value": "Dark"},
+          "k": "themeMode"
+        }
+      ]
+    }
+  ],
+  "trackKeys": [
+    [
+      "Song (feat. Guest)",
+      "Band feat. Guest",
+      "song|band"
+    ],
+    [
+      "Beyoncé",
+      "BEYONCÉ",
+      "beyonce|beyonce"
+    ],
+    [
+      "Mötley",
+      "Mötley Crüe",
+      "motley|motley crue"
+    ],
+    [
+      "Back in Black",
+      "AC/DC",
+      "back in black|ac"
+    ],
+    [
+      "The Boxer",
+      "Simon & Garfunkel",
+      "the boxer|simon"
+    ],
+    [
+      "夜に駆ける",
+      "YOASOBI",
+      "夜に駆ける|yoasobi"
+    ],
+    [
+      "Dreams",
+      "Florence + the Machine & Guest",
+      "dreams|florence the machine"
+    ],
+    [
+      "Slash/Path \"quoted\"",
+      "Tab\tArtist",
+      "slash path quoted|tab artist"
+    ]
+  ],
+  "digest": {
+    "liked#7": "3a5c0fd576866d2a",
+    "progress#3": "0040a7f811691bb8",
+    "liked#6": "7535a0693a0798bc",
+    "settings#0": "e97ca0b2fa7add72",
+    "playlist:pl-1#0": "3cf4cf8c0f8925f2",
+    "playlist:pl-1#1": "8874eb5991ed29c1",
+    "history#15": "2ff7699b71990b3e",
+    "playlists#6": "7627d2fd55f5d239",
+    "playlist:pl-1#2": "63ead2acffc665d4",
+    "liked#0": "fd93c6e4a2deb351",
+    "liked#2": "024d475382c94491",
+    "liked#5": "9d5118e7d89f785b"
+  },
+  "meanings": [
+    [
+      {
+        "pos": 3,
+        "_x": 1,
+        "track": {}
+      },
+      "{\"pos\":3}"
+    ],
+    [
+      {
+        "played": false,
+        "durationMs": 1800000,
+        "positionMs": 65000
+      },
+      "{\"durationMs\":1800000,\"played\":false,\"positionMs\":65000}"
+    ],
+    [
+      {
+        "name": "Road \"trip\"/2",
+        "description": ""
+      },
+      "{\"description\":\"\",\"name\":\"Road \\\"trip\\\"/2\"}"
+    ],
+    [
+      {"value": 1.12},
+      "{\"value\":1.12}"
+    ]
+  ]
+}

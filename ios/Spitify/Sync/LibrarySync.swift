@@ -425,12 +425,13 @@ final class LibrarySync: @unchecked Sendable {
         }
     }
 
-    /// org.json `JSONObject.quote` as shipped on Android: `"`, `\` and `/` are escaped, control characters as \b \t \n \f \r or \u00XX.
+    /// The canonical quoting shared with Kotlin's `LibrarySync.quote`: `"` and `\` are escaped, control
+    /// characters as \b \t \n \f \r or \u00XX (independent of any JSON library; "/" is left as is).
     static func quote(_ s: String) -> String {
         var out = "\""
         for u in s.unicodeScalars {
             switch u {
-            case "\"", "\\", "/": out += "\\"; out.unicodeScalars.append(u)
+            case "\"", "\\": out += "\\"; out.unicodeScalars.append(u)
             case "\t": out += "\\t"
             case "\u{8}": out += "\\b"
             case "\n": out += "\\n"

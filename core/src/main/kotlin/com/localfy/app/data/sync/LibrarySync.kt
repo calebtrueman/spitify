@@ -261,13 +261,29 @@ class LibrarySync(val me: String, private val clock: () -> Long = { SocialRules.
          * Canonical text of a value without "track" and "_…" (informational) fields: sorted keys, so it's identical on every platform
          * and every run (org.json and Swift order keys differently). Null-valued keys are dropped.
          */
+        /**
+         * Canonical string quoting, the same on every platform whatever its JSON library (Android's org.json
+         * escapes "/", the desktop's doesn't): `"` and `\` escaped, control characters as \b \t \n \f \r or \u00xx.
+         */
+        fun quote(text: String): String = buildString {
+            append('"')
+            for (ch in text) when {
+                ch == '"' || ch == '\\' -> append('\\').append(ch)
+                ch == '\t' -> append("\\t"); ch == '\b' -> append("\\b"); ch == '\n' -> append("\\n")
+                ch == '\r' -> append("\\r"); ch == '\u000C' -> append("\\f")
+                ch.code <= 0x1F -> append("\\u%04x".format(ch.code))
+                else -> append(ch)
+            }
+            append('"')
+        }
+
         fun meaning(value: JSONObject?): String {
             if (value == null) return "{}"
             fun canon(v: Any?): String = when (v) {
                 null, JSONObject.NULL -> "null"
-                is JSONObject -> v.keySet().filter { !v.isNull(it) }.sorted().joinToString(",", "{", "}") { "\"$it\":" + canon(v.get(it)) }
+                is JSONObject -> v.keySet().filter { !v.isNull(it) }.sorted().joinToString(",", "{", "}") { quote(it) + ":" + canon(v.get(it)) }
                 is JSONArray -> (0 until v.length()).joinToString(",", "[", "]") { canon(v.get(it)) }
-                is String -> JSONObject.quote(v)
+                is String -> quote(v)
                 is Number -> if (v.toDouble() == Math.floor(v.toDouble()) && !v.toDouble().isInfinite()) v.toLong().toString() else v.toString()
                 else -> v.toString()
             }
