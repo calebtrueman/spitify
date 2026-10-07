@@ -24,9 +24,17 @@ class AndroidDevices(private val app: LocalfyApp) : DeviceLink, DeviceHost {
 
     init {
         social.onDevicePacket = sync::receive
+        // Library sync packets wait in its queue until it has loaded; it accepts them from linked devices only.
+        social.onSyncPacket = { author, packet, encrypted -> if (!sync.loaded || sync.state.devices.isNotEmpty()) app.librarySync.receive(author, packet, encrypted) }
         app.appScope.launch {
             sync.start()
-            sync.revision.collect { if (sync.state.devices.isNotEmpty()) watchPlayer() }
+            var linked: Set<String>? = null
+            sync.revision.collect {
+                if (sync.state.devices.isNotEmpty()) watchPlayer()
+                val ids = sync.state.devices.keys.toSet()
+                if (ids != linked && (ids.isNotEmpty() || app.librarySyncIfStarted != null)) app.librarySync.devicesChanged(ids)
+                linked = ids
+            }
         }
     }
 
