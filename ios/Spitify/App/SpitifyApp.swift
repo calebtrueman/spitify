@@ -80,7 +80,7 @@ struct RootView: View {
         } message: { Text("It will see what you play and can control playback.") }
         .task { await app.start(); openReleaseFeedIfRequested() }
         .onReceive(NotificationCenter.default.publisher(for: .init("SpitifyOpenReleaseFeed"))) { _ in openReleaseFeedIfRequested() }
-        .onChange(of: phase) { _, new in if new == .active { app.devices.foreground(); app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
+        .onChange(of: phase) { _, new in if new == .active { app.devices.foreground(); app.librarySync.foreground(); app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
         .sheet(isPresented: Binding(get: { incomingLink != nil }, set: { if !$0 { incomingLink = nil } })) {
             if let value = incomingLink, let link = SocialLink.parse(value) { NavigationStack { IncomingShareView(link: link) }.environment(app) }
         }

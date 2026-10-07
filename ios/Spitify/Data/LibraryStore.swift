@@ -14,6 +14,14 @@ final class LibraryStore {
     private(set) var books: [Song] = []
     private(set) var scanning = false
     private(set) var lastScanFound = 0
+    /// True once the first scan this launch finished, so library sync never reads a half-loaded library.
+    private(set) var loaded = false
+    /// A finished or skipped listen on this device (not one synced from another device).
+    @ObservationIgnored var onRecorded: ((Listen) -> Void)?
+    /// Play counts from other linked devices: device → song key (`LibrarySync.trackKey`) → plays.
+    var remotePlays: [String: [String: Int]] = [:] { didSet { Store.save(remotePlays, "remotePlays") } }
+    /// Song id → its library-sync key, kept by library sync so counts from other devices find local songs.
+    var syncKeys: [String: String] = [:]
 
     /// Fired when anything the taste engine learns from changes.
     var onWidgetDataChanged: (() -> Void)?
@@ -41,6 +49,7 @@ final class LibraryStore {
         overrides = Store.load([String: MetadataOverride].self, "overrides") ?? [:]
         hiddenSongs = Store.load(Set<String>.self, "hiddenSongs") ?? []
         hiddenArtists = Store.load(Set<String>.self, "hiddenArtists") ?? []
+        remotePlays = Store.load([String: [String: Int]].self, "remotePlays") ?? [:]
         cache = Store.load([String: CacheEntry].self, "scanCache") ?? [:]
         rawSongs = cache.values.map(\.song)
         ensureFolders()
@@ -121,6 +130,7 @@ final class LibraryStore {
         lastScanFound = songs.count
         rebuild()
         SpitifyShortcuts.updateAppShortcutParameters()
+        loaded = true
         onScanCompleted?()
     }
 
@@ -209,12 +219,26 @@ final class LibraryStore {
 
     func record(_ l: Listen) {
         listens.append(l)
+        onRecorded?(l)
         let cutoff = Date().addingTimeInterval(-400 * 86_400)
         if listens.count > 20_000 { listens.removeAll { $0.at < cutoff } }
     }
 
     func playCount(_ id: String) -> Int { playCounts[id] ?? 0 }
-    var playCounts: [String: Int] { Dictionary(grouping: listens.filter { !$0.skipped }, by: \.songId).mapValues(\.count) }
+    /// This device's own plays plus every other linked device's counts.
+    var playCounts: [String: Int] {
+        var counts = Dictionary(grouping: listens.filter { !$0.skipped && $0.device == nil }, by: \.songId).mapValues(\.count)
+        guard !remotePlays.isEmpty else { return counts }
+        var totals: [String: Int] = [:]
+        for plays in remotePlays.values { for (key, n) in plays { totals[key, default: 0] += n } }
+        for (id, key) in syncKeys { if let n = totals[key], n > 0 { counts[id, default: 0] += n } }
+        return counts
+    }
+    /// Listens synced from other devices, kept in time order.
+    func insertListens(_ added: [Listen]) {
+        guard !added.isEmpty else { return }
+        listens = (listens + added).sorted { $0.at < $1.at }
+    }
     func lastPlayed(_ id: String) -> Date? { listens.last { $0.songId == id && !$0.skipped }?.at }
 
     var recentlyPlayed: [Song] {

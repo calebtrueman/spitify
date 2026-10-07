@@ -233,6 +233,8 @@ struct Listen: Codable, Hashable {
     var durationMs: Int64
     var completed: Bool
     var skipped: Bool
+    /// Set for a listen on another linked device (the start of its key); it doesn't count toward this device's own plays.
+    var device: String? = nil
 }
 
 struct MetadataOverride: Codable, Hashable {

@@ -133,6 +133,45 @@ struct RemoteDeviceSheet: View {
     }
 }
 
+/// Settings › Your devices: whether the library matches the other devices, and songs that couldn't be found here.
+private struct LibrarySyncSection: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.palette) private var p
+    @State private var showMissing = false
+
+    var body: some View {
+        let sync = app.librarySync, missing = app.syncHost.unmatched.values.sorted { ($0.title, $0.artist) < ($1.title, $1.artist) }
+        Section {
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                HStack(spacing: 12) {
+                    Image(systemName: sync.syncing > 0 ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(p.accent).frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sync.syncing > 0 ? "Library: syncing \(sync.syncing) \(sync.syncing == 1 ? "item" : "items")…" : "Library: in sync").text(.title)
+                        if let last = sync.lastSync {
+                            Text("Last synced " + RelativeDateTimeFormatter().localizedString(for: Date(timeIntervalSince1970: Double(last) / 1000), relativeTo: Date()))
+                                .text(.caption).foregroundStyle(p.secondary)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("librarySyncStatus")
+            }
+            if !missing.isEmpty {
+                DisclosureGroup("Couldn't find on this device (\(missing.count))", isExpanded: $showMissing) {
+                    ForEach(missing) { track in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(track.title).text(.body).lineLimit(1)
+                            Text(track.artist).text(.caption).foregroundStyle(p.secondary).lineLimit(1)
+                        }
+                    }
+                }
+                Button("Retry") { app.syncHost.retryUnmatched() }
+            }
+        } header: { Text("Library") } footer: {
+            Text("Likes, playlists, saved music, podcasts, history and settings stay the same on your linked devices. Each device plays its own files, downloads or the stream.")
+        }
+    }
+}
+
 /// Settings › Your devices.
 struct DevicesView: View {
     @Environment(AppModel.self) private var app
@@ -165,6 +204,7 @@ struct DevicesView: View {
                     }
                     Button("Leave this group", role: .destructive) { Task { await devices.leaveGroup() } }
                 } header: { Text("Linked devices") }
+                LibrarySyncSection()
             }
             Section("Link a device") {
                 switch devices.pairing {

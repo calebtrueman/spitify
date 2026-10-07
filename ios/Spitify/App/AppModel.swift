@@ -50,6 +50,8 @@ final class AppModel {
     let artistFollows = ArtistFollows()
     let rooms = ListeningRooms()
     let devices = DeviceSyncStore()
+    let librarySync = LibrarySyncStore()
+    @ObservationIgnored private(set) var syncHost: AppLibrarySyncHost!
 
     var theme: ThemeSettings = Store.load(ThemeSettings.self, "theme") ?? ThemeSettings() { didSet { Store.save(theme, "theme") } }
     var profile: Profile = Store.load(Profile.self, "profile") ?? Profile() { didSet { Store.save(profile, "profile"); scheduleMixes(); Task { await social.syncProfile() } } }
@@ -64,7 +66,16 @@ final class AppModel {
     }
     var mixes: [Mix] { generatedMixes.filter { !deletedMixIDs.contains($0.id) } }
     func deleteMix(_ id: String) { deletedMixIDs.insert(id) }
-    func restoreDeletedMixes() { deletedMixIDs = [] }
+    func restoreDeletedMixes() { syncHost.allowMassRemoval([LibrarySync.hiddenMixes]); deletedMixIDs = [] }
+    /// A mix deleted or brought back on another linked device.
+    func setMixDeleted(_ id: String, _ deleted: Bool) {
+        if deleted, !deletedMixIDs.contains(id) { deletedMixIDs.insert(id) } else if !deleted, deletedMixIDs.contains(id) { deletedMixIDs.remove(id) }
+    }
+    /// Settings › "Show hidden recommendations again".
+    func clearHiddenRecommendations() {
+        syncHost.allowMassRemoval([LibrarySync.hiddenSongs, LibrarySync.hiddenArtists])
+        library.hiddenSongs = []; library.hiddenArtists = []
+    }
     private(set) var model: TasteModel?
     private(set) var fixing = false
     private var mixTask: Task<Void, Never>?
@@ -84,6 +95,9 @@ final class AppModel {
         library.onScanCompleted = { [weak self] in Task { await self?.backgroundFixes() } }
         library.onTasteInputChanged = { [weak self] in self?.scheduleMixes() }
         musicDownloads.onImported = { [weak self] in await self?.importDownloadedMusic() }
+        syncHost = AppLibrarySyncHost(app: self)
+        syncHost.onResolved = { [weak self] in self?.librarySync.retry() }
+        library.onRecorded = { [weak self] listen in guard let self else { return }; self.syncHost.recorded(listen, me: self.social.publicKey) }
     }
 
     func start() async {
@@ -92,6 +106,7 @@ final class AppModel {
         rooms.start(app: self)
         do { try social.prepare(); Task { await social.syncProfile() } } catch { social.message = error.localizedDescription }
         devices.start(app: self)
+        librarySync.start(app: self, host: syncHost)
         await library.scan()
         musicDownloads.start()
         await importDownloadedMusic(rescan: false)

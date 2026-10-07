@@ -30,6 +30,15 @@ final class ArtistFollows {
         for album in releases.prefix(10) { saved.releases.append(.init(artist: artist, album: album, foundAt: Date())) }
         persist()
     }
+    /// A follow from another linked device: its current releases count as known, so none show up as new.
+    func followFromSync(_ artist: OnlineArtist) {
+        guard !contains(artist.id), saved.artists.count < 128 else { return }
+        saved.artists.append(artist); persist()
+        Task {
+            guard let page = try? await MonochromeClient().artistPage(artist.id), contains(artist.id) else { return }
+            saved.known[artist.id, default: []].formUnion(page.albums.map(\.id)); persist()
+        }
+    }
     func unfollow(_ id: String) { saved.artists.removeAll { $0.id == id }; saved.known.removeValue(forKey: id); saved.releases.removeAll { $0.artist.id == id }; persist() }
     func setNotifications(_ enabled: Bool) async {
         if enabled {
@@ -48,7 +57,8 @@ final class ArtistFollows {
             do {
                 let page = try await MonochromeClient().artistPage(artist.id)
                 guard contains(artist.id) else { continue }
-                let known = saved.known[artist.id] ?? []
+                // A synced follow whose releases haven't been seen yet: they're all known, none are new.
+                guard let known = saved.known[artist.id] else { saved.known[artist.id] = Set(page.albums.map(\.id)); persist(); continue }
                 let fresh = page.albums.filter { !known.contains($0.id) }
                 saved.known[artist.id, default: []].formUnion(page.albums.map(\.id))
                 for album in fresh {

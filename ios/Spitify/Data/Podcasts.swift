@@ -26,6 +26,8 @@ struct Episode: Identifiable, Codable, Hashable {
     var position: Int
     var localFile: String?
     var explicit: Bool? = nil
+    /// The feed's guid (the audio URL when there's none; the file name for LibriVox): how linked devices name this episode.
+    var guid: String? = nil
 }
 
 struct Resume: Codable, Hashable { var positionMs: Int64; var durationMs: Int64; var played: Bool; var updated: Date }
@@ -77,7 +79,7 @@ final class FeedParser: NSObject, XMLParserDelegate {
                 if let url = cur["url"], feed.episodes.count < 300 {
                     feed.episodes.append(Episode(id: stableId(cur["guid"] ?? url), title: cur["title"] ?? "Untitled episode", summary: FeedParser.clean(cur["desc"] ?? ""),
                                                  audioURL: url, published: FeedParser.date(cur["date"]), durationMs: FeedParser.duration(cur["dur"] ?? ""),
-                                                 artworkURL: cur["art"], position: feed.episodes.count, explicit: cur["explicit"].map { ["yes", "true", "explicit"].contains($0) }))
+                                                 artworkURL: cur["art"], position: feed.episodes.count, explicit: cur["explicit"].map { ["yes", "true", "explicit"].contains($0) }, guid: cur["guid"] ?? url))
                 }
             default: break
             }
@@ -210,7 +212,7 @@ final class ShowsStore {
             let enc = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
             return Episode(id: stableId(name), title: (f["title"] as? String) ?? (name as NSString).deletingPathExtension.replacingOccurrences(of: "_", with: " "),
                            summary: "", audioURL: "https://archive.org/download/\(r.id)/\(enc)", published: nil,
-                           durationMs: FeedParser.duration(f["length"] as? String ?? ""), artworkURL: nil, position: i)
+                           durationMs: FeedParser.duration(f["length"] as? String ?? ""), artworkURL: nil, position: i, guid: name)
         }
         guard !episodes.isEmpty else { return nil }
         let show = Show(id: stableId(feedURL), feedURL: feedURL, title: r.title, author: r.author, summary: r.summary, artworkURL: r.coverURL, kind: .audiobook, subscribedAt: Date(), episodes: episodes)
@@ -238,6 +240,9 @@ final class ShowsStore {
             let known = Set(shows[i].episodes.map(\.id))
             let fresh = feed.episodes.filter { !known.contains($0.id) }
             if !fresh.isEmpty { shows[i].episodes = fresh + shows[i].episodes }
+            // Episodes saved before guids were kept get theirs back.
+            let guids = Dictionary(feed.episodes.compactMap { e in e.guid.map { (e.id, $0) } }, uniquingKeysWith: { a, _ in a })
+            for j in shows[i].episodes.indices where shows[i].episodes[j].guid == nil { if let g = guids[shows[i].episodes[j].id] { shows[i].episodes[j].guid = g } }
         }
     }
 
