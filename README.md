@@ -82,6 +82,7 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - When another device is playing, **Playing on MacBook** appears above the player. Tap it to pause, skip or seek that device, or tap **Listen here** to move the music to this one at the same spot.
 - Like Spotify, one device plays at a time: starting music on one pauses the other.
 - Open Spitify on another device and it offers to **Continue** what you were last playing.
+- **Your library is the same everywhere:** likes, saved songs, playlists, followed artists and friends, hidden items, podcasts and where you are in them, Recently played, play counts and settings like theme and crossfade. Songs aren't copied between devices: each device plays its own copy, its download or the stream. Downloads stay per device. See [how library sync works](docs/library-sync.md).
 - Linked devices talk end to end encrypted through the same relays as Friends. This works even with friend sharing turned off. See [how it works](docs/device-sync.md).
 
 Friends, Rooms and device sync use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
