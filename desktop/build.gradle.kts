@@ -33,6 +33,11 @@ dependencies {
     implementation("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}")
     implementation("org.bytedeco:ffmpeg:${libs.versions.ffmpeg.get()}:$nativePlatform")
     testImplementation(libs.junit)
+
+    // playback engine deps
+    implementation("net.java.dev.jna:jna:5.17.0") // macOS Now Playing (MediaPlayer.framework via the ObjC runtime)
+    implementation("com.github.hypfvieh:dbus-java-core:5.1.1") // Linux MPRIS media keys / now playing
+    implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.1.1")
 }
 
 compose.desktop {
