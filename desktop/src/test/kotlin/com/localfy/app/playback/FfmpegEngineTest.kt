@@ -93,7 +93,9 @@ class FfmpegEngineTest {
     }
 
     @Test fun playsSeveralFormatsGaplessly() {
-        val sink = FakeSink()
+        // 10x real time: the app queues the next track on each transition, as here, and needs the
+        // track still playing then. An unpaced sink can finish a short track first on a slow VM.
+        val sink = FakeSink(speedUp = 10.0)
         val engine = FfmpegAudioEngine(sink)
         val events = Events()
         val names = listOf("quiet-24.flac", "quiet-alac.m4a", "quiet-aac.m4a", "quiet.mp3", "quiet-opus.ogg", "hires-96k-24.flac", "quiet-24.aiff")
