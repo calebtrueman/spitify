@@ -38,6 +38,11 @@ dependencies {
     // macOS arm64/x64, Windows x64/arm64, Linux x64/arm64 (glibc + musl) and FreeBSD.
     implementation("org.nostrdevkit:nostr-sdk-jvm:0.45.1")
     implementation("com.google.zxing:core:3.5.3")
+
+    // playback engine deps
+    implementation("net.java.dev.jna:jna:5.17.0") // macOS Now Playing (MediaPlayer.framework via the ObjC runtime)
+    implementation("com.github.hypfvieh:dbus-java-core:5.1.1") // Linux MPRIS media keys / now playing
+    implementation("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.1.1")
 }
 
 compose.desktop {
