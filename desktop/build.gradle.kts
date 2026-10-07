@@ -57,7 +57,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "Spitify"
-            packageVersion = "1.0.24"
+            packageVersion = "1.0.25"
             description = "Your music, podcasts and audiobooks"
             vendor = "Spitify"
             modules("java.sql", "java.naming", "jdk.crypto.ec", "java.net.http", "jdk.unsupported")

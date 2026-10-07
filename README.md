@@ -77,7 +77,14 @@ Android: Kotlin · Jetpack Compose · Media3 &nbsp; | &nbsp; iPhone: SwiftUI · 
 - Artists opened from **Your Library** show your saved music. Their menu lets you change the cover or hide the artist without deleting songs. **Settings → Hidden artists** brings them back. Main artist tags help keep featured guests out of the main artist list, while full song credits stay visible. Library sort choices stay saved.
 - Online artist pages show songs from their albums and singles, with **Show more songs** to keep browsing beyond the popular picks. Follow artists from their pages, then open **New releases** in Your Library. Checks run when you open the app or refresh the feed. Optional notifications alert you to new releases found during those checks.
 
-Friends and Rooms use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
+### Your devices
+- Link your phone, tablet and computers once in **Settings › Your devices**. One device shows an 8-character code, you type it on the other, then allow it. There's no account.
+- When another device is playing, **Playing on MacBook** appears above the player. Tap it to pause, skip or seek that device, or tap **Listen here** to move the music to this one at the same spot.
+- Like Spotify, one device plays at a time: starting music on one pauses the other.
+- Open Spitify on another device and it offers to **Continue** what you were last playing.
+- Linked devices talk end to end encrypted through the same relays as Friends. This works even with friend sharing turned off. See [how it works](docs/device-sync.md).
+
+Friends, Rooms and device sync use public relays, with no Spitify-run server. Delivery and source availability can vary. See [sharing, privacy and limits](docs/SOCIAL.md).
 
 ### Playlists and complete albums
 
