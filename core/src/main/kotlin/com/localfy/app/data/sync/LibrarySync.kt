@@ -114,11 +114,15 @@ class LibrarySync(val me: String, private val clock: () -> Long = { SocialRules.
 
     /** Remote items this device doesn't have yet (e.g. a song that couldn't be matched); retry later. */
     fun pending(collection: String): List<SyncChange> {
-        val have = localOf(collection)
-        return coll(collection).values.filter { it.present && have[it.key] != it.meaning }.map { SyncChange(collection, it.key, true, it.value) }
+        val all = items[collection] ?: return emptyList()
+        val have = local[collection].orEmpty()
+        return all.values.filter { it.present && have[it.key] != it.meaning }.map { SyncChange(collection, it.key, true, it.value) }
     }
 
-    fun present(collection: String): Map<String, JSONObject> = coll(collection).values.filter { it.present && it.value != null }.associate { it.key to it.value!! }
+    /** True when [key] was removed (a tombstone), as opposed to never seen. */
+    fun isRemoved(collection: String, key: String): Boolean = items[collection]?.get(key)?.present == false
+
+    fun present(collection: String): Map<String, JSONObject> = (items[collection] ?: return emptyMap()).values.filter { it.present && it.value != null }.associate { it.key to it.value!! }
 
     fun collections(): Set<String> = items.keys.toSet()
 

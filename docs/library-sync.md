@@ -83,6 +83,46 @@ artists.
 | `savedShared` | `"<owner>:<id>"` | `{_name}` | Shared playlists saved to your library. |
 | `settings` | a name from `SYNCED_SETTINGS` | `{value}` | Use exactly those names. Map each platform's own setting to the matching name; skip any setting the platform doesn't have. |
 
+### Fixed formats
+
+These must be identical on every platform.
+
+**Progress keys.** Use these, never local ids:
+- Podcast episodes: `e:<feedUrl>#<episode guid>`.
+- Local audiobook or podcast files, and long tracks: `t:` + `trackKey(title, artist)`.
+- A key longer than 380 characters becomes its first 300 characters + `~` + the first 32 hex
+  characters of SHA-256(key).
+
+**Setting values:**
+
+| Setting | Value |
+|---|---|
+| `themeMode` | `System` \| `Dark` \| `Light` \| `Amoled` |
+| `font` | `Figtree` \| `Nunito` \| `SpaceGrotesk` \| `System` \| `Serif` |
+| `artShape` | `Rounded` \| `Square` \| `Soft` |
+| `playerStyle` | `Artwork` \| `Vinyl` \| `Minimal` |
+| `textScale` | the scale as a number: 0.9, 1, 1.12 or 1.25. Apply the nearest. |
+| `accent` | the ARGB colour as an integer number |
+| `accentFromArt` | boolean |
+| `crossfadeMs` | whole number |
+| `speedMusic`, `speedPodcast` | decimal number |
+| everything else | boolean |
+
+- Match enum names case-insensitively when applying.
+- Skip settings this platform doesn't have, and leave values you don't recognise untouched.
+
+**Defaults don't overwrite choices.** Don't report a setting or profile value that is still at its
+default unless that name already exists in the synced collection. Otherwise a brand-new device's
+defaults would win as the newest change.
+
+**Shapes:**
+- A playlist value always has `name` and `description` (`""` when there's none).
+- `imageHash` is present only when the playlist has a cover.
+- When a remote value means the same as yours, keep reporting the remote's exact value.
+
+**Mass removals.** Explicit user actions that clear a collection report with `allowMassRemoval = true`.
+Examples: "Bring back deleted mixes" and "Show hidden again".
+
 ### Playlist ids
 
 Each device keeps a map from global id (UUID) to local playlist id in its sync file.
