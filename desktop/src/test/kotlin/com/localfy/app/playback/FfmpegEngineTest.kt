@@ -118,10 +118,11 @@ class FfmpegEngineTest {
         val deadline = System.currentTimeMillis() + 5_000
         while (engine.positionMs <= 0 && System.currentTimeMillis() < deadline) Thread.sleep(10)
         assertTrue(engine.isPlaying)
-        val p0 = engine.positionMs
+        val p0 = engine.positionMs; val t0 = System.nanoTime()
         Thread.sleep(400)
-        val p1 = engine.positionMs - p0
-        assertTrue("advanced $p1 ms in 400 ms", p1 in 200..700)
+        val p1 = engine.positionMs - p0; val elapsed = (System.nanoTime() - t0) / 1_000_000
+        // Compare with the time that really passed (CI VMs oversleep); position moves in sink-sized steps.
+        assertTrue("advanced $p1 ms in $elapsed ms", p1 > 0 && kotlin.math.abs(p1 - elapsed) <= 300)
         engine.seekTo(1_200)
         Thread.sleep(200)
         val p2 = engine.positionMs
