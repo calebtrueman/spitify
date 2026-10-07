@@ -23,6 +23,11 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
     val rooms = RoomState()
     var onRoomUpdate: ((ListeningRoom) -> Unit)? = null
     var onRoomRequest: ((IncomingRoomRequest) -> Unit)? = null
+    /** Linked-device packets ("device…"), handled by [DeviceSync]. */
+    var onDevicePacket: ((String, SocialPacket, Boolean) -> Unit)? = null
+    /** Linked devices or pairing keep the relay running (inbox only) while friend sharing is off. */
+    var devicesNeedRelay = false
+        set(value) { if (field != value) { field = value; refresh() } }
     fun roomChanged() = changed()
     var message: String? = null; private set
     val playlists get() = state.playlists.values.sortedByDescending { it.updatedAt }
@@ -33,7 +38,10 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
     }
     private fun changed() { changes.value += 1 }
     private fun persist() { prefs.edit().putString("state", state.json().toString()).apply(); changed() }
-    private fun refresh() { if (enabled) relay.start(relayAddresses, state.following, discovery) else relay.stop() }
+    private fun refresh() { if (enabled) relay.start(relayAddresses, state.following, discovery) else if (devicesNeedRelay) relay.start(relayAddresses, emptySet(), inboxOnly = true) else relay.stop() }
+    val relayRunning get() = enabled || devicesNeedRelay
+    suspend fun sendDevice(packet: SocialPacket, logical: String, recipient: String?, expiresIn: Long, extraTags: List<List<String>> = emptyList()) = relay.send(packet, logical, recipient, expiresIn, extraTags)
+    suspend fun lookup(tag: String) = relay.lookup(tag)
     fun configure(enabled: Boolean, discovery: Boolean = this.discovery, relays: List<String>? = null) {
         if (relays != null) { relayAddresses = relays; prefs.edit().putStringSet("relays", relays.toSet()).apply() }
         this.enabled = enabled; this.discovery = discovery
@@ -156,8 +164,10 @@ class SocialRepository(private val context: Context, private val scope: Coroutin
         (state.recipients[playlist.key].orEmpty() + current.editors).forEach { person -> val latest = state.playlists[playlist.key] ?: return; relay.send(SocialPacket("playlist", latest.json()), "playlist:${latest.id}", person) }
     }
     private fun receive(author: String, packet: SocialPacket, encrypted: Boolean) {
+        if (!enabled && !packet.type.startsWith("device")) return
         runCatching {
             when (packet.type) {
+                "deviceCode", "deviceLinkRequest", "deviceList", "deviceUnlink", "devicePlayback", "deviceCommand" -> onDevicePacket?.invoke(author, packet, encrypted)
                 "room" -> { val room = ListeningRoom.parse(packet.body); if (rooms.accept(room, author, publicKey, encrypted)) { changed(); onRoomUpdate?.invoke(room) } }
                 "roomRequest" -> if (encrypted) { val request = RoomRequest.parse(packet.body); if (rooms.receive(request, author, publicKey)) { changed(); onRoomRequest?.invoke(rooms.requests.last()) } }
                 "profileHidden" -> if (!encrypted && author != publicKey && state.profiles[author]?.isPublic != false) { state.profiles.remove(author); persist() }

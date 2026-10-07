@@ -93,6 +93,7 @@ dependencies {
     implementation(libs.palette)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }

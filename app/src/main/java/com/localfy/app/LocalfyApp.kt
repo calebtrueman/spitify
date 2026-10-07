@@ -28,6 +28,7 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
         StallWatch.start(this)
         com.localfy.app.widgets.MusicWidgetProvider.observe(this)
         appScope.launch { profiles.profile.collect { social.syncProfile() } }
+        appScope.launch { devices }
         android.app.backup.BackupManager(this).dataChanged()
         com.localfy.app.playback.EqStore.init(this)
         com.localfy.app.playback.ArtContext.app = this
@@ -62,6 +63,9 @@ class LocalfyApp : Application(), SingletonImageLoader.Factory {
     val artistFollows by lazy { com.localfy.app.data.music.ArtistFollows(this) }
     val rooms by lazy { com.localfy.app.data.social.ListeningRooms(this) }
     val social by lazy { com.localfy.app.data.social.SocialRepository(this, appScope) }
+    private val linkedDevices by lazy { com.localfy.app.data.social.AndroidDevices(this) }
+    /** Your other devices: "Playing on …", remote control and continue where you left off. */
+    val devices get() = linkedDevices.sync
     val flacConversion by lazy { com.localfy.app.data.music.FlacConversion(this, database, appScope) }
     val musicDownloads by lazy { com.localfy.app.data.music.MusicDownloads(this, database, appScope) }
 

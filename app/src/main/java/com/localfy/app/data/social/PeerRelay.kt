@@ -83,14 +83,19 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
     private var known = emptySet<String>()
     private val requestedPlaylists = linkedMapOf<String, SocialLink>()
     private var discover = false
+    private var inboxOnly = false
     private var enabled = false
+    private class Lookup(val tag: String, val found: MutableList<Pair<String, SocialPacket>> = mutableListOf(), var finished: Int = 0)
+    private val lookups = mutableMapOf<String, Lookup>()
+    private var lookupCount = 0
     private val seen = linkedSetOf<String>()
     private val stamps = mutableMapOf<String, Long>()
     private data class Assembly(val author: String, val encrypted: Boolean, val firstAt: Long, val total: Int, val digest: String, val parts: MutableMap<Int, ByteArray> = mutableMapOf())
     private val assemblies = mutableMapOf<String, Assembly>()
 
-    fun start(relays: List<String>, authors: Set<String>, discover: Boolean = false) {
-        known = authors.filter(SocialRules::key).toSet(); this.discover = discover; enabled = true
+    /** [inboxOnly]: only this device's encrypted inbox (linked devices while friend sharing is off). */
+    fun start(relays: List<String>, authors: Set<String>, discover: Boolean = false, inboxOnly: Boolean = false) {
+        known = authors.filter(SocialRules::key).toSet(); this.discover = discover && !inboxOnly; this.inboxOnly = inboxOnly; enabled = true
         wanted = relays.filter { runCatching { val u = URI(it); u.userInfo == null && ((u.scheme == "wss" && u.host.orEmpty().contains('.')) || testMode && u.scheme == "ws" && u.host in listOf("127.0.0.1", "localhost", "10.0.2.2")) }.getOrDefault(false) }.take(4).toSet()
         sockets.keys.toList().filter { it !in wanted }.forEach { sockets.remove(it)?.close(1000, "Settings changed"); connected.remove(it); retry.remove(it)?.cancel() }
         wanted.forEach { url -> sockets[url]?.let(::subscribe) ?: connect(url) }; report()
@@ -121,7 +126,25 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
         requestedPlaylists["${link.owner}:${link.id}"] = link
         sockets.values.forEach(::subscribe)
     }
+    /**
+     * One-off search for public events tagged ["t", tag] (a device-link code). Matching packets also
+     * go through [onPacket]; they're returned too, so the caller knows which tag found them.
+     */
+    suspend fun lookup(tag: String, timeoutMs: Long = 15_000): List<Pair<String, SocialPacket>> {
+        require(tag.length in 1..100)
+        val id = "spitify-lookup-${++lookupCount}"; val lookup = Lookup(tag); lookups[id] = lookup
+        try {
+            connectedSockets().forEach { request(it, id, tag) }
+            withTimeoutOrNull(timeoutMs) { while (lookup.found.isEmpty() || lookup.finished < connected.size.coerceAtLeast(1)) delay(100) }
+            return lookup.found.toList()
+        } finally { lookups.remove(id); connectedSockets().forEach { it.send(JSONArray().put("CLOSE").put(id).toString()) } }
+    }
+    private fun connectedSockets() = sockets.filterKeys { it in connected }.values.toList()
+    private fun request(socket: WebSocket, id: String, tag: String) =
+        socket.send(JSONArray().put("REQ").put(id).put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("#t", JSONArray(listOf(tag))).put("limit", 5)).toString())
     private fun subscribe(socket: WebSocket) {
+        lookups.forEach { (id, lookup) -> request(socket, id, lookup.tag) }
+        if (inboxOnly) { socket.send(JSONArray().put("REQ").put("spitify-v1").put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("#p", JSONArray(listOf(publicKey))).put("#t", JSONArray(listOf("spitify"))).put("limit", 500)).toString()); return }
         val req = JSONArray().put("REQ").put("spitify-v1")
             .put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("authors", JSONArray((known + publicKey).sorted().take(129))).put("#d", JSONArray(listOf("spitify:v1:profile"))).put("limit", 129))
             .put(JSONObject().put("kinds", JSONArray(listOf(30078))).put("authors", JSONArray((known + publicKey).sorted().take(129))).put("#t", JSONArray(listOf("spitify"))).put("limit", 500))
@@ -137,7 +160,9 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
         outgoing.removeAll { it.expiresAt < SocialRules.now }; persist()
         outgoing.toList().forEach { socket.send("[\"EVENT\",${it.json}]"); delay(40) }
     }
-    suspend fun send(packet: SocialPacket, logical: String, recipient: String? = null, expiresIn: Long = 30L * 24 * 60 * 60 * 1000) {
+    /** Relay state stays on the main thread; encrypting and signing run in the background. */
+    suspend fun send(packet: SocialPacket, logical: String, recipient: String? = null, expiresIn: Long = 30L * 24 * 60 * 60 * 1000, extraTags: List<List<String>> = emptyList()) = withContext(Dispatchers.Main.immediate) {
+        require(extraTags.size <= 4 && extraTags.all { it.size in 2..3 && it[0] != "d" && it[0] != "p" && it.all { v -> v.length <= 100 } })
         require(packet.v == 1 && logical.length <= 220 && (recipient == null || SocialRules.key(recipient))) { "That friend code is not valid." }
         val data = packet.json().toString().toByteArray(); require(data.size <= 1_000_000) { "This share is too large. Try a smaller playlist." }
         val transfer = UUID.randomUUID().toString(); val digest = SocialRules.hash(data)
@@ -148,32 +173,39 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
         check(outgoing.count { it.logical != prefix } + chunks.size <= 1000) { "There are many shares waiting to send. Connect before adding more." }
         val created = maxOf(SocialRules.now / 1000, (stamps[prefix] ?: 0) + 1)
         check(created <= SocialRules.now / 1000 + 120) { "Please wait a moment before sharing again." }
-        val prepared = mutableListOf<Outgoing>()
-        chunks.forEachIndexed { index, bytes ->
+        stamps[prefix] = created
+        val prepared = withContext(Dispatchers.Default) { chunks.mapIndexed { index, bytes ->
             val contentPacket = if (chunks.size == 1) packet else SocialPacket("part", JSONObject().put("transfer", transfer).put("index", index).put("total", chunks.size).put("digest", digest).put("content", Base64.getEncoder().encodeToString(bytes)))
             val raw = contentPacket.json().toString()
             val content = if (recipient == null) raw else keys.nip44Encrypt(PublicKey.parse(recipient), raw)
             val identifier = if (logical == "profile" && recipient == null) "spitify:v1:profile" else "spitify:v1:$prefix:$index"
             val tags = mutableListOf(listOf("d", identifier), listOf("t", "spitify"), listOf("expiration", ((SocialRules.now + expiresIn) / 1000).toString()))
             if (recipient != null) { tags += listOf("p", recipient); tags += listOf("encrypted", "nip44") }
+            tags += extraTags
             val event = EventBuilder(Kind(30078u), content).tags(tags.map(Tag::parse)).customCreatedAt(Timestamp.fromSecs(created.toULong())).finalize(keys)
-            prepared += Outgoing(event.id().toHex(), event.asJson(), prefix, SocialRules.now + expiresIn)
-        }
-        outgoing.removeAll { it.logical == prefix }; outgoing += prepared; stamps[prefix] = created
+            Outgoing(event.id().toHex(), event.asJson(), prefix, SocialRules.now + expiresIn)
+        } }
+        if ((stamps[prefix] ?: 0) != created) return@withContext
+        outgoing.removeAll { it.logical == prefix }; outgoing += prepared
         persist(); sockets.values.toList().forEach { flush(it) }
     }
     fun receive(raw: String) { runCatching {
         if (raw.toByteArray().size > 128 * 1024) return
         val values = JSONArray(raw); val type = values.optString(0)
-        if (type == "OK" && values.length() >= 3 && values.optBoolean(2)) { val id = values.getString(1); outgoing.removeAll { it.id == id }; persist(); return }
+        if (type == "OK" && values.length() >= 3 && values.optBoolean(2)) { val id = values.getString(1); if (outgoing.removeAll { it.id == id }) persist(); return }
+        if (type == "EOSE" || type == "CLOSED") { lookups[values.optString(1)]?.let { it.finished++ }; return }
         if (type != "EVENT" || values.length() < 3) return
         val obj = values.getJSONObject(2); val event = Event.fromJson(obj.toString())
         if (!event.verify() || obj.getInt("kind") != 30078 || obj.getLong("created_at") > SocialRules.now / 1000 + 300) return
         val tags = obj.getJSONArray("tags").let { a -> (0 until a.length()).map { i -> a.getJSONArray(i).let { b -> (0 until b.length()).map { b.getString(it) } } } }
         if (listOf("t", "spitify") !in tags || tags.none { it.size > 1 && it[0] == "d" && it[1].startsWith("spitify:v1:") }) return
         if (tags.firstOrNull { it.size > 1 && it[0] == "expiration" }?.get(1)?.toLongOrNull()?.let { it < SocialRules.now / 1000 } == true) return
-        val id = event.id().toHex(); if (id in seen) return
         val encrypted = listOf("encrypted", "nip44") in tags
+        lookups[values.optString(1)]?.let { lookup ->
+            if (!encrypted && listOf("t", lookup.tag) in tags && tags.none { it.size > 1 && it[0] == "p" } && lookup.found.size < 20 && event.content().toByteArray().size <= 48_000)
+                runCatching { SocialPacket.parse(JSONObject(event.content())) }.getOrNull()?.takeIf { it.v == 1 && it.type != "part" }?.let { lookup.found += event.author().toHex() to it }
+        }
+        val id = event.id().toHex(); if (id in seen) return
         val recipients = tags.filter { it.size > 1 && it[0] == "p" }.map { it[1] }
         if (if (encrypted) recipients != listOf(publicKey) else recipients.isNotEmpty()) return
         val author = event.author().toHex()
@@ -198,7 +230,8 @@ class PeerRelay(private val context: Context, val keys: Keys, private val scope:
             if (joined.v == 1 && joined.type != "part") onPacket?.invoke(author, joined, encrypted)
         }
     } }
-    private fun persist() { prefs.edit().putString("events", JSONArray(outgoing.map { it.json() }).toString()).commit(); report() }
+    // apply(): the in-memory copy updates now and the disk write happens off the main thread.
+    private fun persist() { prefs.edit().putString("events", JSONArray(outgoing.map { it.json() }).toString()).apply(); report() }
     private fun report() { onStatus?.invoke(connected.size, outgoing.size) }
     companion object { val DEFAULTS = listOf("wss://relay.damus.io", "wss://nos.lol") }
 }

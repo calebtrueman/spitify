@@ -483,6 +483,7 @@ fun NowPlayingPane(onHide: () -> Unit, onTheater: () -> Unit, modifier: Modifier
                 if (song != null) IconButton(onClick = onTheater) { Icon(Icons.Rounded.OpenInFull, "Dual-screen player") }
                 IconButton(onClick = onHide) { Icon(Icons.Rounded.VerticalSplit, "Hide player pane") }
             }
+            DeviceStrip()
             if (song == null) {
                 com.localfy.app.ui.theme.ThemeScene()
                 EmptyState("Nothing playing", "Tap any song — it plays here while you keep browsing on the other half.")

@@ -41,6 +41,8 @@ data class PlayerUiState(
     val manualQueueIndices: Set<Int> = emptySet(),
     val autoplayQueueIndices: Set<Int> = emptySet(),
     val isPlaying: Boolean = false,
+    /** Playing or about to (buffering): what the user asked for. */
+    val playWhenReady: Boolean = false,
     val isBuffering: Boolean = false,
     val playbackState: Int = Player.STATE_IDLE,
     val shuffle: Boolean = false,
@@ -102,6 +104,13 @@ class PlayerConnection(
     private val _position = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _position.asStateFlow()
 
+    private val _seeks = MutableStateFlow(0L)
+    /** Bumps on every jump in position (seek, skip), for linked devices. */
+    val seeks: StateFlow<Long> = _seeks.asStateFlow()
+
+    /** The position right now, straight from the player. */
+    fun livePosition(): Long = controller?.currentPosition ?: _position.value
+
     private val _sleepTimer = MutableStateFlow<SleepTimer?>(null)
     val sleepTimer: StateFlow<SleepTimer?> = _sleepTimer.asStateFlow()
 
@@ -134,7 +143,7 @@ class PlayerConnection(
                     override fun onDisconnected(controller: MediaController) {
                         this@PlayerConnection.controller = null
                         ticker?.cancel()
-                        _state.value = _state.value.copy(isPlaying = false, connected = false)
+                        _state.value = _state.value.copy(isPlaying = false, playWhenReady = false, connected = false)
                     }
                 })
                 .buildAsync().let { f -> runCatching { f.await() } }
@@ -160,13 +169,14 @@ class PlayerConnection(
         ticker?.cancel()
         c.removeListener(listener)
         c.release()
-        _state.value = _state.value.copy(isPlaying = false, connected = false)
+        _state.value = _state.value.copy(isPlaying = false, playWhenReady = false, connected = false)
     }
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             // Streams fire loading/buffering events constantly; only walk the queue when it changed.
             publish(queueChanged = events.contains(Player.EVENT_TIMELINE_CHANGED))
+            if (events.contains(Player.EVENT_POSITION_DISCONTINUITY)) _seeks.value += 1
             if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_REPEAT_MODE_CHANGED)) saveQueue()
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) && !player.isPlaying) {
                 saveQueue()
@@ -267,6 +277,7 @@ class PlayerConnection(
             autoplayQueueIndices = if (ids === _state.value.queue) _state.value.autoplayQueueIndices else (0 until c.mediaItemCount).filter { c.getMediaItemAt(it).isAutoplayItem() }.toSet(),
             currentIndex = if (ids.isEmpty()) -1 else c.currentMediaItemIndex,
             isPlaying = c.isPlaying,
+            playWhenReady = c.playWhenReady,
             isBuffering = c.playbackState == Player.STATE_BUFFERING,
             repeatMode = c.repeatMode,
             durationMs = c.duration.takeIf { it != C.TIME_UNSET } ?: 0L,

@@ -138,6 +138,7 @@ fun SettingsScreen() {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
         item { BackHeader("Settings") }
         item { SettingRow("Sharing connection", "Pause sharing or change connections") { app.navigate("friends-settings") } }
+        item { SettingRow("Your devices", "See what your other devices play, control them and continue where you left off") { app.navigate("devices") } }
         item { SettingRow("Hidden artists", "Show artists you hid from Library") { app.navigate("hidden-artists") } }
         item {
             val deletedMixes by app.repo.hiddenMixCount.collectAsStateWithLifecycle()

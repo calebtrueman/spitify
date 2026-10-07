@@ -196,6 +196,10 @@ fun LocalfyRoot(activity: Activity) {
     LaunchedEffect(Unit) {
         container.player.messages.collect { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() }
     }
+    LaunchedEffect(Unit) {
+        container.devices.notes.collect { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() }
+    }
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) { container.devices.foreground(); onStopOrDispose {} }
 
     // Re-arm the tabletop player each time the device is half-folded again.
     LaunchedEffect(posture.kind) { if (posture.kind != FoldPosture.Kind.Tabletop) tabletopDismissed = false }
@@ -247,6 +251,7 @@ fun LocalfyRoot(activity: Activity) {
             val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navTotal = if (wide) 0.dp else 80.dp + navInset
             var miniHeight by remember { mutableStateOf(72.dp) }
+            var stripHeight by remember { mutableStateOf(0.dp) }
             val collapsedY = windowHeight - navTotal - miniHeight
             val collapsedPx = with(density) { collapsedY.toPx() }.coerceAtLeast(1f)
             val scope = rememberCoroutineScope()
@@ -352,6 +357,7 @@ fun LocalfyRoot(activity: Activity) {
                             composable("incoming/{link}") { com.localfy.app.ui.screens.IncomingShareScreen(it.arguments?.getString("link").orEmpty()) }
                             composable("friend/{person}") { com.localfy.app.ui.screens.FriendProfileScreen(it.arguments?.getString("person").orEmpty()) }
                             composable("hidden-artists") { com.localfy.app.ui.screens.HiddenArtistsScreen() }
+                            composable("devices") { com.localfy.app.ui.screens.DevicesScreen() }
                             composable("friends-settings") { com.localfy.app.ui.screens.FriendsSettingsScreen() }
                             composable("friend-code") { com.localfy.app.ui.screens.FriendCodeScreen() }
                             composable("add-friend") { com.localfy.app.ui.screens.AddFriendScreen() }
@@ -373,8 +379,9 @@ fun LocalfyRoot(activity: Activity) {
                             StatusBarScrim()
                         }
                     }
+                    if (wide && !showPane) com.localfy.app.ui.player.DeviceStrip()
                     when {
-                        !wide -> Spacer(Modifier.height(navTotal + if (player.hasMedia) miniHeight else 0.dp))
+                        !wide -> Spacer(Modifier.height(navTotal + stripHeight + if (player.hasMedia) miniHeight else 0.dp))
                         !showPane && player.hasMedia -> MiniPlayer(onExpand = { if (paneFits) paneVisible = true else playerExpanded = true }, Modifier.navigationBarsPadding())
                         else -> Spacer(Modifier.navigationBarsPadding())
                     }
@@ -423,6 +430,10 @@ fun LocalfyRoot(activity: Activity) {
                         }
                     }
                 }
+                if (sheet < 0.01f) Box(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = navTotal + if (player.hasMedia) miniHeight else 0.dp)
+                        .onSizeChanged { size -> stripHeight = with(density) { size.height.toDp() } },
+                ) { com.localfy.app.ui.player.DeviceStrip() }
                 NavigationBar(
                     containerColor = Color.Transparent,
                     modifier = Modifier
@@ -503,6 +514,7 @@ fun LocalfyRoot(activity: Activity) {
         }
         addToPlaylist?.let { songs -> AddToPlaylistDialog(songs) { addToPlaylist = null } }
         editing?.let { (songs, album) -> MetadataEditor(songs, album) { editing = null } }
+        com.localfy.app.ui.player.DeviceApprovalDialog()
         if (creatingPlaylist) {
             CreatePlaylistDialog(onDismiss = { creatingPlaylist = false }, onCreated = { actions.navigate(Routes.playlist(it)) })
         }
