@@ -370,7 +370,7 @@ struct ProfileView: View {
                     }.padding(16).contentShape(Rectangle())
                 }.buttonStyle(.plain)
                 if !app.library.hiddenSongs.isEmpty || !app.library.hiddenArtists.isEmpty {
-                    Button("Show hidden recommendations again (\(app.library.hiddenSongs.count + app.library.hiddenArtists.count))") { app.library.hiddenSongs = []; app.library.hiddenArtists = [] }.padding(16)
+                    Button("Show hidden recommendations again (\(app.library.hiddenSongs.count + app.library.hiddenArtists.count))") { app.clearHiddenRecommendations() }.padding(16)
                 }
             }.padding(.bottom, 30)
         }

@@ -12,6 +12,8 @@ final class SocialStore {
     var onRoomRequest: ((IncomingRoomRequest) -> Void)?
     /// Packets whose type starts with "device", for `DeviceSyncStore`.
     var onDevicePacket: ((String, SocialPacket, Bool) -> Void)?
+    /// Packets whose type starts with "sync", for `LibrarySyncStore`.
+    var onSyncPacket: ((String, SocialPacket, Bool) -> Void)?
     /// Linked devices or pairing need the relay even when friend sharing is off.
     var devicesWanted = false { didSet { if devicesWanted != oldValue { refreshConnection() } } }
     var publicProfile = UserDefaults.standard.object(forKey: "socialPublicProfile") as? Bool ?? true
@@ -51,6 +53,16 @@ final class SocialStore {
         Task { await syncProfile() }
     }
     func unfollow(_ id: String) { state.following.remove(id); persist(); refreshConnection() }
+    /// A follow made on another linked device. Unlike `follow`, it doesn't turn sharing on here.
+    func followFromSync(_ id: String) {
+        guard SocialRules.key(id), id != publicKey, !state.following.contains(id), state.following.count < 128 else { return }
+        state.following.insert(id); persist(); refreshConnection()
+    }
+    /// Asks the relays for a shared playlist another linked device saved; it's kept when it arrives.
+    func requestFromSync(owner: String, id: String) {
+        guard SocialRules.key(owner), owner != publicKey, (try? prepare()) != nil else { return }
+        relay?.requestPlaylist(SocialLink(type: "playlist", owner: owner, id: id))
+    }
     func save(_ playlist: SharedPlaylist) throws {
         try prepare()
         guard playlist.owner == publicKey, playlist.valid(), state.playlists.count < 500 || state.playlists[playlist.key] != nil else { throw MusicSourceError.message("This playlist could not be saved.") }
@@ -214,6 +226,7 @@ final class SocialStore {
                 Task { do { try await broadcast(updated) } catch { message = error.localizedDescription } }
             default:
                 if packet.type.hasPrefix("device") { onDevicePacket?(author, packet, encrypted) }
+                else if packet.type.hasPrefix("sync") { onSyncPacket?(author, packet, encrypted) }
             }
         } catch { /* An invalid share cannot change the library. */ }
     }

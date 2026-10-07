@@ -57,6 +57,10 @@ final class DeviceSyncStore {
     @ObservationIgnored private var obeyingUntil: Int64 = 0
     @ObservationIgnored private var offerUntil: Int64 = 0
     @ObservationIgnored private var tracks: [String: SharedTrack] = [:]
+    @ObservationIgnored private var knownDevices: Set<String>?
+    /// Library sync: a device joined the group, or one left it.
+    @ObservationIgnored var onLinked: (() -> Void)?
+    @ObservationIgnored var onUnlinked: ((String) -> Void)?
 
     private struct Saved: Codable {
         var devices: [LinkedDevice] = []
@@ -110,6 +114,7 @@ final class DeviceSyncStore {
             receivedAt = saved.receivedAt.filter { state.linked($0.key) }
             lastOffered = saved.lastOffered ?? 0; lastLocalChange = saved.lastLocalChange ?? 0; lastRevision = saved.lastRevision ?? 0
         }
+        knownDevices = Set(state.devices.map(\.id))
         updateWanted()
     }
 
@@ -185,7 +190,7 @@ final class DeviceSyncStore {
         guard state.approve(link.author) else { message = "You can link up to \(DeviceSyncState.maxDevices) devices."; return }
         pairingTimeout?.cancel()
         pairing = .linked(link.request.name); persist(); updateWanted()
-        Task { await sendList(); await publish(force: true) }
+        Task { await sendList(); await publish(force: true); devicesChanged() }
     }
 
     func deny(_ link: PendingDeviceLink) { state.decline(link.author) }
@@ -216,6 +221,15 @@ final class DeviceSyncStore {
         receivedAt = receivedAt.filter { state.linked($0.key) }
         if let offer = continueOffer, !state.linked(offer.device) { continueOffer = nil }
         if state.devices.isEmpty { heartbeatTask?.cancel(); debounceTask?.cancel(); lastSent = nil }
+        devicesChanged()
+    }
+
+    /// Tells library sync about devices that joined or left the group.
+    private func devicesChanged() {
+        let now = Set(state.devices.map(\.id)), before = knownDevices ?? now
+        knownDevices = now
+        for id in before.subtracting(now) { onUnlinked?(id) }
+        if !now.subtracting(before).isEmpty { onLinked?() }
     }
 
     // MARK: Receiving
@@ -246,7 +260,7 @@ final class DeviceSyncStore {
             case "deviceList":
                 let fromOwner = author == pendingOwner
                 guard state.acceptList(try packet.decode(DeviceList.self), author: author, encrypted: encrypted, pendingOwner: pendingOwner) else { return }
-                persist()
+                persist(); devicesChanged()
                 if fromOwner {
                     pendingOwner = nil; pendingTag = nil; pendingCode = nil; pairingTimeout?.cancel()
                     pairing = .linked(state.device(author)?.name ?? "your device"); updateWanted()

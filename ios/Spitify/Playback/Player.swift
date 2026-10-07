@@ -350,6 +350,15 @@ final class Player {
         updateNowPlaying()
     }
 
+    /// The saved music and podcast/audiobook speeds, which follow you between linked devices.
+    var speeds: (music: Float, spoken: Float) { (speedMusic, speedSpoken) }
+    func setSpeeds(music: Float? = nil, spoken: Float? = nil) {
+        if let music, music.isFinite, (0.5...3).contains(music) { speedMusic = music; UserDefaults.standard.set(music, forKey: "speedMusic") }
+        if let spoken, spoken.isFinite, (0.5...3).contains(spoken) { speedSpoken = spoken; UserDefaults.standard.set(spoken, forKey: "speedSpoken") }
+        guard roomSpeed == nil else { return }
+        engine.setRate(speed); stream.setRate(speed)
+    }
+
     func setSleep(minutes: Int?) {
         engine.setVolume(1); stream.setVolume(1)
         sleep = minutes.map { .at(Date().addingTimeInterval(Double($0) * 60)) }
