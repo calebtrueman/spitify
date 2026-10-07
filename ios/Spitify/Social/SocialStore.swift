@@ -10,6 +10,10 @@ final class SocialStore {
     var rooms = RoomState()
     var onRoomUpdate: ((ListeningRoom) -> Void)?
     var onRoomRequest: ((IncomingRoomRequest) -> Void)?
+    /// Packets whose type starts with "device", for `DeviceSyncStore`.
+    var onDevicePacket: ((String, SocialPacket, Bool) -> Void)?
+    /// Linked devices or pairing need the relay even when friend sharing is off.
+    var devicesWanted = false { didSet { if devicesWanted != oldValue { refreshConnection() } } }
     var publicProfile = UserDefaults.standard.object(forKey: "socialPublicProfile") as? Bool ?? true
     var message: String?
     var enabled = UserDefaults.standard.bool(forKey: "socialEnabled")
@@ -35,7 +39,9 @@ final class SocialStore {
         if enabled { Task { await syncProfile(force: true) } }
     }
     private func refreshConnection() {
-        if enabled { relay?.start(relays: relayAddresses, authors: state.following, discover: discovery) } else { relay?.stop() }
+        if enabled { relay?.start(relays: relayAddresses, authors: state.following, discover: discovery) }
+        else if devicesWanted { relay?.start(relays: relayAddresses, authors: [], inboxOnly: true) }
+        else { relay?.stop() }
     }
     func follow(_ input: String) throws {
         try prepare()
@@ -163,6 +169,17 @@ final class SocialStore {
         try await relay?.send(.make("roomRequest", request), logical: "roomRequest:" + request.id, to: request.host, expiresIn: 120_000)
     }
 
+    /// Device packets go out whether or not friend sharing is on.
+    func sendDevice(_ packet: SocialPacket, logical: String, to recipient: String?, expiresIn: Int64, extraTags: [[String]] = []) async throws {
+        try prepare()
+        try await relay?.send(packet, logical: logical, to: recipient, expiresIn: expiresIn, extraTags: extraTags)
+    }
+    func lookup(_ tag: String, timeout: Duration = .seconds(15)) async {
+        guard (try? prepare()) != nil else { return }
+        await relay?.lookup(tag, timeout: timeout)
+    }
+    func lookupFound(_ tag: String, author: String) -> Bool { relay?.lookupFound(tag, author: author) == true }
+
     private func requireConnection() throws {
         try prepare()
         guard enabled else { throw MusicSourceError.message("Turn on sharing in Friends first.") }
@@ -195,7 +212,8 @@ final class SocialStore {
                 guard encrypted, let updated = state.apply(try packet.decode(SharedEdit.self), author: author, me: publicKey) else { return }
                 persist()
                 Task { do { try await broadcast(updated) } catch { message = error.localizedDescription } }
-            default: break
+            default:
+                if packet.type.hasPrefix("device") { onDevicePacket?(author, packet, encrypted) }
             }
         } catch { /* An invalid share cannot change the library. */ }
     }

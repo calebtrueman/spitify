@@ -66,16 +66,21 @@ struct RootView: View {
             if let e = router.editing { MetadataEditor(songs: e.songs, albumMode: e.albumMode) }
         }
         .overlay(alignment: .top) {
-            if let m = router.notice ?? app.player.message {
+            if let m = router.notice ?? app.player.message ?? app.devices.notice {
                 Text(m).text(.label).foregroundStyle(p.text).padding(.horizontal, 16).padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: Capsule()).padding(.top, 8).transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.spring(duration: 0.35), value: app.player.message)
         .animation(.spring(duration: 0.35), value: router.notice)
+        .animation(.spring(duration: 0.35), value: app.devices.notice)
+        .alert("Link \(app.devices.linkRequest?.request.name ?? "this device")?", isPresented: Binding(get: { app.devices.linkRequest != nil }, set: { _ in })) {
+            Button("Allow") { if let link = app.devices.linkRequest { app.devices.allow(link) } }
+            Button("Don't allow", role: .cancel) { if let link = app.devices.linkRequest { app.devices.deny(link) } }
+        } message: { Text("It will see what you play and can control playback.") }
         .task { await app.start(); openReleaseFeedIfRequested() }
         .onReceive(NotificationCenter.default.publisher(for: .init("SpitifyOpenReleaseFeed"))) { _ in openReleaseFeedIfRequested() }
-        .onChange(of: phase) { _, new in if new == .active { app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
+        .onChange(of: phase) { _, new in if new == .active { app.devices.foreground(); app.scheduleWidgets(); app.musicDownloads.resumePending(); Task { await app.library.scan() }; Task { await app.artistFollows.refresh() } } }
         .sheet(isPresented: Binding(get: { incomingLink != nil }, set: { if !$0 { incomingLink = nil } })) {
             if let value = incomingLink, let link = SocialLink.parse(value) { NavigationStack { IncomingShareView(link: link) }.environment(app) }
         }
@@ -97,7 +102,7 @@ struct RootView: View {
             .background(HomeTabTapObserver(router: router).frame(width: 0, height: 0))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Reserve space in the layout itself, including pushed screens.
-            MiniPlayer().background(p.background)
+            VStack(spacing: 0) { DeviceStrip(); MiniPlayer() }.background(p.background)
         }
         .tint(p.accent)
         .background(p.background)
